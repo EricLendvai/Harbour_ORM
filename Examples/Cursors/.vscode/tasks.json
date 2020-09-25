@@ -1,0 +1,63 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CompileRelease",
+            "type": "shell",
+            "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "HB_VFP_ROOT":"r:\\Harbour_vfp",
+                    "HB_ORM_ROOT":"r:\\Harbour_orm",
+                    "EXEName":"Cursors",
+                    "BuildMode":"release",
+                    "HB_COMPILER":"${input:CCompiler}"
+                }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            }
+        },
+        {
+            "label": "CompileDebug",
+            "type": "shell",
+            "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "HB_VFP_ROOT":"r:\\Harbour_vfp",
+                    "HB_ORM_ROOT":"r:\\Harbour_orm",
+                    "EXEName":"Cursors",
+                    "BuildMode":"debug",
+					// "HB_COMPILER":"${input:CCompiler}"
+					"HB_COMPILER":"mingw64"
+                }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "CCompiler",
+            "type": "pickString",
+            "description": "Select C Compiler",
+            "options": ["mingw64","msvc64"],
+            "default": "mingw64"
+        }
+    ]
+}

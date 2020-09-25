@@ -1,0 +1,25 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "harbour-dbg",
+            "request": "launch",
+            "name": "Launch ORM Example Cursors",
+            "program": "${workspaceFolder}\\mingw64\\debug\\Cursors.exe",
+            "stopOnEntry": false,
+            //In the followin "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
+            "terminalType": "integrated",
+            "preLaunchTask": "CompileDebug",
+            "postDebugTask": "",
+            "workingDir": "${workspaceFolder}\\",
+            "sourcePaths": [
+                "${workspaceFolder}\\",
+                "R:\\Harbour_ORM\\",
+                "R:\\Harbour_VFP\\"
+            ]
+        }
+    ]
+}
