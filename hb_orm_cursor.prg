@@ -156,16 +156,16 @@ for each l_FieldStructure in ::p_Fields
        l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
            
         AAdd(::p_FieldsForAppend,{l_FieldStructure[1],;
-                                     l_FieldStructure[2],;
-                                     l_FieldStructure[3],;
-                                     l_FieldStructure[4],;
-                                     l_FieldStructure[5],;
-                                     l_FieldStructure[6],;
-                                     l_FieldStructure[7],;
-                                     l_FieldStructure[8],;
-                                     l_FieldStructure[9],;
-                                     l_FieldStructure[10];
-                                     })
+                                  l_FieldStructure[2],;
+                                  l_FieldStructure[3],;
+                                  l_FieldStructure[4],;
+                                  l_FieldStructure[5],;
+                                  l_FieldStructure[6],;
+                                  l_FieldStructure[7],;
+                                  l_FieldStructure[8],;
+                                  l_FieldStructure[9],;
+                                  l_FieldStructure[10];
+                                  })
     endif
 
     AAdd(l_Structure,{l_FieldName,l_FieldType,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN],l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_DEC]})
@@ -302,7 +302,7 @@ endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method UpdateRecordCount() class hb_orm_Cursor                //Will update :p_RecordCount
-    ::p_RecordCount := (::p_CursorName)->(reccount())
+::p_RecordCount := (::p_CursorName)->(reccount())
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 

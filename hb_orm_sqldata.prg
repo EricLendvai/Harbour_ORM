@@ -881,9 +881,9 @@ return par_WhereNumber
 method Having(par_Expression,...) class hb_orm_SQLData   // Adds Having condition. Will return a handle that can be used later by ReplaceHaving()
 
 if empty(par_Expression)
-    AAdd(::p_Having,{})
+	AAdd(::p_Having,{})
 else
-    AAdd(::p_Having,allt(::PrepExpression(par_expression,...)))
+	AAdd(::p_Having,allt(::PrepExpression(par_expression,...)))
 endif
 
 return len(::p_Having)

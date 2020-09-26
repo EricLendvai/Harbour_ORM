@@ -9,8 +9,8 @@ if %BuildMode%. == . goto MissingEnvironmentVariables
 if %HB_COMPILER%. ==. goto MissingEnvironmentVariables
 
 if not exist %EXEName%.hbp (
-	echo Invalid Workspace Folder. Missing file %EXEName%.hbp
-	goto End
+    echo Invalid Workspace Folder. Missing file %EXEName%.hbp
+    goto End
 )
 
 if %BuildMode%. == debug.   goto GoodParameters
@@ -40,8 +40,8 @@ md %HB_COMPILER%\%BuildMode%\hbmk2 2>nul
 
 del %HB_COMPILER%\%BuildMode%\%EXEName%.exe 2>nul
 if exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
-	echo Could not delete previous version of %EXEName%.exe
-	goto End
+    echo Could not delete previous version of %EXEName%.exe
+    goto End
 )
 
 ::  -b        = debug
@@ -50,43 +50,43 @@ if exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
 ::  -p        = Leave generated ppo files
 
 if %BuildMode% == debug (
-	copy ..\debugger_on.hbm ..\debugger.hbm
+    copy ..\debugger_on.hbm ..\debugger.hbm
     hbmk2 %EXEName%.hbp -b -p -w3
 ) else (
-	copy ..\debugger_off.hbm ..\debugger.hbm
-	hbmk2 %EXEName%.hbp -w3
+    copy ..\debugger_off.hbm ..\debugger.hbm
+    hbmk2 %EXEName%.hbp -w3
 )
 
 if not exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
-	echo Failed To build %EXEName%.exe
+    echo Failed To build %EXEName%.exe
 ) else (
-	if errorlevel 0 (
-		echo.
-		echo No Errors
-		echo.
-		echo Ready            BuildMode = %BuildMode%          C Compiler = %HB_COMPILER%          EXE = %EXEName%
+    if errorlevel 0 (
+        echo.
+        echo No Errors
+        echo.
+        echo Ready            BuildMode = %BuildMode%          C Compiler = %HB_COMPILER%          EXE = %EXEName%
         if %BuildMode% == release (
             echo -----------------------------------------------------------------------------------------------
             %HB_COMPILER%\release\%EXEName%
             echo.
             echo -----------------------------------------------------------------------------------------------
         )
-	) else (
-		echo Compilation Error
-		if errorlevel  1 echo Unknown platform
-		if errorlevel  2 echo Unknown compiler
-		if errorlevel  3 echo Failed Harbour detection
-		if errorlevel  5 echo Failed stub creation
-		if errorlevel  6 echo Failed in compilation (Harbour, C compiler, Resource compiler)
-		if errorlevel  7 echo Failed in final assembly (linker or library manager)
-		if errorlevel  8 echo Unsupported
-		if errorlevel  9 echo Failed to create working directory
-		if errorlevel 19 echo Help
-		if errorlevel 10 echo Dependency missing or disabled
-		if errorlevel 20 echo Plugin initialization
-		if errorlevel 30 echo Too deep nesting
-		if errorlevel 50 echo Stop requested
-	)
+    ) else (
+        echo Compilation Error
+        if errorlevel  1 echo Unknown platform
+        if errorlevel  2 echo Unknown compiler
+        if errorlevel  3 echo Failed Harbour detection
+        if errorlevel  5 echo Failed stub creation
+        if errorlevel  6 echo Failed in compilation (Harbour, C compiler, Resource compiler)
+        if errorlevel  7 echo Failed in final assembly (linker or library manager)
+        if errorlevel  8 echo Unsupported
+        if errorlevel  9 echo Failed to create working directory
+        if errorlevel 19 echo Help
+        if errorlevel 10 echo Dependency missing or disabled
+        if errorlevel 20 echo Plugin initialization
+        if errorlevel 30 echo Too deep nesting
+        if errorlevel 50 echo Stop requested
+    )
 )
 
 goto End

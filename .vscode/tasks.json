@@ -35,8 +35,8 @@
                     "HB_VFP_ROOT":"r:\\Harbour_vfp",
                     "LIBName":"hb_orm",
                     "BuildMode":"debug",
-					// "HB_COMPILER":"${input:CCompiler}"
-					"HB_COMPILER":"mingw64"
+                    // "HB_COMPILER":"${input:CCompiler}"
+                    "HB_COMPILER":"mingw64"
                 }
             },
             "presentation": {

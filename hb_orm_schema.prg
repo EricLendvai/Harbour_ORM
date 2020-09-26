@@ -109,250 +109,250 @@ local l_result
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-	do case
-	case par_FieldType == "C"
-*		l_result := [CHAR(]+trans(par_FieldLen)+[) ASCII NOT NULL DEFAULT '' COLLATE 'utf8_general_ci']
-		if par_FieldSQLAlNull
-			l_result := [CHAR(]+trans(par_FieldLen)+[) NULL COLLATE 'utf8_general_ci']
-		else
-			l_result := [CHAR(]+trans(par_FieldLen)+[) NOT NULL DEFAULT '' COLLATE 'utf8_general_ci']
-		endif
-		
-	case par_FieldType == "D"
-		if par_FieldSQLAlNull
-			l_result := [DATE NULL]
-		else
-			l_result := [DATE NOT NULL DEFAULT '0000-00-00']
-		endif
-		
-	case par_FieldType == "T"
-		if par_FieldSQLAlNull
-			l_result := [DATETIME NULL]
-		else
-			l_result := [DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00']
-		endif
-		
-	case par_FieldType == "TS"
-		l_result := [TIMESTAMP NOT NULL DEFAULT current_timestamp]
-		
-	case par_FieldType == "I"
-		do case
-		case par_FieldSQLautoinc
-			l_result := [INTEGER NOT NULL AUTO_INCREMENT]
-		case par_FieldSQLAlNull
-			l_result := [INTEGER NULL]
-		otherwise
-			l_result := [INTEGER NOT NULL DEFAULT 0]
-		endcase
-		
-	case par_FieldType == "Y"
-		if par_FieldSQLAlNull
-			l_result := [MONEY NULL]
-		else
-			l_result := [MONEY NOT NULL DEFAULT 0]
-		endif
-		
-	case par_FieldType == "N"
-		do case
-		case par_FieldSQLautoinc
-			l_result := [DECIMAL(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) NOT NULL AUTO_INCREMENT]
-		case par_FieldSQLAlNull
-			l_result := [DECIMAL(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) NULL]
-		otherwise
-			l_result := [DECIMAL(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) NOT NULL DEFAULT 0]
-		endcase
-		
-	case par_FieldType == "L"
-		if par_FieldSQLAlNull
-			l_result := [TINYINT(1) UNSIGNED NULL]
-		else
-			l_result := [TINYINT(1) UNSIGNED NOT NULL DEFAULT 0]
-		endif
-		
-	case par_FieldType == "M"
-		*l_result := [LONGTEXT NOT NULL DEFAULT '']
-		*l_result := [LONGTEXT NOT NULL]
-		l_result := [LONGTEXT COLLATE 'utf8_general_ci']
-		
-	otherwise
-		l_result := []
-		
-	endcase
-	
+    do case
+    case par_FieldType == "C"
+*       l_result := [CHAR(]+trans(par_FieldLen)+[) ASCII NOT NULL DEFAULT '' COLLATE 'utf8_general_ci']
+        if par_FieldSQLAlNull
+            l_result := [CHAR(]+trans(par_FieldLen)+[) NULL COLLATE 'utf8_general_ci']
+        else
+            l_result := [CHAR(]+trans(par_FieldLen)+[) NOT NULL DEFAULT '' COLLATE 'utf8_general_ci']
+        endif
+        
+    case par_FieldType == "D"
+        if par_FieldSQLAlNull
+            l_result := [DATE NULL]
+        else
+            l_result := [DATE NOT NULL DEFAULT '0000-00-00']
+        endif
+        
+    case par_FieldType == "T"
+        if par_FieldSQLAlNull
+            l_result := [DATETIME NULL]
+        else
+            l_result := [DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00']
+        endif
+        
+    case par_FieldType == "TS"
+        l_result := [TIMESTAMP NOT NULL DEFAULT current_timestamp]
+        
+    case par_FieldType == "I"
+        do case
+        case par_FieldSQLautoinc
+            l_result := [INTEGER NOT NULL AUTO_INCREMENT]
+        case par_FieldSQLAlNull
+            l_result := [INTEGER NULL]
+        otherwise
+            l_result := [INTEGER NOT NULL DEFAULT 0]
+        endcase
+        
+    case par_FieldType == "Y"
+        if par_FieldSQLAlNull
+            l_result := [MONEY NULL]
+        else
+            l_result := [MONEY NOT NULL DEFAULT 0]
+        endif
+        
+    case par_FieldType == "N"
+        do case
+        case par_FieldSQLautoinc
+            l_result := [DECIMAL(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) NOT NULL AUTO_INCREMENT]
+        case par_FieldSQLAlNull
+            l_result := [DECIMAL(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) NULL]
+        otherwise
+            l_result := [DECIMAL(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) NOT NULL DEFAULT 0]
+        endcase
+        
+    case par_FieldType == "L"
+        if par_FieldSQLAlNull
+            l_result := [TINYINT(1) UNSIGNED NULL]
+        else
+            l_result := [TINYINT(1) UNSIGNED NOT NULL DEFAULT 0]
+        endif
+        
+    case par_FieldType == "M"
+        *l_result := [LONGTEXT NOT NULL DEFAULT '']
+        *l_result := [LONGTEXT NOT NULL]
+        l_result := [LONGTEXT COLLATE 'utf8_general_ci']
+        
+    otherwise
+        l_result := []
+        
+    endcase
+    
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-	do case
-	case par_Mode == 2  // Missing Column
-		do case
-		case par_FieldType == "C"
-			if par_FieldSQLAlNull
-				l_result := [character(]+trans(par_FieldLen)+[) DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [character(]+trans(par_FieldLen)+[) DEFAULT '', ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "D"
-			if par_FieldSQLAlNull
-				l_result := [date]
-			else
-				l_result := [date]
-			endif
-			
-		case par_FieldType == "T"
-			if par_FieldSQLAlNull
-				l_result := [time]
-			else
-				l_result := [time]
-			endif
-			
-		case par_FieldType == "TS"
-			if par_FieldSQLAlNull
-				l_result := [timestamp]
-			else
-				l_result := [timestamp]
-			endif
-			
-		case par_FieldType == "I"
-			if par_FieldSQLAlNull
-				l_result := [integer DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [integer DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "Y"
-			if par_FieldSQLAlNull
-				l_result := [money DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [money DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "N"
-			if par_FieldSQLAlNull
-				l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "L"
-			if par_FieldSQLAlNull
-				l_result := [boolean DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [boolean DEFAULT FALSE, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "M"
-			if par_FieldSQLAlNull
-				l_result := [text DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [text DEFAULT '', ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		otherwise
-			l_result := []
-			
-		endcase
-		
-	case par_Mode == 3  // Changed Column
-		do case
-		case par_FieldType == "C"
-			if par_FieldSQLAlNull
-				l_result := [character(]+trans(par_FieldLen)+[), ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [character(]+trans(par_FieldLen)+[), ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT '', ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "D"
-			if par_FieldSQLAlNull
-				l_result := [date, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [date, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			endif
-			
-		case par_FieldType == "T"
-			if par_FieldSQLAlNull
-				l_result := [time, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [time, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			endif
-			
-		case par_FieldType == "TS"
-			if par_FieldSQLAlNull
-				l_result := [timestamp, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [timestamp, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			endif
-			
-		case par_FieldType == "I"
-			if par_FieldSQLAlNull
-				l_result := [integer, ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [integer, ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "Y"
-			if par_FieldSQLAlNull
-				l_result := [money, ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [money, ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "N"
-			if par_FieldSQLAlNull
-				l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[), ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[), ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "L"
-			if par_FieldSQLAlNull
-				l_result := [boolean, ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [boolean, ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT FALSE, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		case par_FieldType == "M"
-			if par_FieldSQLAlNull
-				l_result := [text, ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
-			else
-				l_result := [text, ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT '', ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
-			endif
-			
-		otherwise
-			l_result := []
-			
-		endcase
-		
-	otherwise
-		// Missing Table
-		do case
-		case par_FieldType == "C"
-			if par_FieldSQLAlNull
-				l_result := [character(]+trans(par_FieldLen)+[)]
-			else
-				l_result := [character(]+trans(par_FieldLen)+[) NOT NULL DEFAULT '']
-			endif
-			
-		case par_FieldType == "D"
-			if par_FieldSQLAlNull
-				l_result := [date]
-			else
-				l_result := [date NULL]
-			endif
-			
-		case par_FieldType == "T"
-			if par_FieldSQLAlNull
-				l_result := [time]
-			else
-				l_result := [time NULL]
-			endif
-			
-		case par_FieldType == "TS"
-			if par_FieldSQLAlNull
-				l_result := [timestamp]
-			else
-				l_result := [timestamp NULL]
-			endif
-			
-		case par_FieldType == "I"
+    do case
+    case par_Mode == 2  // Missing Column
+        do case
+        case par_FieldType == "C"
+            if par_FieldSQLAlNull
+                l_result := [character(]+trans(par_FieldLen)+[) DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [character(]+trans(par_FieldLen)+[) DEFAULT '', ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "D"
+            if par_FieldSQLAlNull
+                l_result := [date]
+            else
+                l_result := [date]
+            endif
+            
+        case par_FieldType == "T"
+            if par_FieldSQLAlNull
+                l_result := [time]
+            else
+                l_result := [time]
+            endif
+            
+        case par_FieldType == "TS"
+            if par_FieldSQLAlNull
+                l_result := [timestamp]
+            else
+                l_result := [timestamp]
+            endif
+            
+        case par_FieldType == "I"
+            if par_FieldSQLAlNull
+                l_result := [integer DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [integer DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "Y"
+            if par_FieldSQLAlNull
+                l_result := [money DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [money DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "N"
+            if par_FieldSQLAlNull
+                l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "L"
+            if par_FieldSQLAlNull
+                l_result := [boolean DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [boolean DEFAULT FALSE, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "M"
+            if par_FieldSQLAlNull
+                l_result := [text DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [text DEFAULT '', ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        otherwise
+            l_result := []
+            
+        endcase
+        
+    case par_Mode == 3  // Changed Column
+        do case
+        case par_FieldType == "C"
+            if par_FieldSQLAlNull
+                l_result := [character(]+trans(par_FieldLen)+[), ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [character(]+trans(par_FieldLen)+[), ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT '', ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "D"
+            if par_FieldSQLAlNull
+                l_result := [date, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [date, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            endif
+            
+        case par_FieldType == "T"
+            if par_FieldSQLAlNull
+                l_result := [time, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [time, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            endif
+            
+        case par_FieldType == "TS"
+            if par_FieldSQLAlNull
+                l_result := [timestamp, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [timestamp, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            endif
+            
+        case par_FieldType == "I"
+            if par_FieldSQLAlNull
+                l_result := [integer, ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [integer, ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "Y"
+            if par_FieldSQLAlNull
+                l_result := [money, ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [money, ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "N"
+            if par_FieldSQLAlNull
+                l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[), ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[), ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT 0, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "L"
+            if par_FieldSQLAlNull
+                l_result := [boolean, ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [boolean, ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT FALSE, ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        case par_FieldType == "M"
+            if par_FieldSQLAlNull
+                l_result := [text, ALTER COLUMN "] + par_FieldSQLName + [" DROP DEFAULT, ALTER COLUMN "] + par_FieldSQLName + [" DROP NOT NULL]
+            else
+                l_result := [text, ALTER COLUMN "] + par_FieldSQLName + [" SET DEFAULT '', ALTER COLUMN "] + par_FieldSQLName + [" SET NOT NULL]
+            endif
+            
+        otherwise
+            l_result := []
+            
+        endcase
+        
+    otherwise
+        // Missing Table
+        do case
+        case par_FieldType == "C"
+            if par_FieldSQLAlNull
+                l_result := [character(]+trans(par_FieldLen)+[)]
+            else
+                l_result := [character(]+trans(par_FieldLen)+[) NOT NULL DEFAULT '']
+            endif
+            
+        case par_FieldType == "D"
+            if par_FieldSQLAlNull
+                l_result := [date]
+            else
+                l_result := [date NULL]
+            endif
+            
+        case par_FieldType == "T"
+            if par_FieldSQLAlNull
+                l_result := [time]
+            else
+                l_result := [time NULL]
+            endif
+            
+        case par_FieldType == "TS"
+            if par_FieldSQLAlNull
+                l_result := [timestamp]
+            else
+                l_result := [timestamp NULL]
+            endif
+            
+        case par_FieldType == "I"
 
             do case
             case par_FieldSQLautoinc
@@ -365,47 +365,47 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             endcase
 
 
-			// if par_FieldSQLAlNull
-			// 	l_result := [integer]
-			// else
-			// 	l_result := [integer NOT NULL DEFAULT 0]
-			// endif
-			
-		case par_FieldType == "Y"
-			if par_FieldSQLAlNull
-				l_result := [money]
-			else
-				l_result := [money NOT NULL DEFAULT 0]
-			endif
-			
-		case par_FieldType == "N"
-			if par_FieldSQLAlNull
-				l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[)]
-			else
-				l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) NOT NULL DEFAULT 0]
-			endif
-			
-		case par_FieldType == "L"
-			if par_FieldSQLAlNull
-				l_result := [boolean]
-			else
-				l_result := [boolean NOT NULL DEFAULT FALSE]
-			endif
-			
-		case par_FieldType == "M"
-			if par_FieldSQLAlNull
-				l_result := [text]
-			else
-				l_result := [text NOT NULL DEFAULT '']
-			endif
-			
-		otherwise
-			l_result := []
-			
-		endcase
-		
-	endcase
-	
+            // if par_FieldSQLAlNull
+            // 	l_result := [integer]
+            // else
+            // 	l_result := [integer NOT NULL DEFAULT 0]
+            // endif
+            
+        case par_FieldType == "Y"
+            if par_FieldSQLAlNull
+                l_result := [money]
+            else
+                l_result := [money NOT NULL DEFAULT 0]
+            endif
+            
+        case par_FieldType == "N"
+            if par_FieldSQLAlNull
+                l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[)]
+            else
+                l_result := [numeric(]+trans(iif(par_FieldDec == 0 , par_FieldLen , par_FieldLen-1))+[,]+trans(par_FieldDec)+[) NOT NULL DEFAULT 0]
+            endif
+            
+        case par_FieldType == "L"
+            if par_FieldSQLAlNull
+                l_result := [boolean]
+            else
+                l_result := [boolean NOT NULL DEFAULT FALSE]
+            endif
+            
+        case par_FieldType == "M"
+            if par_FieldSQLAlNull
+                l_result := [text]
+            else
+                l_result := [text NOT NULL DEFAULT '']
+            endif
+            
+        otherwise
+            l_result := []
+            
+        endcase
+        
+    endcase
+    
 endcase
 
 return l_result

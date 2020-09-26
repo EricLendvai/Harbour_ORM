@@ -9,7 +9,7 @@
 HB_FUNC( HB_ORM_OUTPUTDEBUGSTRING )   // For Windows Only
 {
 #ifdef _WIN32
-	OutputDebugString( hb_parc(1) );
+    OutputDebugString( hb_parc(1) );
 #endif
 }
 
