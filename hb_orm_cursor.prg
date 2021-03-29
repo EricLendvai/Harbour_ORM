@@ -1,4 +1,4 @@
-//Copyright (c) 2020 Eric Lendvai MIT License
+//Copyright (c) 2021 Eric Lendvai MIT License
 
 #include "hb_vfp.ch"
 #include "hb_orm.ch"
@@ -38,22 +38,22 @@ class hb_orm_Cursor
         method Init()
         method GetName()                inline ::p_CursorName
 
-        method Field(par_Name,par_Type,par_Length,par_Decimal,par_Flags)                 //Add or update a field definition. Should be used before calling :CreateCursor()
-                                                                                         //_M_ Document Supported Field Types
-                                                                                         //Flags can be "N" for AllowNul,"+" for IsAutoIncrement,"B" for Binary,"T" for Trimmed,"U" for Unicode, "Z" or "C" for Compressed. Will not support "Encrypted" since in memory.
-        method RemoveField(par_Name)                                                     //Remove a field definition. To be used before calling :CreateCursor()
-        method CreateCursor(par_Name)
+        method Field(par_cName,par_Type,par_Length,par_Decimal,par_Flags)                 //Add or update a field definition. Should be used before calling :CreateCursor()
+                                                                                          //Flags can be "N" for AllowNul,"+" for IsAutoIncrement,"B" for Binary,"T" for Trimmed,"U" for Unicode, "Z" or "C" for Compressed. Will not support "Encrypted" since in memory.
+        method RemoveField(par_cName)                                                     //Remove a field definition. To be used before calling :CreateCursor()
+        method CreateCursor(par_cName)
         
-        method Index(par_Name,par_Expression)                                             //Add or update an index definition. Should be used before calling :CreateIndexes()
-        //  Future  (par_Name,par_Expression,par_Direction,par_Unique,par_ForExpression)  //Currently SQLMix does not seems to support ordCondSet()
+        method Index(par_cName,par_Expression,par_Unique)                                 //Add or update an index definition. Should be used before calling :CreateIndexes()
+        //  Future  (par_cName,par_Expression,par_Direction,par_Unique,par_ForExpression)  //Currently SQLMix does not seems to support ordCondSet()
 
-        method RemoveIndex(par_Name)                                                     //Remove a index definition. To be used before calling :CreateIndexes()
+        method RemoveIndex(par_cName)                                                     //Remove a index definition. To be used before calling :CreateIndexes()
         method CreateIndexes()                                                           //Create the index tags after the :Index() were called
-        method SetOrder(par_Name)                                                        //Set the Tax(index) on the cursor
+        method SetOrder(par_cName)                                                        //Set the Tax(index) on the cursor
         
         method AppendBlank()                                                             //Add a blank record and respect autoincrement and Set Null Values
-        method SetFieldValue(par_FieldName,par_Value)
+        method SetFieldValue(par_cFieldName,par_Value)
         method SetFieldValues(par_HashFieldValues)
+        method GetFieldValue(par_cFieldName)
         method InsertRecord(par_HashFieldValues)                                         //Returns 0 or the last AutoIncrement value
         // method Insert()                                                               //Add an complete record with all the values. Return the last AutoIncrement Value if at least one field was used.
         method Close()                                                                   //Close the Cursor and removes all field definitions
@@ -62,7 +62,7 @@ class hb_orm_Cursor
 
         method Associate(par_CursorName)                                                 //Called by hb_orm_sqldata when the result is a cursor
 
-    DESTRUCTOR destroy
+    DESTRUCTOR destroy()
 endclass
 //-----------------------------------------------------------------------------------------------------------------
 method destroy() class hb_orm_Cursor
@@ -70,8 +70,8 @@ method destroy() class hb_orm_Cursor
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
 method Init() class hb_orm_Cursor
-hb_hSetCaseMatch(::p_Fields ,.f.)
-hb_hSetCaseMatch(::p_Indexes,.f.)
+hb_HCaseMatch(::p_Fields ,.f.)
+hb_HCaseMatch(::p_Indexes,.f.)
 return Self
 //-----------------------------------------------------------------------------------------------------------------
 method Close() class hb_orm_Cursor
@@ -85,7 +85,7 @@ hb_HClear(::p_Indexes)
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Field(par_Name,par_Type,par_Length,par_Decimal,par_Flags) class hb_orm_Cursor    //Add a field definition
+method Field(par_cName,par_Type,par_Length,par_Decimal,par_Flags) class hb_orm_Cursor    //Add a field definition
 local l_AllowNull,l_IsAutoIncrement,l_Binary,l_Trimmed,l_Unicode,l_Compressed
 local l_Flags := upper(hb_DefaultValue(par_flags,""))
 
@@ -96,21 +96,20 @@ l_Trimmed         := ("T" $ l_Flags) .and. (par_Type $ "C")
 l_Unicode         := ("U" $ l_Flags)
 l_Compressed      := (("Z" $ l_Flags) .or. ("C" $ l_Flags))
 
-//_M_ Validate the par_type,par_length and par_decimal
-::p_Fields[par_Name] := {0,par_Type,par_Length,par_Decimal,l_AllowNull,l_IsAutoIncrement,l_Binary,l_Trimmed,l_Unicode,l_Compressed}
+::p_Fields[par_cName] := {0,par_Type,par_Length,par_Decimal,l_AllowNull,l_IsAutoIncrement,l_Binary,l_Trimmed,l_Unicode,l_Compressed}
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method RemoveField(par_Name) class hb_orm_Cursor
-hb_hDel(::p_Fields,par_Name)
+method RemoveField(par_cName) class hb_orm_Cursor
+hb_hDel(::p_Fields,par_cName)
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method SetOrder(par_Name) class hb_orm_Cursor
+method SetOrder(par_cName) class hb_orm_Cursor
 //_M_ extra test to see if cursor and index exists
-(::p_CursorName)->(ordSetFocus(par_Name))
+(::p_CursorName)->(ordSetFocus(par_cName))
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method CreateCursor(par_Name) class hb_orm_Cursor
+method CreateCursor(par_cName) class hb_orm_Cursor
 local l_Structure := {}
 local l_FieldStructure
 local l_FieldType
@@ -126,9 +125,9 @@ if !empty(::p_CursorName)
     ASize(::p_FieldsForAppend,0)
 endif
 
-CloseAlias(par_Name)
+CloseAlias(par_cName)
 
-::p_CursorName             := par_Name
+::p_CursorName             := par_cName
 ::p_RecordCount            := 0
 ::p_AutoIncrementLastValue := 0
 
@@ -176,18 +175,18 @@ DbCreate(::p_CursorName,l_Structure,'SQLMIX',.T.,::p_CursorName,,"UTF8")
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-//method Index(par_Name,par_Expression,par_Direction,par_Unique,par_ForExpression) class hb_orm_Cursor
-// ::p_Indexes[par_Name] := {par_Expression,;
+//method Index(par_cName,par_Expression,par_Direction,par_Unique,par_ForExpression) class hb_orm_Cursor
+// ::p_Indexes[par_cName] := {par_Expression,;
 //                           iif(hb_IsNil(par_Unique),.f.,par_Unique),;
 //                           iif(hb_IsNil(par_Direction),"A",upper(left(par_Direction,1))),;
 //                           iif(hb_IsNil(par_ForExpression),.f.,par_ForExpression)}
 
-method Index(par_Name,par_Expression,par_Unique) class hb_orm_Cursor
-::p_Indexes[par_Name] := {par_Expression,iif(hb_IsNil(par_Unique),.f.,par_Unique)}
+method Index(par_cName,par_Expression,par_Unique) class hb_orm_Cursor
+::p_Indexes[par_cName] := {par_Expression,iif(hb_IsNil(par_Unique),.f.,par_Unique)}
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method RemoveIndex(par_Name) class hb_orm_Cursor
-hb_hDel(::p_Indexes,par_Name)
+method RemoveIndex(par_cName) class hb_orm_Cursor
+hb_hDel(::p_Indexes,par_cName)
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method CreateIndexes() class hb_orm_Cursor
@@ -207,8 +206,6 @@ return NIL
 method AppendBlank() class hb_orm_Cursor
 local l_select := iif(used(),select(),0)
 local l_FieldStructure
-local l_result
-
 select (::p_CursorName)
 dbAppend()
 ::p_RecordCount++
@@ -216,7 +213,7 @@ dbAppend()
 for each l_FieldStructure in ::p_FieldsForAppend
     do case
     case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]
-        l_result := FieldPut(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],++::p_AutoIncrementLastValue)
+        FieldPut(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],++::p_AutoIncrementLastValue)
     case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]
         FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],NIL)
     case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY]
@@ -229,13 +226,12 @@ endfor
 select (l_select)
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method SetFieldValue(par_FieldName,par_Value) class hb_orm_Cursor
-local l_FieldPos := FieldPos(par_FieldName)
+method SetFieldValue(par_cFieldName,par_Value) class hb_orm_Cursor
+local l_FieldPos := FieldPos(par_cFieldName)
 local l_FieldStructure
-local l_Value
 local l_ValueLen
 if l_FieldPos > 0
-    l_FieldStructure := ::p_Fields[par_FieldName]
+    l_FieldStructure := ::p_Fields[par_cFieldName]
     if !l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]        //Prevent Overwritting AutoIncrement Field
         if par_Value == NIL
             if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]   //Ensure the field is nullable
@@ -282,9 +278,12 @@ for each l_FieldValue in par_HashFieldValues
 endfor
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
+method GetFieldValue(par_cFieldName) class hb_orm_Cursor
+return FieldGet(FieldPos(par_cFieldName))
+//-----------------------------------------------------------------------------------------------------------------
 method InsertRecord(par_HashFieldValues) class hb_orm_Cursor
 local l_CurrentAutoIncrementValue := ::p_AutoIncrementLastValue
-//_M_ later could optimize by not setting default values for field in par_HashFieldValues
+//_M_ Later could optimize by not setting default values for field in par_HashFieldValues, but getting this from a schema definition
 ::AppendBlank()
 ::SetFieldValues(par_HashFieldValues)
 return iif(l_CurrentAutoIncrementValue == ::p_AutoIncrementLastValue,0,::p_AutoIncrementLastValue)
@@ -374,7 +373,7 @@ for l_FieldCounter := 1 to l_NumberOfFields
     l_AllowNull       := ("N" $ l_FieldFlags)
     l_IsAutoIncrement := ("+" $ l_FieldFlags)
     l_Binary          := ("B" $ l_FieldFlags)
-    l_Trimmed         := .t.    //_M_ not certain how to set this up. Since this is a coming back from SQL backend, Usually trims Charater Fields
+    l_Trimmed         := .t.    // Since this is a coming back from SQL backend, Usually trims Character Fields
     l_Unicode         := ("U" $ l_FieldFlags)
     l_Compressed      := (("Z" $ l_FieldFlags) .or. ("C" $ l_FieldFlags))
 

@@ -9,30 +9,34 @@
 		"harbour.compilerExecutable": "C:\\Harbour\\bin\\win\\mingw64\\harbour.exe",
 		"harbour.extraOptions": "-iC:\\Harbour\\include",
 		"harbour.extraIncludePaths":["C:\\Harbour\\include\\",
-			                          "R:\\Harbour_ORM\\",
-                                      "R:\\Harbour_VFP\\"],
+			                          "C:\\Harbour_ORM\\",
+                                      "C:\\Harbour_VFP\\"],
         "harbour.warningLevel": 1,
-		"local-history.path": "R:\\VSCode_History\\Harbour_ORM",
+		"local-history.path": "C:\\VSCode_History\\Harbour_ORM",
 		"local-history.treeLocation": "localHistory",
 		"local-history.daysLimit": 0,
 		"local-history.maxDisplay": 5,	
-		"actionButtons": {
-			"defaultColor": "white", // Can also use string color names.
-			"loadNpmCommands":false, // Disables automatic generation of actions for npm commands.
-			"reloadButton":"♻️", // Custom reload button text or icon (default ↻). null value enables automatic reload on configuration change
-			"commands": [
-                {
-                    "name":"<del *.ppo>",
-                    "cwd": "${workspaceFolder}",
-                    "command" : "del *.ppo"
-                }
-			]
-        },
+		// "cSpell.ignorePaths": ["*.ppao"],  Is defined in the settings.json instead
         "cSpell.words": [
-            "isnull",
-            "orm",
-            "orm isnull"
-        ],
+			"changeddata",
+			"class",
+			"defined",
+			"defined hb orm sqldata class",
+			"definition",
+			"hb",
+			"hb orm sqlconnect class definition",
+			"hbclass",
+			"isnull",
+			"last",
+			"orm",
+			"orm isnull",
+			"p last update changeddata",
+			"p pkfn",
+			"pkfn",
+			"sqlconnect",
+			"sqldata",
+			"update"
+		],
         "cSpell.language": "en,en-US"
 	}
 }

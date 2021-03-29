@@ -51,10 +51,10 @@ if exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
 
 if %BuildMode% == debug (
     copy ..\debugger_on.hbm ..\debugger.hbm
-    hbmk2 %EXEName%.hbp -b -p -w3
+    hbmk2 %EXEName%.hbp -b -p -w3 -dDONOTINCLUDE
 ) else (
     copy ..\debugger_off.hbm ..\debugger.hbm
-    hbmk2 %EXEName%.hbp -w3
+    hbmk2 %EXEName%.hbp -w3 -dDONOTINCLUDE
 )
 
 if not exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (

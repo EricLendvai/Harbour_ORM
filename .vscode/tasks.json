@@ -4,17 +4,11 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "CompileRelease",
-            "type": "shell",
-            "command": "${workspaceFolder}\\BuildLIB.bat",
+            "label": "RunDebug",
+            "command": "${command:workbench.action.debug.start}",
             "options": {
                 "cwd": "${workspaceFolder}",
-                "env": {
-                    "HB_VFP_ROOT":"r:\\Harbour_vfp",
-                    "LIBName":"hb_orm",
-                    "BuildMode":"release",
-                    "HB_COMPILER":"${input:CCompiler}"
-                }
+                "statusbar": {"label" : "<Compile and Debug>","hide" : false}
             },
             "presentation": {
                 "echo": true,
@@ -32,12 +26,13 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "HB_VFP_ROOT":"r:\\Harbour_vfp",
+                    "HB_VFP_ROOT":"c:\\Harbour_vfp",
                     "LIBName":"hb_orm",
                     "BuildMode":"debug",
                     // "HB_COMPILER":"${input:CCompiler}"
                     "HB_COMPILER":"mingw64"
-                }
+                },
+                "statusbar": {"label" : "<Compile Debug>","hide" : false}
             },
             "presentation": {
                 "echo": true,
@@ -47,6 +42,40 @@
                 "showReuseMessage": false,
                 "clear": true
             }
+        },
+        {
+            "label": "CompileRelease",
+            "type": "shell",
+            "command": "${workspaceFolder}\\BuildLIB.bat",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "HB_VFP_ROOT":"c:\\Harbour_vfp",
+                    "LIBName":"hb_orm",
+                    "BuildMode":"release",
+                    "HB_COMPILER":"${input:CCompiler}"
+                },
+                "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            }
+        },
+        {
+            "label": "DelAllPPO",
+            "type": "shell",
+            "command": "del *.ppo",
+            "isBackground": true,
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "statusbar": {"label" : "<Del All PPO>","hide" : false}
+            },
+            "presentation": {"reveal": "never"}
         }
     ],
     "inputs": [

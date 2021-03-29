@@ -1,11 +1,8 @@
 # Ideas and Todos for hb_orm_Cursor
 - Check every areas marked with _M_
 - UTF8 support already exists, what about Code Pages
-- Re-test all the Field Types
 - For Field assignments add auto conversion maybe?
-- Delete Record(s)
 - Check memory use, or memory use limitation.
-- Should We have a delete record? and a garbage recycle
 - Method to push cursor to server?
 - Option to dump to DBF?
 - Fix SQLMix support to descending orders and use that support in Index() and CreateIndexes() methods
@@ -13,7 +10,8 @@
 
 # Ideas and Todos for hb_orm_sqldata
 - Implement SQL UNIONs
-- Implement Cross SQL Backends global UDFs that includes most hb and vfp string manipulation
+- Implement Cross SQL Backends global UDFs that includes most hb and vfp manipulation.
+  like for example: left(),right(),strtran(),padr(),allt(),iif(),case(),between(),inlist(),nvl(),round(),dtot(),dow(),trans(),bitand(),space(),mline(),chr(),FormatAlphaNumericForIndexing(), ....
 - Add optional Field Flags attribute to Field() method
 - Initialize the related hb_orm_cursor object's p_AutoIncrementLastValue property so newly added records will also have their auto-increment field properly set
 - Default setting of "Trimmed" field Flag attribute for related hb_orm_cursor object character fields
@@ -43,3 +41,10 @@
     For cursors created with mem:table   VFPCDX or DBFCDX:
         Field Name length is limited to 10 characters
         Field defined as Null, after dbAppend() will have their values set as NIL
+
+
+# Coding Standards
+- Every local variable names start with "l_". Most of the time will be followed Hungarian notation.
+- Every parameter names in a method or function start with "par_"
+- Most property names start with "p_"
+- Global variable names start with "v_"

@@ -1,609 +1,565 @@
-//Copyright (c) 2020 Eric Lendvai MIT License
-
-// #include "hb_fcgi.ch"
-// #include "fileio.ch"
-// #include "dbinfo.ch"
-
-// request DBFCDX
-// request DBFFPT
-// request HB_CODEPAGE_EN
-//request HB_CODEPAGE_UTF8
-// memvar v_hPP
-
-//request hb_vfp
+//Copyright (c) 2021 Eric Lendvai MIT License
 
 REQUEST HB_CODEPAGE_UTF8
 
 #include "hb_orm.ch"
 #include "hb_VFP.ch"
 
-// #include "dbinfo.ch"   // for the export to html file
-
-// #include "inkey.ch"
-// #include "button.ch"
-// #include "setcurs.ch"
-// #include "box.ch"
-
-// #define _DRAW_1 hb_UTF8ToStr( "├" )
-// #define _DRAW_2 hb_UTF8ToStr( "┤" )
-// #define _DRAW_3 hb_UTF8ToStrBox( "┐ ┌─" )
-// #define _DRAW_4 hb_UTF8ToStrBox( "┘ └─" )
-// #define _DRAW_5 hb_UTF8ToStrBox( "│ │" )
-// #define _DRAW_6 hb_UTF8ToStrBox( "┐ ┌─┤HIDE├─" )
-// #define _DRAW_7 hb_UTF8ToStrBox( "╖ ╓─┤HIDE├─" )
-// #define _DRAW_8 hb_UTF8ToStrBox( "╜ ╙─" )
-// #define _DRAW_9 hb_UTF8ToStrBox( "║ ║" )
-
 //=================================================================================================================
 Function Main()
-local iSQLHandle
-local oSQLConnection1
-local oSQLConnection2
+local l_iSQLHandle
+local l_oSQLConnection1
+local l_oSQLConnection2
 local o_DB1
 local o_DB2
-local nKey
-local l_result
+local l_nKey
 
 local l_w1
-local l_LastSQL
 
 local l_o_data
-local l_a_array := {}
-
-local l_aStructure
-
-local l_Tally
-local l_LastSQLError
-local l_loop
-
-local l_table_003
-local l_table_003_key
-local l_table_003_keyB
-local l_hash_Key
-local l_TestResult
 
 local l_o_Cursor
 
-// public v_hPP
-// v_hPP := nil
+local l_SchemaDefinition1
+local l_SchemaDefinition2
 
-// SendToDebugView("Starting ORM Example SQL_CRUD")
+local l_SQLScript
+local l_LastError
 
-// //hb_cdpSelect("UTF8")
-// hb_cdpSelect("EN")
+local l_Version
 
-// // oFcgi := hb_Fcgi():New()
-// oFcgi := MyFcgi():New()    // Used a subclass of hb_Fcgi
-// do while oFcgi:Wait()
-//     oFcgi:OnRequest()
-// enddo
+local l_cPreviousSchemaName
 
 hb_cdpSelect("UTF8") 
 
-?"-----"+vfp_strtran("Hello","HEL","Bye",-1,-1,1)+"-----"
-// altd()
-?VFP_GetCompatibilityPackVersion()
-
+//===========================================================================================================================
 ?"------------------------------------------------------"
-TestCode()
+//===========================================================================================================================
 
-oSQLConnection1 := hb_SQLConnect()
-with object oSQLConnection1
+l_oSQLConnection1 := hb_SQLConnect()
+with object l_oSQLConnection1
+    :MySQLEngineConvertIdentifierToLowerCase := .f.
+    :SetDriver("MariaDB ODBC 3.1 Driver")
     :SetBackendType("MariaDB")
     :SetUser("root")
     :SetPassword("rndrnd")
     :SetDatabase("test001")
     // :SetServer("127.0.0.1")
-    iSQLHandle := :Connect()
+    :SetPrimaryKeyFieldName("key")
+    l_iSQLHandle := :Connect()
     do case
-    case iSQLHandle == 0
+    case l_iSQLHandle == 0
         ?"Already Connected"
-    case iSQLHandle < 0
-        ? :GetLastErrorMessage()
+    case l_iSQLHandle < 0
+        ? :GetErrorMessage()
     otherwise
-        ?"connection is",iSQLHandle
+        ?"connection is",l_iSQLHandle
     endcase
 
     ?"MariaDB Get last Handle",:GetHandle()
-
-
-    //:LoadSchema()
-    //altd()
-
-
-    // if !:Lock("hbwarti",123)
-    //     ?"Failed to lock"
-    // endif
-    // altd()
-    // :Unlock("hbwarti",123)
-    // altd()
-    // ?"Paused"
 end
 
 
-oSQLConnection2 := hb_SQLConnect("PostgreSQL",,,,"postgres","rndrnd","test002","public")
-with object oSQLConnection2
-    iSQLHandle := :Connect()
+l_oSQLConnection2 := hb_SQLConnect("PostgreSQL",,,,"postgres","rndrnd","test001","set001")
+
+with object l_oSQLConnection2
+   :PostgreSQLIdentifierCasing := HB_ORM_POSTGRESQL_CASE_SENSITIVE
+   :PostgreSQLHBORMSchemaName := "MyDataDic"
+    l_iSQLHandle := :Connect()
     do case
-    case iSQLHandle == 0
+    case l_iSQLHandle == 0
         ?"Already Connected"
-    case iSQLHandle < 0
-        ? :GetLastErrorMessage()
+    case l_iSQLHandle < 0
+        ? :GetErrorMessage()
     otherwise
-        ?"connection is",iSQLHandle
+        ?"connection is",l_iSQLHandle
     endcase
 
     ?"PostgreSQL Get last Handle",:GetHandle()
-
-    // if !:Lock("hbwarti",123)
-    //     ?"Failed to lock"
-    // endif
-    // altd()
-    // :Unlock("hbwarti",123)
-    // altd()
-    // ?"Paused"
-
-    l_table_003      := :p_Schema["table003"]
-    l_table_003_key  := l_table_003["varchar51"]
-    l_table_003_keyB := :p_Schema["table003"]["varchar51"]
-
-
-// nPosition := hb_hPos( aHash, Key ) 
-// Key := hb_hKeyAt( aHash, nPosition )
-
-//To get the 
-l_hash_Key := hb_hKeyAt( :p_Schema["table003"], hb_hPos( :p_Schema["table003"], "varchar51" )  ) 
-
-//    altd()
-
-
 end
 
-//hb_orm_TestDebugger()
+//===========================================================================================================================
+
+if l_oSQLConnection1:Connected
+    hb_orm_SendToDebugView("MariaDB table001 exists ",l_oSQLConnection1:TableExists("table001"))
+endif
+if l_oSQLConnection2:Connected
+    hb_orm_SendToDebugView("PostgreSQL table001 exists ",l_oSQLConnection2:TableExists("table001"))
+    hb_orm_SendToDebugView("PostgreSQL bogus.table001 exists ",l_oSQLConnection2:TableExists("bogus.table001"))
+endif
+
+hb_orm_SendToDebugView("Will Initialize l_SchemaDefinition1")
+
+l_SchemaDefinition1 := ;
+{"dbf001"=>{;   //Field Definition
+   {"key"          =>{,  "I",   0,  0,.f.,.t.};
+   ,"customer_name"=>{,  "C",  50,  0,.f.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"dbf002"=>{;   //Field Definition
+   {"key"     =>{,  "I",   0,  0,.f.,.t.};
+   ,"p_dbf001"=>{,  "I",   0,  0,.f.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"noindextesttable"=>{;   //Field Definition
+   {"KeY" =>{,  "I",   0,  0,.f.,.t.};
+   ,"Code"=>{,  "C",   3,  0,.t.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"table001"=>{;   //Field Definition
+   {"key"     =>{   ,  "I",   0,  0,.f.,.t.};
+   ,"LnAme"   =>{   ,  "C",  50,  0,.f.,.f.};
+   ,"fname"   =>{   ,  "C",  53,  0,.f.,.f.};
+   ,"minitial"=>{   ,  "C",   1,  0,.f.,.f.};
+   ,"age"     =>{   ,  "N",   3,  0,.f.,.f.};
+   ,"dob"     =>{   ,  "D",   0,  0,.f.,.f.};
+   ,"dati"    =>{   ,"DTZ",   0,  0,.f.,.f.};
+   ,"logical1"=>{"P",  "L",   0,  0,.f.,.f.};
+   ,"numdec2" =>{   ,  "N",   6,  1,.f.,.f.};
+   ,"bigint"  =>{"M", "IB",   0,  0,.f.,.f.};
+   ,"varchar" =>{   , "CV", 203,  0,.f.,.f.}};
+   ,;   //Index Definition
+   {"lname"=>{   ,"LnAme",.f.,"BTREE"};
+   ,"tag1" =>{"P","upper((lname)::text)",.f.,"BTREE"};
+   ,"tag2" =>{"P","upper((fname)::text)",.f.,"BTREE"}}};
+,"table002"=>{;   //Field Definition
+   {"key"       =>{,  "I",   0,  0,.f.,.t.};
+   ,"p_table001"=>{,  "I",   0,  0,.t.,.f.};
+   ,"children"  =>{, "CV", 200,  0,.t.,.f.};
+   ,"Cars"      =>{, "CV", 300,  0,.f.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"table003"=>{;   //Field Definition
+   {"key"        =>{,  "I",   0,  0,.f.,.t.};
+   ,"p_table001" =>{,  "I",   0,  0,.f.,.f.};
+   ,"char50"     =>{,  "C",  50,  0,.f.,.f.};
+   ,"bigint"     =>{, "IB",   0,  0,.t.,.f.};
+   ,"Bit"        =>{,  "R",   0,  0,.t.,.f.};
+   ,"Decimal5_2" =>{,  "N",   5,  2,.t.,.f.};
+   ,"Decimal25_7"=>{,  "N",  25,  7,.t.,.f.};
+   ,"VarChar51"  =>{, "CV",  50,  0,.t.,.f.};
+   ,"Text"       =>{,  "M",   0,  0,.t.,.f.};
+   ,"Binary"     =>{,  "R",   0,  0,.t.,.f.};
+   ,"Date"       =>{,  "D",   0,  0,.t.,.f.};
+   ,"DateTime"   =>{, "DT",   0,  4,.t.,.f.};
+   ,"time"       =>{, "TO",   0,  4,.t.,.f.};
+   ,"Boolean"    =>{,  "L",   0,  0,.t.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"table004"=>{;   //Field Definition
+   {"id"    =>{,  "I",   0,  0,.f.,.f.};
+   ,"street"=>{,  "C",  50,  0,.t.,.f.};
+   ,"zip"   =>{,  "C",   5,  0,.t.,.f.};
+   ,"state" =>{,  "C",   2,  0,.t.,.f.}};
+   ,;   //Index Definition
+   {"pkey"=>{,"id",.t.,"BTREE"}}};
+,"alltypes"=>{;   //Field Definition
+   {"key"                =>{,  "I",   0,  0,.f.,.t.};
+   ,"integer"            =>{,  "I",   0,  0,.t.,.f.};
+   ,"big_integer"        =>{, "IB",   0,  0,.t.,.f.};
+   ,"money"              =>{,  "Y",   0,  0,.t.,.f.};
+   ,"char10"             =>{,  "C",  10,  0,.t.,.f.};
+   ,"varchar10"          =>{, "CV",  10,  0,.t.,.f.};
+   ,"binary10"           =>{,  "B",  10,  0,.t.,.f.};
+   ,"varbinary10"        =>{, "BV",  10,  0,.t.,.f.};
+   ,"memo"               =>{,  "M",   0,  0,.t.,.f.};
+   ,"raw"                =>{,  "R",   0,  0,.t.,.f.};
+   ,"logical"            =>{,  "L",   0,  0,.t.,.f.};
+   ,"date"               =>{,  "D",   0,  0,.t.,.f.};
+   ,"time_with_zone"     =>{,"TOZ",   0,  0,.t.,.f.};
+   ,"time_no_zone"       =>{, "TO",   0,  0,.t.,.f.};
+   ,"datetime_with_zone" =>{,"DTZ",   0,  0,.t.,.f.};
+   ,"datetime_no_zone"   =>{, "DT",   0,  0,.t.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"zipcodes"=>{;   //Field Definition
+   {"key"    =>{, "IB",   0,  0,.f.,.t.};
+   ,"zipcode"=>{,  "C",   5,  0,.t.,.f.};
+   ,"city"   =>{,  "C",  45,  0,.t.,.f.}};
+   ,;   //Index Definition
+   NIL};
+}
+
+hb_orm_SendToDebugView("Initialized l_SchemaDefinition1")
+
+hb_orm_SendToDebugView("Will Initialize l_SchemaDefinition2")
 
 
-// Field Types
-// "C"  = Character - C  / String - Textbox
-// "M"  = Memo - M / Text (No Limit Of Length) - Text Area
-// "N"  = Numeric - N / Numeric - Textbox
-// "D"  = Date - D / Date - Textbox
-// "T"  = DateTime - T / Date and Time - Textbox
-// "TS" = Timestamp
-// "L"  = Logical - L / Logical (Yes/No) - Checkbox
-// "I"  = Integer - I / List Of Values
-	
+l_SchemaDefinition2 := ;
+{"dbf001"=>{;   //Field Definition
+   {"key"          =>{,  "I",   0,  0,.f.,.t.};
+   ,"customer_name"=>{,  "C",  50,  0,.f.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"dbf002"=>{;   //Field Definition
+   {"key"     =>{,  "I",   0,  0,.f.,.t.};
+   ,"p_dbf001"=>{,  "I",   0,  0,.f.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"set003.cust001"=>{;   //Field Definition
+   {"KeY" =>{,  "I",   0,  0,.f.,.t.};
+   ,"Code"=>{,  "C",   3,  0,.t.,.f.}};
+   ,;   //Index Definition
+   NIL};
+,"set003.form001"=>{;   //Field Definition
+   {"key"     =>{   ,  "I",   0,  0,.f.,.t.};
+   ,"LnAme"   =>{   ,  "C",  50,  0,.f.,.f.};
+   ,"fname"   =>{   ,  "C",  53,  0,.f.,.f.};
+   ,"minitial"=>{   ,  "C",   1,  0,.f.,.f.};
+   ,"age"     =>{   ,  "N",   3,  0,.f.,.f.};
+   ,"dob"     =>{   ,  "D",   0,  0,.f.,.f.};
+   ,"dati"    =>{   ,"DTZ",   0,  0,.f.,.f.};
+   ,"logical1"=>{"P",  "L",   0,  0,.f.,.f.};
+   ,"numdec2" =>{   ,  "N",   6,  1,.f.,.f.};
+   ,"bigint"  =>{"M", "IB",   0,  0,.f.,.f.};
+   ,"varchar" =>{   , "CV", 203,  0,.f.,.f.}};
+   ,;   //Index Definition
+   {"lname"=>{   ,"LnAme",.f.,"BTREE"};
+   ,"tag1" =>{"P","upper((lname)::text)",.f.,"BTREE"};
+   ,"tag2" =>{"P","upper((fname)::text)",.f.,"BTREE"}}};
+,"form002"=>{;   //Field Definition
+   {"key"       =>{,  "I",   0,  0,.f.,.t.};
+   ,"p_table001"=>{,  "I",   0,  0,.t.,.f.};
+   ,"children"  =>{, "CV", 200,  0,.t.,.f.};
+   ,"Cars"      =>{, "CV", 300,  0,.f.,.f.}};
+   ,;   //Index Definition
+   NIL};
+}
 
-//l_FieldType,l_FieldLen,l_FieldDec,l_Fie5ldAllowNull,l_FieldAutoIncrement
+if l_oSQLConnection1:Connected
+    l_Version := l_oSQLConnection1:GetSchemaDefinitionVersion("AllMySQL v1")
+    l_oSQLConnection1:SetSchemaDefinitionVersion("AllMySQL v1"      ,l_Version+1)
+endif
 
-l_aStructure := {=>}
-l_aStructure["key"]        := {"I",,,,.t.}
-l_aStructure["p_table001"] := {"I"}
-l_aStructure["city"]       := {"C",50,0}
-
-
-o_DB1 := hb_SQLData()
-with object o_DB1
-
-    // :Echo()
-
-    :SetPrimaryKeyFieldName("key")
-    :UseConnection(oSQLConnection1)
-
-    // l_aStructure := :LoadTableStructure("table001")
+if l_oSQLConnection2:Connected
+    l_Version := l_oSQLConnection2:GetSchemaDefinitionVersion("AllPostgreSQL v1")
+    l_oSQLConnection2:SetSchemaDefinitionVersion("AllPostgreSQL v1" ,l_Version+1)
+endif
 // altd()
-//     l_aStructure := :LoadTableStructure("table002")
-// altd()
-    // l_aStructure := :LoadTableStructure("table003")
-// altd()
 
+hb_orm_SendToDebugView("Initialized l_SchemaDefinition2")
 
-// altd()
-//     l_TestResult := :FixTableAndFieldNameCasingInExpression("table001.fname")
-//     l_TestResult := :FixTableAndFieldNameCasingInExpression("table001.fname < 5")
-//     l_TestResult := :FixTableAndFieldNameCasingInExpression("table001>fname")
-//     l_TestResult := :FixTableAndFieldNameCasingInExpression("table001 .fname")
-//     l_TestResult := :FixTableAndFieldNameCasingInExpression("table001..fname")
-//     l_TestResult := :FixTableAndFieldNameCasingInExpression("table001.()")
-//     l_TestResult := :FixTableAndFieldNameCasingInExpression("upper(table001.fName) $ taBle001.LName")
+//===========================================================================================================================
+if l_oSQLConnection1:Connected
+    hb_orm_SendToDebugView("MariaDB - Will GenerateCurrentSchemaHarbourCode")
+    l_oSQLConnection1:GenerateCurrentSchemaHarbourCode("d:\CurrentSchema_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_.txt")
+    hb_orm_SendToDebugView("MariaDB - Done d:\CurrentSchema_PostgreSQL_...text")
 
-    :Table("table003")
-    :Column("table003.key"        ,"table003_key")
-    :Column("table003.char50"     ,"table003_char50")
-    :Column("table003.Bigint33"   ,"table003_Bigint33")
-    :Column("table003.BIT"        ,"table003_Bit")
-    :Column("table003.Decimal5_2" ,"table003_Decimal5_2")
-    :Column("table003.Varchar51"  ,"table003_Varchar51")
-    :Column("table003.Text"       ,"table003_Text")
-    :Column("table003.Binary52"   ,"table003_Binary52")
-    :Column("table003.Varbinary55","table003_Varbinary55")
-    :Column("table003.Date"       ,"table003_Date")
-    :Column("table003.DateTime"   ,"table003_DateTime")
-    :Column("table003.Time"       ,"table003_Time")
-    :Column("table003.Boolean"    ,"table003_Boolean")
-
-    :SQL(10000,"Table003Records")
-
-    //Example of adding a record and adding a local index in activating it
-    l_o_Cursor := o_DB1:p_oCursor
-
-    l_o_Cursor:AppendBlank() //Blank Record
-    l_o_Cursor:SetFieldValue("TABLE003_CHAR50","Bogus")
-
-    l_o_Cursor:InsertRecord({"TABLE003_CHAR50"   => "Fabulous",;
-                             "TABLE003_BIGINT33" => 1234})
-
-    l_o_Cursor:Index("tag1","TABLE003_CHAR50")
-    l_o_Cursor:CreateIndexes()
-    l_o_Cursor:SetOrder("tag1")
-    
-
-// select Table003Records
-// dbGoBottom()
-// altd()
-// dbGoTop()
-
-    l_Tally        := :tally
-    l_LastSQLError := :ErrorMessage()
-    l_LastSQL      := :LastSQL()
-    l_TestResult   := oSQLConnection1:p_Schema["table003"]
-// altd()
-//function ExportTableToHtmlFile(par_alias,par_html_file,par_MaxKBSize,par_HeaderRepeatFrequency)
-
-//ExportTableToHtmlFile("Table003Records","R:\Harbour_ORM\Examples\SQL_CRUD\Table003Records.html")
-ExportTableToHtmlFile("Table003Records","MySQL_Table003Records","From MySQL",,,.t.)
-
-// ?"Will Get DBF name:"
-// ?VFP_dbf("Table003Records")   //Will be NIL
-
-//     // :Table("table003")
-//     // :Field("table003.char50"   ,"Eric Lendvai")
-//     // :Field("table003.Bigint33" ,1)
-//     // :Field("table003.Decimal5_2" ,12.34)
-//     // :Add()
-
-//     select Table003Records
-
-//     l_Tally := :tally
-//     l_LastSQLError := :ErrorMessage()
-
-
-// hb_orm_SendToDebugView(replicate("-",60))
-// hb_orm_SendToDebugView("Alias",alias())
-// hb_orm_SendToDebugView("Record Number",recno())
-// for l_loop := 1 to FCount()
-//     hb_orm_SendToDebugView(FieldName(l_loop)+" - "+hb_FieldType(l_loop)+" - "+trans(hb_FieldLen())+" - "+trans(hb_FieldDec()))
-//     hb_orm_SendToDebugView("Value",FieldGet(l_loop))
-// endfor
-// hb_orm_SendToDebugView(replicate("-",60))
-
-// // altd()
-//     :UpdateTableStructure("table003",l_aStructure,.f.)
-
-    select Table003Records
-
-
-hb_orm_SendToDebugView(replicate("-",60))
-hb_orm_SendToDebugView("Alias",alias())
-hb_orm_SendToDebugView("Record Number",recno())
-for l_loop := 1 to FCount()
-    hb_orm_SendToDebugView("MySQL "+trans(l_loop)+") "+FieldName(l_loop)+" - "+hb_FieldType(l_loop)+" - "+trans(hb_FieldLen())+" - "+trans(hb_FieldDec()))
-
-// altd()
-// l_TestResult := StrTran(FieldName(l_loop),"TABLE003_","")
-// l_TestResult := oSQLConnection1:p_Schema["table003"][StrTran(FieldName(l_loop),"TABLE003_","")]
-
-    hb_orm_SendToDebugView("SQLField Type: ",oSQLConnection1:p_Schema["table003"][StrTran(FieldName(l_loop),"TABLE003_","")][6])
-    hb_orm_SendToDebugView("Value: ",FieldGet(l_loop))
-endfor
-hb_orm_SendToDebugView(replicate("-",60))
-
-
-// altd()
-    :Table("table001")
-    :Field("age",5)
-    :Field("dob",date())
-    :Field("dati",hb_datetime())
-    :Field("fname","Michael"+' "excetera"')
-    :Field("lname","O'Hara 123")
-    :Field("logical1",NIL)
-    if :Add()
-        nKey := :Key()
-
-        :Table("table001")
-        :Field("fname","Ingrid")
-        :Update(nKey)
-    
-
-// altd()
-        :Table("table001")
-        :Column("table001.fname","table001_fname")
-        l_o_data := :Get(nKey)
-// altd()
-        l_w1 := l_o_data:table001_fname
-        // AltD()
-
-        l_w1 := l_o_data:GetFieldInfo(0,"hello")
-        // AltD()
-
-        :Table("table001")
-        l_o_data := :Get(nKey)
-// AltD()
-
-        // ?"Add record with key = "+AllTrim(str(nKey))
-        ?"Add record with key = "+Trans(nKey)
-
-
-        :Delete(nKey)
-
+    // altd()
+    // l_SQLScript := l_LastError := ""
+    if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_SchemaDefinition1),,@l_SQLScript,@l_LastError) > 0
+        hb_orm_SendToDebugView("MariaDB - Updated d:\MigrationSqlScript_MariaDB_....txt")
+    else
+        if !empty(l_LastError)
+            hb_orm_SendToDebugView("MariaDB - Failed Migrate d:\MigrationSqlScript_MariaDB_....txt")
+            hb_MemoWrit("d:\MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+".txt",l_LastError)
+        endif
     endif
-
-// altd()
-    :Table("table001")
-    // :Join("inner","table002","","table002.p_table001 = table001 and key = ^",5)
-    l_w1 := :Join("inner","table002","","table002.p_table001 = table001")
-    :ReplaceJoin(l_w1,"inner","table002","","table002.p_table001 = table001.key")
-
-    l_w1 := :Where("table001.fname = ^","eric")
-    :Where("table001.lname = ^","lendvai")
-    :ReplaceWhere(l_w1,"table001.fname = ^","liam")
-
-    l_w1 := :Having("table001.fname = ^","eric")
-    :Having("table001.lname = ^","lendvai")
-    :ReplaceHaving(l_w1,"table001.fname = ^","liam")
-
-    //:KeywordCondition("eric","fname+lname","or",.t.)
-    
-
     // altd()
+    hb_MemoWrit("d:\MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+".txt",l_SQLScript)
 
-    ?"----------------------------------------------"
-    :Table("table001")
-    :Column("table001.key"  ,"key")
-    :Column("table001.fname","table001_fname")
-    :Column("table001.lname","table001_lname")
-    :Column("table002.children","table002_children")
-    :Where("table001.key < 4")
-    :Join("inner","table002","","table002.p_table001 = table001.key")
-    :SQL(10001,"AllRecords")
-    
-    l_LastSQLError := :ErrorMessage()
+endif
 
-    l_LastSQL := :LastSQL()
-    hb_orm_SendToDebugView("LastSQL",l_LastSQL)
-    hb_orm_SendToDebugView("LastRunTime",:LastRunTime())
+//===========================================================================================================================
+if l_oSQLConnection2:Connected
 
-    ?"Will use scan/endscan"
-    select AllRecords
-    index on upper(field->table001_fname) tag ufname to AllRecords
+    l_oSQLConnection2:SetCurrentSchemaName("set001")
 
-    // do while !eof()
-    scan all
-        ?"MySQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
-    endscan
-    // enddo
+    hb_orm_SendToDebugView("PostgreSQL - Will GenerateCurrentSchemaHarbourCode")
+    l_oSQLConnection2:GenerateCurrentSchemaHarbourCode("d:\CurrentSchema_PostgreSQL_"+l_oSQLConnection2:GetDatabase()+"_.txt")
+    hb_orm_SendToDebugView("PostgreSQL - Done d:\CurrentSchema_PostgreSQL_...text")
 
-// dbGoTop()
-// browse()   //Would require to use gtwin in the hbp file
-
-    // l_w1 := :SQL(10005)
-    // l_w1 := :SQL(10006,l_a_array)
-
-    ?"----------------------------------------------"
-
-
-
-
-    :SetExplainMode(2)
-    l_result := :SQL(10004)
-    // altd()
-
-    //altd()
-    l_o_Cursor:Close()
-
-
-end
-
-o_DB2 := hb_SQLData()
-with object o_DB2
-    :SetPrimaryKeyFieldName("key")
-    :UseConnection(oSQLConnection2)
-
-//     l_aStructure := :LoadTableStructure("table001")
-// altd()
-//     l_aStructure := :LoadTableStructure("table002")
-// altd()
-//     l_aStructure := :LoadTableStructure("table003")
-// altd()
-//     l_aStructure := :LoadTableStructure("table004")
-// altd()
-
-
-
-
-
-    // l_aStructure := :LoadTableStructure("table003")
-// altd()
-    :Table("table003")
-    :Column("table003.key"        ,"table003_key")
-    :Column("table003.char50"     ,"table003_char50")
-    :Column("table003.bigint"     ,"table003_Bigint")
-    :Column("table003.Bit"        ,"table003_Bit")
-    :Column("table003.Decimal5_2" ,"table003_Decimal5_2")
-    :Column("table003.Varchar51"  ,"table003_Varchar51")
-    :Column("table003.Text"       ,"table003_Text")
-    :Column("table003.BInary"     ,"table003_Binary")
-    // :Column("table003.Varbinary55","table003_Varbinary55")
-    :Column("table003.Date"       ,"table003_Date")
-    :Column("table003.DateTime"   ,"table003_DateTime")
-    :Column("table003.time"       ,"table003_Time")
-    :Column("table003.Boolean"    ,"table003_Boolean")
-    :SQL(10010,"Table003Records")
-
-    l_Tally        := :tally
-    l_LastSQLError := :ErrorMessage()
-    l_LastSQL      := :LastSQL()
-
-// altd()
-ExportTableToHtmlFile("Table003Records","PostgreSQL_Table003Records.html","From PostgreSQL",,25,.t.)
-
-    select Table003Records
-
-
-hb_orm_SendToDebugView(replicate("-",60))
-hb_orm_SendToDebugView("Alias",alias())
-hb_orm_SendToDebugView("Record Number",recno())
-for l_loop := 1 to FCount()
-    hb_orm_SendToDebugView("PostgreSQL "+trans(l_loop)+") "+FieldName(l_loop)+" - "+hb_FieldType(l_loop)+" - "+trans(hb_FieldLen())+" - "+trans(hb_FieldDec()))
-    hb_orm_SendToDebugView("Value",FieldGet(l_loop))
-endfor
-hb_orm_SendToDebugView(replicate("-",60))
-
-
-
-
-
-
-    // :UpdateTableStructure("table003",l_aStructure,.f.)
-
-    :Table("table001")
-    :Field("age",6)
-    :Field("dob",date())
-    :Field("dati",hb_datetime())
-    :Field("fname","Michael"+' "excetera"')
-    :Field("lname","O'Hara 123")
-    :Field("logical1",.t.)
-    // :Field("fname","Eric")
-    // :Field("lname","lebeaux")
-    if :Add()
-        nKey := :Key()
-
-
-        :Table("table001")
-        :Field("fname","Ingrid")
-        :Update(nKey)
-    
-
-
-        :Table("table001")
-        :Column("table001.fname","table001_fname")
-        l_o_data := :Get(nKey)
-
-        l_w1 := l_o_data:table001_fname
-        // AltD()
-
-        l_w1 := l_o_data:GetFieldInfo(0,"hello")
-        // AltD()
-
-        :Table("table001")
-        l_o_data := :Get(nKey)
-// AltD()
-
-        // ?"Add record with key = "+AllTrim(str(nKey))
-        ?"Add record with key = "+Trans(nKey)
-
-        :Delete(nKey)
-
-
-// l_result := :PrepExpression("Hello World ^ ^ ^ ^",date(),hb_datetime(),5,"testing")
-// altd()
-
+    l_SQLScript := ""
+    if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_SchemaDefinition1),,@l_SQLScript,@l_LastError) > 0
+        hb_orm_SendToDebugView("PostgreSQL - Updated d:\MigrationSqlScript_PostgreSQL_set001....txt")
+    else
+        if !empty(l_LastError)
+            hb_orm_SendToDebugView("PostgreSQL - Failed Migrate d:\MigrationSqlScript_PostgreSQL_set001_....txt")
+            hb_MemoWrit("d:\MigrationSqlScript_PostgreSQL_set001_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_LastError)
+        endif
     endif
-
-    ?"----------------------------------------------"
-    :Table("table001")
-    :Column("table001.key"  ,"key")
-    :Column("table001.fname","table001_fname")
-    :Column("table001.lname","table001_lname")
-    :Column("table002.children","table002_children")
-    :Where("table001.key < 4")
-    :Join("inner","table002","","table002.p_table001 = table001.key")
-    :SQL(10002,"AllRecords")
-
-    l_LastSQL := :LastSQL()
-    hb_orm_SendToDebugView("LastSQL",l_LastSQL)
-    hb_orm_SendToDebugView("LastRunTime",:LastRunTime())
-
-    select AllRecords
-    do while !eof()
-        ?"PostgreSQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
-        dbSkip()
-    enddo
-    ?"----------------------------------------------"
-
-    // altd()
-
-    :SetExplainMode(2)
-    l_result := :SQL(10007)
-    // altd()
-
-end
-
-/*
-o_DB1 := hb_orm()
-o_DB1:UseConnection(oSQLConnection1)
-
-with object o_DB1
-    :Table("table001")
-end
-
-// Altd()
-// ?o_DB1:Echo("The SQL Engine is ")
-
-*/
-
-oSQLConnection1:Disconnect()
-?"MariaDB Get last Handle",oSQLConnection1:GetHandle()
+    hb_MemoWrit("d:\MigrationSqlScript_PostgreSQL_set001_"+l_oSQLConnection2:GetDatabase()+".txt",l_SQLScript)
 
 
-oSQLConnection2:Disconnect()
-?"PostgreSQL Get last Handle",oSQLConnection2:GetHandle()
+    l_cPreviousSchemaName := l_oSQLConnection2:SetCurrentSchemaName("set002")
+
+    l_SQLScript := ""
+    if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_SchemaDefinition2),,@l_SQLScript,@l_LastError) > 0
+        hb_orm_SendToDebugView("PostgreSQL - Updated d:\MigrationSqlScript_PostgreSQL_set002....txt")
+    else
+        if !empty(l_LastError)
+            hb_orm_SendToDebugView("PostgreSQL - Failed Migrate d:\MigrationSqlScript_PostgreSQL_set002_....txt")
+            hb_MemoWrit("d:\MigrationSqlScript_PostgreSQL_set002_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_LastError)
+        endif
+    endif
+    hb_MemoWrit("d:\MigrationSqlScript_PostgreSQL_set002_"+l_oSQLConnection2:GetDatabase()+".txt",l_SQLScript)
 
 
 
-// o_DB = hb_orm()  //:New()
 
-// altd()
+    l_oSQLConnection2:SetCurrentSchemaName(l_cPreviousSchemaName)
+    
 
-// ??o_DB:Echo("Hello")
-// //??GetMessage()
+    l_oSQLConnection2:Lock("set001.table001",1000)
+    l_oSQLConnection2:Lock("set001.table001",1000)
+    l_oSQLConnection2:Lock("set001.table001",1000)
+    l_oSQLConnection2:Lock("set001.table001",1001)
+    l_oSQLConnection2:Lock("set001.table001",1002)
+    l_oSQLConnection2:Unlock("set001.table001",1000)
 
-// hb_orm_SendToDebugView("test001")
+endif
 
-// altd()
-// SendToDebugView("Done")
+//===========================================================================================================================
+?"Done"
+
+if l_oSQLConnection1:Connected
+    o_DB1 := hb_SQLData(l_oSQLConnection1)
+    with object o_DB1
+
+        :Table("alltypes")
+        :SetEventId("MySQLAddAllTypes")
+        :Field("integer"           ,123)
+        :Field("big_integer"       ,10**15)
+        :Field("money"             ,123456.1245)
+        :Field("char10"            ,"Hello World Hello World Hello World")
+        :Field("varchar10"         ,"Hello World Hello World Hello World")
+        :Field("binary10"          ,"01010")
+        :Field("varbinary10"       ,"0101010101010")
+        :Field("memo"              ,"Test")
+        :Field("raw"               ,"Test")
+        :Field("logical"           ,.t.)
+        :Field("date"              ,hb_ctod("02/24/2021"))
+        :Field("time_with_zone"    ,"11:12:13")
+        :Field("time_no_zone"      ,"11:12:13")
+        :Field("datetime_with_zone",hb_ctot("02/24/2021 11:12:13"))
+        :Field("datetime_no_zone"  ,hb_ctot("02/24/2021 11:12:13"))
+        :Add()
+
+
+
+        :Table("table003")
+        :SetEventId("MySQLDecimalTest")
+        :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog
+        :Field("Decimal25_7","-1111567890123456.1234567")
+        // :Field("DateTime",hb_ctot("02/25/2021 07:24:03:234 pm","mm/dd/yyyy", "hh:mm:ss:fff pp"))
+        :Field("DateTime",hb_ctot("02/25/2021 07:24:04:1234","mm/dd/yyyy", "hh:mm:ss:ffff"))
+        :Add()
+
+
+        // :UseConnection(l_oSQLConnection1)
+
+        :Table("table003")
+        :SetEventId("mysql 1")
+        :Column("table003.key"        ,"table003_key")
+        :Column("table003.char50"     ,"table003_char50")
+        :Column("table003.Bigint"     ,"table003_Bigint")
+        :Column("table003.Bit"        ,"table003_Bit")
+        :Column("table003.Decimal5_2" ,"table003_Decimal5_2")
+        :Column("table003.Varchar51"  ,"table003_Varchar51")
+        :Column("table003.Text"       ,"table003_Text")
+        :Column("table003.Binary"     ,"table003_Binary")
+        :Column("table003.Date"       ,"table003_Date")
+        :Column("table003.DateTime"   ,"table003_DateTime")
+        :Column("table003.Time"       ,"table003_Time")
+        :Column("table003.Boolean"    ,"table003_Boolean")
+
+        :SQL(10000,"Table003Records")
+
+        //Example of adding a record and adding a local index in activating it
+        l_o_Cursor := o_DB1:p_oCursor
+
+        l_o_Cursor:AppendBlank() //Blank Record
+        l_o_Cursor:SetFieldValue("TABLE003_CHAR50","Bogus")
+
+        l_o_Cursor:InsertRecord({"TABLE003_CHAR50" => "Fabulous",;
+                                "TABLE003_BIGINT" => 1234})
+
+        l_o_Cursor:Index("tag1","TABLE003_CHAR50")
+        l_o_Cursor:CreateIndexes()
+        l_o_Cursor:SetOrder("tag1")
+        
+        // l_Tally        := :tally
+        // l_LastSQLError := :ErrorMessage()
+        // l_LastSQL      := :LastSQL()
+        // l_TestResult   := l_oSQLConnection1:p_Schema["table003"][1]
+
+        ExportTableToHtmlFile("Table003Records","MySQL_Table003Records","From MySQL",,,.t.)
+
+
+        :Table("table001")
+        :SetEventId(2)
+        :Field("age","5")   //To trigger new SchemaAndDataErrorLog
+        :Field("dob",date())
+        :Field("dati",hb_datetime())
+        :Field("fname","Michael"+' "excetera2" 0123456789012345678901234567890123456789012345678901234567890123456789')
+        :Field("lname","O'Hara 123")
+        // :Field("logical1",NIL)
+        if :Add()
+            l_nKey := :Key()
+
+            :Table("table001")
+            :SetEventId(3)
+            :Field("fname"   ,"Ingrid2")
+            :Field("lname","1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890")
+            :Field("minitial","aBBA2")
+            :Update(l_nKey)
+        
+            :Table("table001")
+            :SetEventId(4)
+            :Column("table001.fname","table001_fname")
+            l_o_data := :Get(l_nKey)
+
+            l_o_data:GetFieldInfo(0,"hello")
+
+            :Table("table001")
+            :Column("table001.fname","table001_fname")
+            :SetEventId(5)
+            l_o_data := :Get(l_nKey)
+
+            ?"Add record with key = "+Trans(l_nKey)+" First Name = "+l_o_data:table001_fname
+
+        endif
+
+        :Table("table001")
+        :SetEventId(6)
+        // :Join("inner","table002","","table002.p_table001 = table001 and key = ^",5)
+        l_w1 := :Join("inner","table002","","table002.p_table001 = table001")
+        :ReplaceJoin(l_w1,"inner","table002","","table002.p_table001 = table001.key")
+
+        l_w1 := :Where("table001.fname = ^","Jodie")
+        :Where("table001.lname = ^","Foster")
+        :ReplaceWhere(l_w1,"table001.fname = ^","Harrison")
+
+        l_w1 := :Having("table001.fname = ^","Jodie")
+        :Having("table001.lname = ^","Foster")
+        :ReplaceHaving(l_w1,"table001.fname = ^","Harrison")
+
+        //:KeywordCondition("Jodie","fname+lname","or",.t.)
+        
+        ?"----------------------------------------------"
+        :Table("table001")
+        :SetEventId(7)
+        :Column("table001.key"  ,"key")
+        :Column("table001.fname","table001_fname")
+        :Column("table001.lname","table001_lname")
+        :Column("table002.children","table002_children")
+        :Where("table001.key < 4")
+        :Join("inner","table002","","table002.p_table001 = table001.key")
+        :SQL(10001,"AllRecords")
+        
+        ?"Will use scan/endscan"
+        select AllRecords
+        index on upper(field->table001_fname) tag ufname to AllRecords
+
+        scan all
+            ?"MySQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
+        endscan
+        
+        ExportTableToHtmlFile("AllRecords","MySQL_Table001_Join_Table002","From MySQL",,,.t.)
+
+        ?"----------------------------------------------"
+
+
+        :SetExplainMode(2)
+        :SQL(10004)
+        l_o_Cursor:Close()
+
+
+    endwith
+endif
+
+if l_oSQLConnection2:Connected
+    o_DB2 := hb_SQLData()
+    with object o_DB2
+        :UseConnection(l_oSQLConnection2)
+
+
+        :Table("table003")
+        :SetEventId("PostgreSQLDecimalTest")
+        :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog
+        :Field("Decimal25_7","-1111567890123456.1234567")
+        // :Field("DateTime",hb_ctot("02/25/2021 07:24:03:234 pm","mm/dd/yyyy", "hh:mm:ss:fff pp"))
+        :Field("DateTime",hb_ctot("02/25/2021 07:24:04:1234","mm/dd/yyyy", "hh:mm:ss:ffff"))
+        :Field("time","07:24:05.1234")
+        :Add()
+
+
+        :Table("table003")
+        :SetEventId(8)
+        :Column("table003.key"        ,"table003_key")
+        :Column("table003.char50"     ,"table003_char50")
+        :Column("table003.bigint"     ,"table003_Bigint")
+        :Column("table003.Bit"        ,"table003_Bit")
+        :Column("table003.Decimal5_2" ,"table003_Decimal5_2")
+        :Column("table003.Varchar51"  ,"table003_Varchar51")
+        :Column("table003.Text"       ,"table003_Text")
+        :Column("table003.BInary"     ,"table003_Binary")
+        // :Column("table003.Varbinary55","table003_Varbinary55")
+        :Column("table003.Date"       ,"table003_Date")
+        :Column("table003.DateTime"   ,"table003_DateTime")
+        :Column("table003.time"       ,"table003_Time")
+        :Column("table003.Boolean"    ,"table003_Boolean")
+        :SQL(10010,"Table003Records")
+
+        // l_Tally        := :tally
+        // l_LastSQLError := :ErrorMessage()
+        // l_LastSQL      := :LastSQL()
+        ExportTableToHtmlFile("Table003Records","PostgreSQL_Table003Records.html","From PostgreSQL",,25,.t.)
+
+
+
+        :Table("table001")
+        :SetEventId("Postgres 9")
+        :Field("age","a6")
+        :Field("dob",date())
+        :Field("dati",hb_datetime())
+        :Field("fname","Michael"+' "excetera" 0123456789012345678901234567890123456789012345678901234567890123456789')
+        :Field("lname","O'Hara 123")
+        :Field("logical1",.t.)
+        if :Add()
+            l_nKey := :Key()
+
+
+            :Table("table001")
+            :SetEventId(10)
+            :Field("fname","Ingrid")
+            :Field("lname","1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890")
+            :Field("minitial","aBBA2")
+            :Update(l_nKey)
+        
+        endif
+
+        ?"----------------------------------------------"
+        :Table("table001")
+        :SetEventId(13)
+        :Column("table001.key"  ,"key")
+        :Column("table001.fname","table001_fname")
+        :Column("table001.lname","table001_lname")
+        :Column("table002.children","table002_children")
+        :Where("table001.key < 4")
+        :Join("inner","table002","","table002.p_table001 = table001.key")
+        :SQL(10002,"AllRecords")
+
+        select AllRecords
+        scan all
+            ?"PostgreSQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
+        endscan
+        ?"----------------------------------------------"
+
+        :SetExplainMode(2)
+        :SQL(10007)
+
+    end
+endif
+
+l_oSQLConnection1:Disconnect()
+?"MariaDB Get last Handle",l_oSQLConnection1:GetHandle()
+
+l_oSQLConnection2:Disconnect()
+?"PostgreSQL Get last Handle",l_oSQLConnection2:GetHandle()
 
 return nil
 //=================================================================================================================
 //=================================================================================================================
 //=================================================================================================================
-//=================================================================================================================
-
-function TestCode()
-local aArray2Dim := {}
-local cTextToSearch
-local iRow
-
-AAdd(aArray2Dim,{1,"Hello"})
-AAdd(aArray2Dim,{2,"World"})
-
-?aArray2Dim[1][1]
-?aArray2Dim[1][2]
-?aArray2Dim[2][1]
-?aArray2Dim[2][2]
-
-//Will the following work
-?aArray2Dim[2,2]
-
-//Search for row where "World" is in the second column
-cTextToSearch = upper("world")
-
-iRow = AScan( aArray2Dim, {|aRow|upper(aRow[2]) == cTextToSearch } )
-//iRow will be 0 if not found
-?"Row Key",aArray2Dim[iRow][1]
-
-aadd(aArray2Dim,"New Item 1")
-// hb_ains(aArray2Dim,-1,"Hello",.t.)
-// altd()
-
-return NIL
 //=================================================================================================================

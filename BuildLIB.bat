@@ -50,18 +50,21 @@ del %HB_COMPILER%\%BuildMode%\*.lib 2>nul
 if %BuildMode% == debug (
     copy debugger_on.hbm debugger.hbm
 rem hbmk2 %LIBName%.hbp -b -p -w3 -es2
-    hbmk2 %LIBName%.hbp -b -p -w3
+    hbmk2 %LIBName%.hbp -b -p -w3 -dDONOTINCLUDE
 ) else (
     copy debugger_off.hbm debugger.hbm
     copy *.ch %HB_COMPILER%\%BuildMode%\
     del %HB_COMPILER%\%BuildMode%\*.ppo
 rem	hbmk2 %LIBName%.hbp -w3 -es2
-    hbmk2 %LIBName%.hbp -w3
+    hbmk2 %LIBName%.hbp -w3 -dDONOTINCLUDE
 )
 
 set SUCCESS=F
 if exist %HB_COMPILER%\%BuildMode%\lib%LIBName%.a (set SUCCESS=T)
 if exist %HB_COMPILER%\%BuildMode%\%LIBName%.lib  (set SUCCESS=T)
+
+rem the following will output the current datetime
+call datetime.cmd
 
 if %SUCCESS% == F (
     echo Failed To build Library

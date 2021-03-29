@@ -4,18 +4,11 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "CompileRelease",
-            "type": "shell",
-            "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+            "label": "RunDebug",
+            "command": "${command:workbench.action.debug.start}",
             "options": {
                 "cwd": "${workspaceFolder}",
-                "env": {
-                    "HB_VFP_ROOT":"r:\\Harbour_vfp",
-                    "HB_ORM_ROOT":"r:\\Harbour_orm",
-                    "EXEName":"Cursors",
-                    "BuildMode":"release",
-                    "HB_COMPILER":"${input:CCompiler}"
-                }
+                "statusbar": {"label" : "<Compile and Debug>","hide" : false}
             },
             "presentation": {
                 "echo": true,
@@ -33,13 +26,14 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "HB_VFP_ROOT":"r:\\Harbour_vfp",
-                    "HB_ORM_ROOT":"r:\\Harbour_orm",
+                    "HB_VFP_ROOT":"c:\\Harbour_vfp",
+                    "HB_ORM_ROOT":"c:\\Harbour_orm",
                     "EXEName":"Cursors",
                     "BuildMode":"debug",
                     // "HB_COMPILER":"${input:CCompiler}"
                     "HB_COMPILER":"mingw64"
-                }
+                },
+                "statusbar": {"label" : "<Compile Debug>","hide" : false}
             },
             "presentation": {
                 "echo": true,
@@ -49,6 +43,59 @@
                 "showReuseMessage": false,
                 "clear": true
             }
+        },
+        {
+            "label": "CompileRelease",
+            "type": "shell",
+            "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "HB_VFP_ROOT":"c:\\Harbour_vfp",
+                    "HB_ORM_ROOT":"c:\\Harbour_orm",
+                    "EXEName":"Cursors",
+                    "BuildMode":"release",
+                    "HB_COMPILER":"${input:CCompiler}"
+                },
+                "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            }
+        },
+        {
+            "label": "RunReleaseMingw64",
+            "type": "shell",
+            "command": "${workspaceFolder}\\mingw64\\release\\Cursors.exe",
+            "options": {
+                "statusbar": {"label" : "<Run Release Mingw64>","hide" : false}
+            },
+            "presentation": {"reveal": "never"}
+        },
+        {
+            "label": "Run Release msvc64",
+            "type": "shell",
+            "command": "${workspaceFolder}\\msvc64\\release\\Cursors.exe",
+            "options": {
+                "statusbar": {"label" : "<Run Release msvc64>","hide" : false}
+            },
+            "presentation": {"reveal": "never"}
+        },
+        {
+            "label": "DelAllPPO",
+            "type": "shell",
+            "command": "del *.ppo",
+            "isBackground": true,
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "statusbar": {"label" : "<Del All PPO>","hide" : false}
+            },
+            "presentation": {"reveal": "never"}
         }
     ],
     "inputs": [

@@ -3,10 +3,13 @@
 #To enabled progressing recompilation uncomment the following line
 #-inc
 
-#used for VSCODE debugger
--gtcgi
+#used for VSCODE debugger. 
+#Will make the EXE Asynch if called from CMD prompt
+#-gtcgi
+
 # Only use gtwin instead of gtcgi if using the browse()  function to visualize table content.
-#-gtwin
+# Will make the EXE Synchronous if called from CMD prompt
+-gtwin
 
 -trace
 
@@ -33,9 +36,13 @@ ${HB_ORM_ROOT}\${HB_COMPILER}\${BuildMode}\hb_orm.hbx
 
 
 sddodbc.hbc
+gtwvg.hbc
 
 #for the export to html file
 hbct.hbc
+
+#for ctot ...
+#xhb.hbc
 
 -workdir=${HB_COMPILER}\${BuildMode}\hbmk2\
 

@@ -4,7 +4,7 @@
 #define CHECKMARK "✓"
 
 //=================================================================================================================
-function ExportTableToHtmlFile(par_alias,par_html_file,par_Desciption,par_MaxKBSize,par_HeaderRepeatFrequency,par_DisplayStructure)
+function ExportTableToHtmlFile(par_alias,par_html_file,par_Description,par_MaxKBSize,par_HeaderRepeatFrequency,par_DisplayStructure)
 local l_Folder          := ""
 local l_FileName        := ""
 local l_FileExtension   := ""
@@ -25,7 +25,7 @@ local l_MaxFileSize           := (hb_DefaultValue(par_MaxKBSize,0) * 1024)
 local l_WriteBufferSize       := 100 * 1024  // To chunck the writting of the html file by max 100 Kb.
 local l_HeaderRepeatFrequency := hb_DefaultValue(par_HeaderRepeatFrequency,0)   // Number of rows between headers
 local l_RowsAfterHeader       := 0
-local l_Description           := hb_DefaultValue(par_Desciption,'')
+local l_Description           := hb_DefaultValue(par_Description,'')
 local l_DisplayStructure      := hb_DefaultValue(par_DisplayStructure,.f.)
 local l_Structure             := {}
 local l_FieldNilInfo

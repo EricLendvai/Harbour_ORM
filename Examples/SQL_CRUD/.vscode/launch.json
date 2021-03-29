@@ -10,15 +10,15 @@
             "name": "Launch ORM Example SQL_CRUD",
             "program": "${workspaceFolder}\\mingw64\\debug\\SQL_CRUD.exe",
             "stopOnEntry": false,
-            //In the followin "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
+            //In the following "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
             "terminalType": "integrated",
             "preLaunchTask": "CompileDebug",
             "postDebugTask": "",
             "workingDir": "${workspaceFolder}\\",
             "sourcePaths": [
                 "${workspaceFolder}\\",
-                "R:\\Harbour_ORM\\",
-                "R:\\Harbour_VFP\\"
+                "C:\\Harbour_ORM\\",
+                "C:\\Harbour_VFP\\"
             ]
         }
     ]

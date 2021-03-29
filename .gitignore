@@ -11,3 +11,7 @@
 .hbmk
 *.NotInGit
 Thumbs.db
+*_rnd.*
+*sdol*.*
+sdol
+hb_out.log
