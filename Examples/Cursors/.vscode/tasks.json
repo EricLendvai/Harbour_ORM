@@ -31,9 +31,35 @@
                     "EXEName":"Cursors",
                     "BuildMode":"debug",
                     // "HB_COMPILER":"${input:CCompiler}"
+                    "RunAfterCompile":"no",
                     "HB_COMPILER":"mingw64"
                 },
                 "statusbar": {"label" : "<Compile Debug>","hide" : false}
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            }
+        },
+        {
+            "label": "CompileAndRunRelease",
+            "type": "shell",
+            "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "HB_VFP_ROOT":"c:\\Harbour_vfp",
+                    "HB_ORM_ROOT":"c:\\Harbour_orm",
+                    "EXEName":"Cursors",
+                    "BuildMode":"release",
+                    "RunAfterCompile":"yes",
+                    "HB_COMPILER":"${input:CCompiler}"
+                },
+                "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
             },
             "presentation": {
                 "echo": true,
@@ -55,9 +81,10 @@
                     "HB_ORM_ROOT":"c:\\Harbour_orm",
                     "EXEName":"Cursors",
                     "BuildMode":"release",
+                    "RunAfterCompile":"no",
                     "HB_COMPILER":"${input:CCompiler}"
                 },
-                "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
+                "statusbar": {"label" : "<Compile Release>","hide" : false}
             },
             "presentation": {
                 "echo": true,

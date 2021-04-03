@@ -57,6 +57,11 @@ if %BuildMode% == debug (
     hbmk2 %EXEName%.hbp -w3 -dDONOTINCLUDE
 )
 
+rem the following will output the current datetime
+for /F "tokens=2" %%i in ('date /t') do set mydate=%%i
+set mytime=%time%
+echo Current time is %mydate% %mytime%
+
 if not exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
     echo Failed To build %EXEName%.exe
 ) else (
@@ -66,10 +71,12 @@ if not exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
         echo.
         echo Ready            BuildMode = %BuildMode%          C Compiler = %HB_COMPILER%          EXE = %EXEName%
         if %BuildMode% == release (
-            echo -----------------------------------------------------------------------------------------------
-            %HB_COMPILER%\release\%EXEName%
-            echo.
-            echo -----------------------------------------------------------------------------------------------
+            if %RunAfterCompile% == yes (
+                echo -----------------------------------------------------------------------------------------------
+                %HB_COMPILER%\release\%EXEName%
+                echo.
+                echo -----------------------------------------------------------------------------------------------
+            )
         )
     ) else (
         echo Compilation Error

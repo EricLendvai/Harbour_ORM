@@ -59,12 +59,14 @@ rem	hbmk2 %LIBName%.hbp -w3 -es2
     hbmk2 %LIBName%.hbp -w3 -dDONOTINCLUDE
 )
 
+rem the following will output the current datetime
+for /F "tokens=2" %%i in ('date /t') do set mydate=%%i
+set mytime=%time%
+echo Current time is %mydate% %mytime%
+
 set SUCCESS=F
 if exist %HB_COMPILER%\%BuildMode%\lib%LIBName%.a (set SUCCESS=T)
 if exist %HB_COMPILER%\%BuildMode%\%LIBName%.lib  (set SUCCESS=T)
-
-rem the following will output the current datetime
-call datetime.cmd
 
 if %SUCCESS% == F (
     echo Failed To build Library
@@ -78,11 +80,6 @@ rem     since debug and release have different .hbx file, localize it
         echo No Errors
         echo.
         echo Ready          BuildMode = %BuildMode%          C Compiler = %HB_COMPILER%
-        if %BuildMode% == release (
-rem            echo -----------------------------------------------------------------------------------------------
-rem            echo.
-rem            echo -----------------------------------------------------------------------------------------------
-        )
     ) else (
         echo Compilation Error
         if errorlevel  1 echo Unknown platform
