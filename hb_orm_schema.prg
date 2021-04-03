@@ -230,8 +230,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                                                                  l_FieldType,;
                                                                  l_FieldLen,;
                                                                  l_FieldDec,;
-                                                                 l_FieldAllowNull,;
-                                                                 l_FieldAutoIncrement}
+                                                                 iif(l_FieldAllowNull,"N","")+iif(l_FieldAutoIncrement,"+","")}
 
                 endscan
 
@@ -560,7 +559,7 @@ SELECT pk
                     l_FieldAllowNull     := (field->field_nullable == "1")
                     l_FieldAutoIncrement := (field->field_identity_is == "1")                    //{"I",,,,.t.}
 
-                    l_Schema_Fields[trim(field->field_Name)] := {,l_FieldType,l_FieldLen,l_FieldDec,l_FieldAllowNull,l_FieldAutoIncrement}
+                    l_Schema_Fields[trim(field->field_Name)] := {,l_FieldType,l_FieldLen,l_FieldDec,iif(l_FieldAllowNull,"N","")+iif(l_FieldAutoIncrement,"+","")}
 
                 endscan
 
@@ -648,8 +647,8 @@ local l_iArrayPos
 local l_aCurrentTableDefinition
 local l_aCurrentFieldDefinition
 local l_aCurrentIndexDefinition
-local l_FieldType,       l_FieldLen,       l_FieldDec,       l_FieldAllowNull,       l_FieldAutoIncrement
-local l_CurrentFieldType,l_CurrentFieldLen,l_CurrentFieldDec,l_CurrentFieldAllowNull,l_CurrentFieldAutoIncrement
+local l_FieldType,       l_FieldLen,       l_FieldDec,       l_FieldAttributes,       l_FieldAllowNull,       l_FieldAutoIncrement
+local l_CurrentFieldType,l_CurrentFieldLen,l_CurrentFieldDec,l_CurrentFieldAttributes,l_CurrentFieldAllowNull,l_CurrentFieldAutoIncrement
 local l_MatchingFieldDefinition
 local l_cCurrentSchemaName,l_cSchemaName
 local l_SQLScript := ""
@@ -661,9 +660,6 @@ local l_iPos
 local l_hListOfSchemaName := {=>}
 local l_hSchemaName
 local l_SQLScriptCreateSchemaName := ""
-
-//Will compare ::p_Schema and par_hSchemaDefinition, call UpdateTableStructure(p...) and/or index pudates
-//for each 
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -764,8 +760,9 @@ for each l_hTableDefinition in par_hSchemaDefinition
                     l_FieldType                 := iif(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE] == "T","DT",l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
                     l_FieldLen                  := iif(len(l_aFieldDefinition) < 2, 0 ,hb_defaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 ))
                     l_FieldDec                  := iif(len(l_aFieldDefinition) < 3, 0 ,hb_defaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]      , 0 ))
-                    l_FieldAllowNull            := iif(len(l_aFieldDefinition) < 4,.f.,hb_defaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ALLOW_NULL]    ,.f.))
-                    l_FieldAutoIncrement        := iif(len(l_aFieldDefinition) < 5,.f.,hb_defaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_AUTO_INCREMENT],.f.))
+                    l_FieldAttributes           := iif(len(l_aFieldDefinition) < 4, "",hb_defaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]    , ""))
+                    l_FieldAllowNull            := ("N" $ l_FieldAttributes)
+                    l_FieldAutoIncrement        := ("+" $ l_FieldAttributes)
 
                     if lower(l_cFieldName) == lower(::p_PKFN)
                         l_FieldAutoIncrement := .t.
@@ -777,6 +774,8 @@ for each l_hTableDefinition in par_hSchemaDefinition
                         l_FieldAllowNull := .f.
                     endif
 
+                    l_FieldAttributes := iif(l_FieldAllowNull,"N","")+iif(l_FieldAutoIncrement,"+","")
+
                     l_aCurrentFieldDefinition := hb_HGetDef(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName,NIL)
                     if hb_IsNIL(l_aCurrentFieldDefinition)
                         //Missing Field
@@ -784,15 +783,16 @@ for each l_hTableDefinition in par_hSchemaDefinition
                         l_SQLScriptFieldChangesCycle1 += ::AddField(l_cSchemaName,;
                                                                     l_cTableName,;
                                                                     l_cFieldName,;
-                                                                    {,l_FieldType,l_FieldLen,l_FieldDec,l_FieldAllowNull,l_FieldAutoIncrement})
+                                                                    {,l_FieldType,l_FieldLen,l_FieldDec,l_FieldAttributes})
                     else
                         //Compare the field definition using arrays l_aCurrentFieldDefinition and l_aFieldDefinition
 
                         l_CurrentFieldType          := iif(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE] == "T","DT",l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
                         l_CurrentFieldLen           := iif(len(l_aCurrentFieldDefinition) < 2, 0 ,hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 ))
                         l_CurrentFieldDec           := iif(len(l_aCurrentFieldDefinition) < 3, 0 ,hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]      , 0 ))
-                        l_CurrentFieldAllowNull     := iif(len(l_aCurrentFieldDefinition) < 4,.f.,hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_ALLOW_NULL]    ,.f.))
-                        l_CurrentFieldAutoIncrement := iif(len(l_aCurrentFieldDefinition) < 5,.f.,hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_AUTO_INCREMENT],.f.))
+                        l_CurrentFieldAttributes    := iif(len(l_aCurrentFieldDefinition) < 4, "",hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]    , ""))
+                        l_CurrentFieldAllowNull     := ("N" $ l_CurrentFieldAttributes)
+                        l_CurrentFieldAutoIncrement := ("+" $ l_CurrentFieldAttributes)
 
                         if l_CurrentFieldAutoIncrement .and. empty(el_inlist(l_CurrentFieldType,"I","IB"))  //Only those fields types may be flagged as Auto-Increment
                             l_CurrentFieldAutoIncrement := .f.
@@ -800,6 +800,8 @@ for each l_hTableDefinition in par_hSchemaDefinition
                         if l_CurrentFieldAutoIncrement .and. l_CurrentFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
                             l_CurrentFieldAllowNull := .f.
                         endif
+
+                        l_CurrentFieldAttributes := iif(l_CurrentFieldAllowNull,"N","")+iif(l_CurrentFieldAutoIncrement,"+","")
 
                         l_MatchingFieldDefinition := .t.
                         do case
@@ -829,8 +831,8 @@ for each l_hTableDefinition in par_hSchemaDefinition
                             l_SQLScriptFieldChanges := ::UpdateField(l_cSchemaName,;
                                                                     l_cTableName,;
                                                                     l_cFieldName,;
-                                                                    {,l_FieldType,l_FieldLen,l_FieldDec,l_FieldAllowNull,l_FieldAutoIncrement},;
-                                                                    {,l_CurrentFieldType,l_CurrentFieldLen,l_CurrentFieldDec,l_CurrentFieldAllowNull,l_CurrentFieldAutoIncrement})
+                                                                    {,l_FieldType,l_FieldLen,l_FieldDec,l_FieldAttributes},;
+                                                                    {,l_CurrentFieldType,l_CurrentFieldLen,l_CurrentFieldDec,l_CurrentFieldAttributes})
                             l_SQLScriptFieldChangesCycle1 += l_SQLScriptFieldChanges[1]
                             l_SQLScriptFieldChangesCycle2 += l_SQLScriptFieldChanges[2]
                         endif
@@ -971,6 +973,7 @@ local l_SQLFields := ""
 local l_FieldType
 local l_FieldDec
 local l_FieldLen
+local l_FieldAttributes
 local l_FieldAllowNull
 local l_FieldAutoIncrement
 local l_NumberOfFieldDefinitionParameters
@@ -1012,8 +1015,9 @@ for each l_aField in par_hStructure
             l_FieldType          := l_FieldStructure[HB_ORM_SCHEMA_FIELD_TYPE]
             l_FieldLen           := iif(l_NumberOfFieldDefinitionParameters < 2, 0 ,hb_DefaultValue(l_FieldStructure[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 ))
             l_FieldDec           := iif(l_NumberOfFieldDefinitionParameters < 3, 0 ,hb_DefaultValue(l_FieldStructure[HB_ORM_SCHEMA_FIELD_DECIMALS]      , 0 ))
-            l_FieldAllowNull     := iif(l_NumberOfFieldDefinitionParameters < 4,.f.,hb_DefaultValue(l_FieldStructure[HB_ORM_SCHEMA_FIELD_ALLOW_NULL]    ,.f.))
-            l_FieldAutoIncrement := iif(l_NumberOfFieldDefinitionParameters < 5,.f.,hb_DefaultValue(l_FieldStructure[HB_ORM_SCHEMA_FIELD_AUTO_INCREMENT],.f.))
+            l_FieldAttributes    := iif(l_NumberOfFieldDefinitionParameters < 4, "",hb_DefaultValue(l_FieldStructure[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]    , ""))
+            l_FieldAllowNull     := ("N" $ l_FieldAttributes)
+            l_FieldAutoIncrement := ("+" $ l_FieldAttributes)
 
             if lower(l_FieldName) == lower(::p_PKFN)
                 l_FieldAutoIncrement := .t.
@@ -1024,6 +1028,8 @@ for each l_aField in par_hStructure
             if l_FieldAutoIncrement .and. l_FieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
                 l_FieldAllowNull := .f.
             endif
+
+            // l_FieldAttributes := iif(l_FieldAllowNull,"N","")+iif(l_FieldAutoIncrement,"+","")  Not needed since the AddTable will also deal with all the fields and not call AddField()
 
             if !empty(l_SQLFields)
                 l_SQLFields += ","
@@ -1273,19 +1279,21 @@ method UpdateField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefin
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
 local l_SQLCommandCycle1 := ""
 local l_SQLCommandCycle2 := ""
-local l_FieldType,       l_FieldLen,       l_FieldDec,       l_FieldAllowNull,       l_FieldAutoIncrement
-local                                                        l_CurrentFieldAllowNull,l_CurrentFieldAutoIncrement
+local l_FieldType,       l_FieldLen,       l_FieldDec,       l_FieldAttributes,       l_FieldAllowNull,       l_FieldAutoIncrement
+local                                                        l_CurrentFieldAttributes,l_CurrentFieldAllowNull,l_CurrentFieldAutoIncrement
 local l_FormattedFieldName := ::FormatIdentifier(par_cFieldName)
 local l_Default
 
 l_FieldType                 := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
 l_FieldLen                  := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]
 l_FieldDec                  := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]
-l_FieldAllowNull            := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ALLOW_NULL]
-l_FieldAutoIncrement        := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_AUTO_INCREMENT]
+l_FieldAttributes           := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]
+l_FieldAllowNull            := ("N" $ l_FieldAttributes)
+l_FieldAutoIncrement        := ("+" $ l_FieldAttributes)
 
-l_CurrentFieldAllowNull     := par_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_ALLOW_NULL]
-l_CurrentFieldAutoIncrement := par_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_AUTO_INCREMENT]
+l_CurrentFieldAttributes    := par_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]
+l_CurrentFieldAllowNull     := ("N" $ l_CurrentFieldAttributes)
+l_CurrentFieldAutoIncrement := ("+" $ l_CurrentFieldAttributes)
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -1577,15 +1585,16 @@ return {l_SQLCommandCycle1,l_SQLCommandCycle2}
 //-----------------------------------------------------------------------------------------------------------------
 method AddField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition) class hb_orm_SQLConnect
 local l_SQLCommand := ""
-local l_FieldType,l_FieldLen,l_FieldDec,l_FieldAllowNull,l_FieldAutoIncrement
+local l_FieldType,l_FieldLen,l_FieldDec,l_FieldAttributes,l_FieldAllowNull,l_FieldAutoIncrement
 local l_FormattedFieldName := ::FormatIdentifier(par_cFieldName)
 local l_Default
 
 l_FieldType          := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
 l_FieldLen           := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]
 l_FieldDec           := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]
-l_FieldAllowNull     := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ALLOW_NULL]
-l_FieldAutoIncrement := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_AUTO_INCREMENT]
+l_FieldAttributes    := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]
+l_FieldAllowNull     := ("N" $ l_FieldAttributes)
+l_FieldAutoIncrement := ("+" $ l_FieldAttributes)
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -1882,7 +1891,7 @@ local l_nMaxNameLength
 local l_cIndent := space(3)
 local l_aListOfTablesToNoProcess := {"SchemaCacheLog"}
 local l_cIndexExpression
-local l_FieldType,l_FieldLen,l_FieldDec,l_FieldAllowNull,l_FieldAutoIncrement
+local l_FieldType,l_FieldLen,l_FieldDec,l_FieldAttributes,l_FieldAllowNull,l_FieldAutoIncrement
 
 
 ::UpdateSchemaCache()
@@ -1916,8 +1925,9 @@ for each l_hTableDefinition in ::p_Schema
         l_FieldType          := allt(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
         l_FieldLen           := hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 )
         l_FieldDec           := hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]      , 0 )
-        l_FieldAllowNull     := hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ALLOW_NULL]    ,.f.)
-        l_FieldAutoIncrement := hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_AUTO_INCREMENT],.f.)
+        l_FieldAttributes    := hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]    , "")
+        l_FieldAllowNull     := ("N" $ l_FieldAttributes)
+        l_FieldAutoIncrement := ("+" $ l_FieldAttributes)
 
         if lower(l_cFieldName) == lower(::p_PKFN)
             l_FieldAutoIncrement := .t.
@@ -1929,13 +1939,14 @@ for each l_hTableDefinition in ::p_Schema
             l_FieldAllowNull := .f.
         endif
 
+        l_FieldAttributes := iif(l_FieldAllowNull,"N","")+iif(l_FieldAutoIncrement,"+","")
+
         l_cSourceCodeFields += padr('"'+l_cFieldName+'"',l_nMaxNameLength+2)+"=>{"
         l_cSourceCodeFields += ","  // Null Value for the HB_ORM_SCHEMA_INDEX_BACKEND_TYPES 
         l_cSourceCodeFields += padl('"'+l_FieldType+'"',5)+","+;
                              str(l_FieldLen,4)+","+;
                              str(l_FieldDec,3)+","+;
-                             iif(l_FieldAllowNull,".t.",".f.")+","+;   //May not allow null if auto-increment is selected
-                             iif(l_FieldAutoIncrement,".t.",".f.")
+                             iif(empty(l_FieldAttributes),"",'"'+l_FieldAttributes+'"')
         l_cSourceCodeFields += "}"
 
     endfor
@@ -2623,52 +2634,52 @@ local l_result := .f.   // return .t. if overall schema changed
 local l_SQLScript,l_ErrorInfo   // can be removed later, only used during code testing
 local l_PreviousSchemaName
 local l_Schema := ;
-                  {"SchemaVersion"=>{;   //Field Definition
-                    {"pk"     =>{, "I",  0,  0,.f.,.t.};
-                    ,"name"   =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     ,"CV",254,  0,.f.,.f.},;
-                                 {HB_ORM_SCHEMA_POSTGRESQL_OBJECT, "M",  0,  0,.f.,.f.}};
-                    ,"version"=>{, "I",  0,  0,.f.,.f.}};
-                    ,;   //Index Definition
-                    NIL};
-                   ,"SchemaAutoTrimLog" => {;   //Field Definition
-                    {"pk"           =>{                                , "IB",  0,  0,.f.,.t.};
-                    ,"eventid"      =>{                                ,  "C",HB_ORM_MAX_EVENTID_SIZE,0,.t.,.f.};
-                    ,"datetime"     =>{                                ,"DTZ",  0,  0,.f.,.f.};
-                    ,"ip"           =>{                                ,  "C", 43,  0,.f.,.f.};
-                    ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,.f.,.f.};
-                    ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,.f.,.f.},;
-                                       {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,.f.,.f.}};
-                    ,"recordpk"     =>{                                , "IB",  0,  0,.f.,.f.};
-                    ,"fieldname"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,.f.,.f.},;
-                                       {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,.f.,.f.}};
-                    ,"fieldtype"    =>{                                ,  "C",  3,  0,.f.,.f.};
-                    ,"fieldlen"     =>{                                ,  "I",  0,  0,.f.,.f.};
-                    ,"fieldvaluer"  =>{                                ,  "R",  0,  0,.t.,.f.};
-                    ,"fieldvaluem"  =>{                                ,  "M",  0,  0,.t.,.f.}};
-                    ,;   //Index Definition
-                    NIL};
-                   ,"SchemaAndDataErrorLog" => {;   // _M_ Maybe add a user defined "errornumber" to make easier to search.
-                    {"pk"           =>{                                , "IB",  0,  0,.f.,.t.};
-                    ,"eventid"      =>{                                ,  "C",HB_ORM_MAX_EVENTID_SIZE,0,.t.,.f.};
-                    ,"datetime"     =>{                                ,"DTZ",  0,  0,.f.,.f.};
-                    ,"ip"           =>{                                ,  "C", 43,  0,.f.,.f.};
-                    ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,.t.,.f.};
-                    ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,.t.,.f.},;
-                                       {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,.t.,.f.}};
-                    ,"recordpk"     =>{                                , "IB",  0,  0,.t.,.f.};
-                    ,"errormessage" =>{                                ,  "M",  0,  0,.t.,.f.};
-                    ,"appstack"     =>{                                ,  "M",  0,  0,.t.,.f.}};
-                    ,;   //Index Definition
-                    NIL};
-                   ,"SchemaTableNumber" => {;   // Used to get a single number for a table name, to be used with pg_advisory_lock()
-                    {"pk"           =>{                                ,  "I",  0,  0,.f.,.t.};   // Will never have more than 2**32 tables.
-                    ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,.f.,.f.};
-                    ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,.f.,.f.},;
-                                       {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,.f.,.f.}}};
-                    ,;   //Index Definition
-                    {"schemaname" =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT,"schemaname",.f.,"BTREE"};
-                    ,"tablename"  =>{                               ,"tablename" ,.f.,"BTREE"}}};
-                  }
+    {"SchemaVersion"=>{;   //Field Definition
+      {"pk"     =>{, "I",  0,  0,""};
+      ,"name"   =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     ,"CV",254,  0,},;
+                   {HB_ORM_SCHEMA_POSTGRESQL_OBJECT, "M",  0,  0,}};
+      ,"version"=>{, "I",  0,  0,}};
+      ,;   //Index Definition
+      NIL};
+     ,"SchemaAutoTrimLog" => {;   //Field Definition
+      {"pk"           =>{                                , "IB",  0,  0,"+"};
+      ,"eventid"      =>{                                ,  "C",HB_ORM_MAX_EVENTID_SIZE,0,"N"};
+      ,"datetime"     =>{                                ,"DTZ",  0,  0,};
+      ,"ip"           =>{                                ,  "C", 43,  0,};
+      ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,};   /*{{Note: This field will only exists for PostgreSQL databases.}}*/
+      ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,},;  /*{{Note: Same field defined differently depending of backend server.}}*/
+                         {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,}};
+      ,"recordpk"     =>{                                , "IB",  0,  0,};
+      ,"fieldname"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,},;
+                         {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,}};
+      ,"fieldtype"    =>{                                ,  "C",  3,  0,};
+      ,"fieldlen"     =>{                                ,  "I",  0,  0,};
+      ,"fieldvaluer"  =>{                                ,  "R",  0,  0,"N"};
+      ,"fieldvaluem"  =>{                                ,  "M",  0,  0,"N"}};
+      ,;   //Index Definition
+      NIL};
+     ,"SchemaAndDataErrorLog" => {;   // _M_ Maybe add a user defined "errornumber" to make easier to search.
+      {"pk"           =>{                                , "IB",  0,  0,"+"};
+      ,"eventid"      =>{                                ,  "C",HB_ORM_MAX_EVENTID_SIZE,0,"N"};
+      ,"datetime"     =>{                                ,"DTZ",  0,  0,};
+      ,"ip"           =>{                                ,  "C", 43,  0,};
+      ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,"N"};
+      ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,"N"},;
+                         {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,"N"}};
+      ,"recordpk"     =>{                                , "IB",  0,  0,"N"};
+      ,"errormessage" =>{                                ,  "M",  0,  0,"N"};
+      ,"appstack"     =>{                                ,  "M",  0,  0,"N"}};
+      ,;   //Index Definition
+      NIL};
+     ,"SchemaTableNumber" => {;   // Used to get a single number for a table name, to be used with pg_advisory_lock()
+      {"pk"           =>{                                ,  "I",  0,  0,"+"};   // Will never have more than 2**32 tables.
+      ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,};
+      ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,},;
+                         {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,}}};
+      ,;   //Index Definition
+      {"schemaname" =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT,"schemaname",.f.,"BTREE"};   /*{{Note: This index will only exists for PostgreSQL databases.}}*/
+      ,"tablename"  =>{                               ,"tablename" ,.f.,"BTREE"}}};
+    }
 
 l_PreviousSchemaName := ::SetCurrentSchemaName(::PostgreSQLHBORMSchemaName)
 
@@ -2785,19 +2796,6 @@ method SetSchemaDefinitionVersion(par_cSchemaDefinitionName,par_iVersion) class 
 local l_result := .f.
 local l_SQLCommand := ""
 local l_FormattedTableName
-
-// local l_Schema := ;
-//                   {"SchemaVersion"=>{;   //Field Definition
-//                      {"pk"     =>{, "I",   0,  0,.f.,.t.};
-//                      ,"name"   =>{,"CV", 200,  0,.f.,.f.};
-//                      ,"version"=>{, "I",   0,  0,.f.,.f.}};
-//                      ,;   //Index Definition
-//                      NIL};
-//                   }
-
-// // l_Schema["SchemaVersion"][HB_ORM_SCHEMA_FIELD][::p_PKFN] := {,"I",0,0,.f.,.f.}  //Adds a key
-// // altd()
-// ::MigrateSchema(l_Schema)
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL

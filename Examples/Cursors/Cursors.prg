@@ -37,7 +37,7 @@ hb_cdpSelect("UTF8")
 //=====================================================================================
 l_oCursor1 := hb_Cursor()
 with object l_oCursor1
-
+// Altd()
     :Field("KEY"                       ,"I",  4,0,"+")
     :Field("ID"                        ,"C", 10,0)
     :Field("FNAME"                     ,"C", 20,0,"T")

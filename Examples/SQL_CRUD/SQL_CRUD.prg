@@ -56,7 +56,7 @@ with object l_oSQLConnection1
         ?"connection is",l_iSQLHandle
     endcase
 
-    ?"MariaDB Get last Handle",:GetHandle()
+    ?"MariaDB Get last Handle",:GetHandle()  // This function is only needed if l_iSQLHandle was set to 0.
 end
 
 
@@ -75,9 +75,8 @@ with object l_oSQLConnection2
         ?"connection is",l_iSQLHandle
     endcase
 
-    ?"PostgreSQL Get last Handle",:GetHandle()
+    ?"PostgreSQL Get last Handle",:GetHandle()  // This function is only needed if l_iSQLHandle was set to 0.
 end
-
 //===========================================================================================================================
 
 if l_oSQLConnection1:Connected
@@ -92,90 +91,90 @@ hb_orm_SendToDebugView("Will Initialize l_SchemaDefinition1")
 
 l_SchemaDefinition1 := ;
 {"dbf001"=>{;   //Field Definition
-   {"key"          =>{,  "I",   0,  0,.f.,.t.};
-   ,"customer_name"=>{,  "C",  50,  0,.f.,.f.}};
+   {"key"          =>{,  "I",   0,  0,"+"};
+   ,"customer_name"=>{,  "C",  50,  0,}};
    ,;   //Index Definition
    NIL};
 ,"dbf002"=>{;   //Field Definition
-   {"key"     =>{,  "I",   0,  0,.f.,.t.};
-   ,"p_dbf001"=>{,  "I",   0,  0,.f.,.f.}};
+   {"key"     =>{,  "I",   0,  0,"+"};
+   ,"p_dbf001"=>{,  "I",   0,  0,}};
    ,;   //Index Definition
    NIL};
 ,"noindextesttable"=>{;   //Field Definition
-   {"KeY" =>{,  "I",   0,  0,.f.,.t.};
-   ,"Code"=>{,  "C",   3,  0,.t.,.f.}};
+   {"KeY" =>{,  "I",   0,  0,"+"};
+   ,"Code"=>{,  "C",   3,  0,"N"}};
    ,;   //Index Definition
    NIL};
 ,"table001"=>{;   //Field Definition
-   {"key"     =>{   ,  "I",   0,  0,.f.,.t.};
-   ,"LnAme"   =>{   ,  "C",  50,  0,.f.,.f.};
-   ,"fname"   =>{   ,  "C",  53,  0,.f.,.f.};
-   ,"minitial"=>{   ,  "C",   1,  0,.f.,.f.};
-   ,"age"     =>{   ,  "N",   3,  0,.f.,.f.};
-   ,"dob"     =>{   ,  "D",   0,  0,.f.,.f.};
-   ,"dati"    =>{   ,"DTZ",   0,  0,.f.,.f.};
-   ,"logical1"=>{"P",  "L",   0,  0,.f.,.f.};
-   ,"numdec2" =>{   ,  "N",   6,  1,.f.,.f.};
-   ,"bigint"  =>{"M", "IB",   0,  0,.f.,.f.};
-   ,"varchar" =>{   , "CV", 203,  0,.f.,.f.}};
+   {"key"     =>{   ,  "I",   0,  0,"+"};
+   ,"LnAme"   =>{   ,  "C",  50,  0,};
+   ,"fname"   =>{   ,  "C",  53,  0,};
+   ,"minitial"=>{   ,  "C",   1,  0,};
+   ,"age"     =>{   ,  "N",   3,  0,};
+   ,"dob"     =>{   ,  "D",   0,  0,};
+   ,"dati"    =>{   ,"DTZ",   0,  0,};
+   ,"logical1"=>{"P",  "L",   0,  0,};
+   ,"numdec2" =>{   ,  "N",   6,  1,};
+   ,"bigint"  =>{"M", "IB",   0,  0,};
+   ,"varchar" =>{   , "CV", 203,  0,}};
    ,;   //Index Definition
    {"lname"=>{   ,"LnAme",.f.,"BTREE"};
    ,"tag1" =>{"P","upper((lname)::text)",.f.,"BTREE"};
    ,"tag2" =>{"P","upper((fname)::text)",.f.,"BTREE"}}};
 ,"table002"=>{;   //Field Definition
-   {"key"       =>{,  "I",   0,  0,.f.,.t.};
-   ,"p_table001"=>{,  "I",   0,  0,.t.,.f.};
-   ,"children"  =>{, "CV", 200,  0,.t.,.f.};
-   ,"Cars"      =>{, "CV", 300,  0,.f.,.f.}};
+   {"key"       =>{,  "I",   0,  0,"+"};
+   ,"p_table001"=>{,  "I",   0,  0,"N"};
+   ,"children"  =>{, "CV", 200,  0,"N"};
+   ,"Cars"      =>{, "CV", 300,  0,}};
    ,;   //Index Definition
    NIL};
 ,"table003"=>{;   //Field Definition
-   {"key"        =>{,  "I",   0,  0,.f.,.t.};
-   ,"p_table001" =>{,  "I",   0,  0,.f.,.f.};
-   ,"char50"     =>{,  "C",  50,  0,.f.,.f.};
-   ,"bigint"     =>{, "IB",   0,  0,.t.,.f.};
-   ,"Bit"        =>{,  "R",   0,  0,.t.,.f.};
-   ,"Decimal5_2" =>{,  "N",   5,  2,.t.,.f.};
-   ,"Decimal25_7"=>{,  "N",  25,  7,.t.,.f.};
-   ,"VarChar51"  =>{, "CV",  50,  0,.t.,.f.};
-   ,"Text"       =>{,  "M",   0,  0,.t.,.f.};
-   ,"Binary"     =>{,  "R",   0,  0,.t.,.f.};
-   ,"Date"       =>{,  "D",   0,  0,.t.,.f.};
-   ,"DateTime"   =>{, "DT",   0,  4,.t.,.f.};
-   ,"time"       =>{, "TO",   0,  4,.t.,.f.};
-   ,"Boolean"    =>{,  "L",   0,  0,.t.,.f.}};
+   {"key"        =>{,  "I",   0,  0,"+"};
+   ,"p_table001" =>{,  "I",   0,  0,};
+   ,"char50"     =>{,  "C",  50,  0,};
+   ,"bigint"     =>{, "IB",   0,  0,"N"};
+   ,"Bit"        =>{,  "R",   0,  0,"N"};
+   ,"Decimal5_2" =>{,  "N",   5,  2,"N"};
+   ,"Decimal25_7"=>{,  "N",  25,  7,"N"};
+   ,"VarChar51"  =>{, "CV",  50,  0,"N"};
+   ,"Text"       =>{,  "M",   0,  0,"N"};
+   ,"Binary"     =>{,  "R",   0,  0,"N"};
+   ,"Date"       =>{,  "D",   0,  0,"N"};
+   ,"DateTime"   =>{, "DT",   0,  4,"N"};
+   ,"time"       =>{, "TO",   0,  4,"N"};
+   ,"Boolean"    =>{,  "L",   0,  0,"N"}};
    ,;   //Index Definition
    NIL};
 ,"table004"=>{;   //Field Definition
-   {"id"    =>{,  "I",   0,  0,.f.,.f.};
-   ,"street"=>{,  "C",  50,  0,.t.,.f.};
-   ,"zip"   =>{,  "C",   5,  0,.t.,.f.};
-   ,"state" =>{,  "C",   2,  0,.t.,.f.}};
+   {"id"    =>{,  "I",   0,  0,};
+   ,"street"=>{,  "C",  50,  0,"N"};
+   ,"zip"   =>{,  "C",   5,  0,"N"};
+   ,"state" =>{,  "C",   2,  0,"N"}};
    ,;   //Index Definition
    {"pkey"=>{,"id",.t.,"BTREE"}}};
 ,"alltypes"=>{;   //Field Definition
-   {"key"                =>{,  "I",   0,  0,.f.,.t.};
-   ,"integer"            =>{,  "I",   0,  0,.t.,.f.};
-   ,"big_integer"        =>{, "IB",   0,  0,.t.,.f.};
-   ,"money"              =>{,  "Y",   0,  0,.t.,.f.};
-   ,"char10"             =>{,  "C",  10,  0,.t.,.f.};
-   ,"varchar10"          =>{, "CV",  10,  0,.t.,.f.};
-   ,"binary10"           =>{,  "B",  10,  0,.t.,.f.};
-   ,"varbinary10"        =>{, "BV",  10,  0,.t.,.f.};
-   ,"memo"               =>{,  "M",   0,  0,.t.,.f.};
-   ,"raw"                =>{,  "R",   0,  0,.t.,.f.};
-   ,"logical"            =>{,  "L",   0,  0,.t.,.f.};
-   ,"date"               =>{,  "D",   0,  0,.t.,.f.};
-   ,"time_with_zone"     =>{,"TOZ",   0,  0,.t.,.f.};
-   ,"time_no_zone"       =>{, "TO",   0,  0,.t.,.f.};
-   ,"datetime_with_zone" =>{,"DTZ",   0,  0,.t.,.f.};
-   ,"datetime_no_zone"   =>{, "DT",   0,  0,.t.,.f.}};
+   {"key"                =>{,  "I",   0,  0,"+"};
+   ,"integer"            =>{,  "I",   0,  0,"N"};
+   ,"big_integer"        =>{, "IB",   0,  0,"N"};
+   ,"money"              =>{,  "Y",   0,  0,"N"};
+   ,"char10"             =>{,  "C",  10,  0,"N"};
+   ,"varchar10"          =>{, "CV",  10,  0,"N"};
+   ,"binary10"           =>{,  "B",  10,  0,"N"};
+   ,"varbinary10"        =>{, "BV",  10,  0,"N"};
+   ,"memo"               =>{,  "M",   0,  0,"N"};
+   ,"raw"                =>{,  "R",   0,  0,"N"};
+   ,"logical"            =>{,  "L",   0,  0,"N"};
+   ,"date"               =>{,  "D",   0,  0,"N"};
+   ,"time_with_zone"     =>{,"TOZ",   0,  0,"N"};
+   ,"time_no_zone"       =>{, "TO",   0,  0,"N"};
+   ,"datetime_with_zone" =>{,"DTZ",   0,  0,"N"};
+   ,"datetime_no_zone"   =>{, "DT",   0,  0,"N"}};
    ,;   //Index Definition
    NIL};
 ,"zipcodes"=>{;   //Field Definition
-   {"key"    =>{, "IB",   0,  0,.f.,.t.};
-   ,"zipcode"=>{,  "C",   5,  0,.t.,.f.};
-   ,"city"   =>{,  "C",  45,  0,.t.,.f.}};
+   {"key"    =>{, "IB",   0,  0,"+"};
+   ,"zipcode"=>{,  "C",   5,  0,"N"};
+   ,"city"   =>{,  "C",  45,  0,"N"}};
    ,;   //Index Definition
    NIL};
 }
@@ -187,41 +186,41 @@ hb_orm_SendToDebugView("Will Initialize l_SchemaDefinition2")
 
 l_SchemaDefinition2 := ;
 {"dbf001"=>{;   //Field Definition
-   {"key"          =>{,  "I",   0,  0,.f.,.t.};
-   ,"customer_name"=>{,  "C",  50,  0,.f.,.f.}};
+   {"key"          =>{,  "I",   0,  0,"+"};
+   ,"customer_name"=>{,  "C",  50,  0,}};
    ,;   //Index Definition
    NIL};
 ,"dbf002"=>{;   //Field Definition
-   {"key"     =>{,  "I",   0,  0,.f.,.t.};
-   ,"p_dbf001"=>{,  "I",   0,  0,.f.,.f.}};
+   {"key"     =>{,  "I",   0,  0,"+"};
+   ,"p_dbf001"=>{,  "I",   0,  0,}};
    ,;   //Index Definition
    NIL};
 ,"set003.cust001"=>{;   //Field Definition
-   {"KeY" =>{,  "I",   0,  0,.f.,.t.};
-   ,"Code"=>{,  "C",   3,  0,.t.,.f.}};
+   {"KeY" =>{,  "I",   0,  0,"+"};
+   ,"Code"=>{,  "C",   3,  0,"N"}};
    ,;   //Index Definition
    NIL};
 ,"set003.form001"=>{;   //Field Definition
-   {"key"     =>{   ,  "I",   0,  0,.f.,.t.};
-   ,"LnAme"   =>{   ,  "C",  50,  0,.f.,.f.};
-   ,"fname"   =>{   ,  "C",  53,  0,.f.,.f.};
-   ,"minitial"=>{   ,  "C",   1,  0,.f.,.f.};
-   ,"age"     =>{   ,  "N",   3,  0,.f.,.f.};
-   ,"dob"     =>{   ,  "D",   0,  0,.f.,.f.};
-   ,"dati"    =>{   ,"DTZ",   0,  0,.f.,.f.};
-   ,"logical1"=>{"P",  "L",   0,  0,.f.,.f.};
-   ,"numdec2" =>{   ,  "N",   6,  1,.f.,.f.};
-   ,"bigint"  =>{"M", "IB",   0,  0,.f.,.f.};
-   ,"varchar" =>{   , "CV", 203,  0,.f.,.f.}};
+   {"key"     =>{   ,  "I",   0,  0,"+"};
+   ,"LnAme"   =>{   ,  "C",  50,  0,};
+   ,"fname"   =>{   ,  "C",  53,  0,};
+   ,"minitial"=>{   ,  "C",   1,  0,};
+   ,"age"     =>{   ,  "N",   3,  0,};
+   ,"dob"     =>{   ,  "D",   0,  0,};
+   ,"dati"    =>{   ,"DTZ",   0,  0,};
+   ,"logical1"=>{"P",  "L",   0,  0,};
+   ,"numdec2" =>{   ,  "N",   6,  1,};
+   ,"bigint"  =>{"M", "IB",   0,  0,};
+   ,"varchar" =>{   , "CV", 203,  0,}};
    ,;   //Index Definition
    {"lname"=>{   ,"LnAme",.f.,"BTREE"};
    ,"tag1" =>{"P","upper((lname)::text)",.f.,"BTREE"};
    ,"tag2" =>{"P","upper((fname)::text)",.f.,"BTREE"}}};
 ,"form002"=>{;   //Field Definition
-   {"key"       =>{,  "I",   0,  0,.f.,.t.};
-   ,"p_table001"=>{,  "I",   0,  0,.t.,.f.};
-   ,"children"  =>{, "CV", 200,  0,.t.,.f.};
-   ,"Cars"      =>{, "CV", 300,  0,.f.,.f.}};
+   {"key"       =>{,  "I",   0,  0,"+"};
+   ,"p_table001"=>{,  "I",   0,  0,"N"};
+   ,"children"  =>{, "CV", 200,  0,"N"};
+   ,"Cars"      =>{, "CV", 300,  0,}};
    ,;   //Index Definition
    NIL};
 }

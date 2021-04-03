@@ -92,7 +92,7 @@ local l_Flags := upper(hb_DefaultValue(par_flags,""))
 l_AllowNull       := ("N" $ l_Flags)
 l_IsAutoIncrement := ("+" $ l_Flags)
 l_Binary          := ("B" $ l_Flags)
-l_Trimmed         := ("T" $ l_Flags) .and. (par_Type $ "C")
+l_Trimmed         := ("T" $ l_Flags) .and. (par_Type $ "C" .or. par_Type $ "CV")
 l_Unicode         := ("U" $ l_Flags)
 l_Compressed      := (("Z" $ l_Flags) .or. ("C" $ l_Flags))
 
