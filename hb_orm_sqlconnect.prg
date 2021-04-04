@@ -260,7 +260,7 @@ if ::p_ConnectionNumber > 0
 endif
 
 if ::p_SQLConnection > 0
-    hb_RDDInfo(RDDI_DISCONNECT, ::p_SQLConnection)
+    hb_RDDInfo(RDDI_DISCONNECT,,"SQLMIX",::p_SQLConnection)
     ::p_SQLConnection := 0
 endif
 

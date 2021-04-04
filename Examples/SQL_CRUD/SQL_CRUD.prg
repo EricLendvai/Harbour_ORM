@@ -553,7 +553,6 @@ endif
 
 l_oSQLConnection1:Disconnect()
 ?"MariaDB Get last Handle",l_oSQLConnection1:GetHandle()
-
 l_oSQLConnection2:Disconnect()
 ?"PostgreSQL Get last Handle",l_oSQLConnection2:GetHandle()
 
