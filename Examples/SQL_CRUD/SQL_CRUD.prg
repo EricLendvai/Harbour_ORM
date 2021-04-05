@@ -536,13 +536,20 @@ if l_oSQLConnection2:Connected
         :Column("table001.lname","table001_lname")
         :Column("table002.children","table002_children")
         :Where("table001.key < 4")
+        :Where("table001.fname = ^","Ingrid")
+        :Where("table002.children = ^","bbbb")
         :Join("inner","table002","","table002.p_table001 = table001.key")
         :SQL(10002,"AllRecords")
 
-        select AllRecords
-        scan all
-            ?"PostgreSQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
-        endscan
+        if :Tally < 0
+            ? :ErrorMessage()
+            altd()
+        else
+            select AllRecords
+            scan all
+                ?"PostgreSQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
+            endscan
+        endif
         ?"----------------------------------------------"
 
         :SetExplainMode(2)
@@ -555,7 +562,7 @@ l_oSQLConnection1:Disconnect()
 ?"MariaDB Get last Handle",l_oSQLConnection1:GetHandle()
 l_oSQLConnection2:Disconnect()
 ?"PostgreSQL Get last Handle",l_oSQLConnection2:GetHandle()
-
+altd()
 return nil
 //=================================================================================================================
 //=================================================================================================================

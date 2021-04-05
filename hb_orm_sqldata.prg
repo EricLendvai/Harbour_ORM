@@ -679,9 +679,9 @@ if pcount() > 1 .and. "^" $ par_Expression
                 switch valtype(l_Value)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_result += '"'+hb_StrReplace( l_Value, { "'" => "\'",;
+                    l_result += "'"+hb_StrReplace( l_Value, { "'" => "\'",;
                                                             '"' => '\"',;
-                                                            '\' => '\\'} )+'"'
+                                                            '\' => '\\'} )+"'"
                     exit
 
                 case "N"  // Numeric
@@ -689,12 +689,12 @@ if pcount() > 1 .and. "^" $ par_Expression
                     exit
 
                 case "D"  // Date   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
-                    // l_Value := '"'+hb_DtoC(l_Value,"YYYY-MM-DD")+'"'           //_M_  Test on 1753-01-01
+                    // l_Value := "'"+hb_DtoC(l_Value,"YYYY-MM-DD")+"'"          //_M_  Test on 1753-01-01
                     l_result += ::FormatDateForSQLUpdate(l_Value)
                     exit
 
                 case "T"  // TimeStamp (*)   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
-                    // l_Value := '"'+hb_TtoC(l_Value,"YYYY-MM-DD","hh:mm:ss")+'"'           //_M_  Test on 1753-01-01
+                    // l_Value := "'" +hb_TtoC(l_Value,"YYYY-MM-DD","hh:mm:ss")+"'"            //_M_  Test on 1753-01-01
                     l_result += ::FormatDateTimeForSQLUpdate(l_Value)
                     exit
 
