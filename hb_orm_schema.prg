@@ -1889,19 +1889,32 @@ local l_cSourceCode := ""
 local l_cSourceCodeFields,l_cSourceCodeIndexes
 local l_nMaxNameLength
 local l_cIndent := space(3)
-local l_aListOfTablesToNoProcess := {"SchemaCacheLog"}
+// local l_aListOfTablesToNoProcess := {"SchemaCacheLog"}
 local l_cIndexExpression
 local l_FieldType,l_FieldLen,l_FieldDec,l_FieldAttributes,l_FieldAllowNull,l_FieldAutoIncrement
-
+local l_nLengthPostgreSQLHBORMSchemaName := Len(::PostgreSQLHBORMSchemaName)
 
 ::UpdateSchemaCache()
 ::LoadSchema()
 
 for each l_hTableDefinition in ::p_Schema
     l_cTableName       := l_hTableDefinition:__enumKey()
-    if AScan( l_aListOfTablesToNoProcess, {|cName|lower(cName) == lower(l_cTableName) } ) > 0
-        loop
-    endif
+    // if AScan( l_aListOfTablesToNoProcess, {|cName|lower(cName) == lower(l_cTableName) } ) > 0
+    //     loop
+    // endif
+
+    // Do not export the ORM Support Files
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        if lower(left(l_cTableName,6)) == "schema"   // Not the best method to decide if a ORM support table.
+            loop
+        endif
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        if lower(left(l_cTableName,l_nLengthPostgreSQLHBORMSchemaName+1)) == lower(::PostgreSQLHBORMSchemaName)+"."
+            loop
+        endif
+    endcase
+
     l_aTableDefinition := l_hTableDefinition:__enumValue()
 
     l_hFields          := l_aTableDefinition[HB_ORM_SCHEMA_FIELD]
