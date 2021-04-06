@@ -37,6 +37,11 @@ md %HB_COMPILER% 2>nul
 md %HB_COMPILER%\%BuildMode% 2>nul
 md %HB_COMPILER%\%BuildMode%\hbmk2 2>nul
 
+rem the following will output the current datetime
+for /F "tokens=2" %%i in ('date /t') do set mydate=%%i
+set mytime=%time%
+echo local l_cBuildInfo := "%HB_COMPILER% %BuildMode% %mydate% %mytime%">BuildInfo.txt
+
 del %HB_COMPILER%\%BuildMode%\*.a 2>nul
 del %HB_COMPILER%\%BuildMode%\*.lib 2>nul
 
@@ -59,9 +64,6 @@ rem	hbmk2 %LIBName%.hbp -w3 -es2
     hbmk2 %LIBName%.hbp -w3 -dDONOTINCLUDE
 )
 
-rem the following will output the current datetime
-for /F "tokens=2" %%i in ('date /t') do set mydate=%%i
-set mytime=%time%
 echo Current time is %mydate% %mytime%
 
 set SUCCESS=F

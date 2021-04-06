@@ -1,0 +1,1 @@
+local l_cBuildInfo := "msvc64 release 04/05/2021 22:12:19.81"
