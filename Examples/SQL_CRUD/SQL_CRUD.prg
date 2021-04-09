@@ -472,7 +472,6 @@ if l_oSQLConnection2:Connected
     with object o_DB2
         :UseConnection(l_oSQLConnection2)
 
-
         :Table("table003")
         :SetEventId("PostgreSQLDecimalTest")
         :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog

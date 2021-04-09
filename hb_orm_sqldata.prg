@@ -18,7 +18,7 @@ method UseConnection(par_oSQLConnection) class hb_orm_SQLData
 ::p_SQLEngineType       := ::p_oSQLConnection:GetSQLEngineType()
 ::p_ConnectionNumber    := ::p_oSQLConnection:GetConnectionNumber()
 ::p_Database            := ::p_oSQLConnection:GetDatabase()
-::p_SchemaName          := ::p_oSQLConnection:GetCurrentSchemaName()
+::p_SchemaName          := ::p_oSQLConnection:GetCurrentSchemaName()   // Will "Freeze" the current connection p_SchemaName
 ::p_PKFN                := ::p_oSQLConnection:GetPrimaryKeyFieldName() //  p_PKFN
 return Self
 //-----------------------------------------------------------------------------------------------------------------
@@ -46,27 +46,13 @@ hb_orm_SendToDebugView("hb_orm destroy")
 ::p_oSQLConnection            := NIL
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
-method Table(par_cName,par_Alias) class hb_orm_SQLData
+method Table(par_cSchemaAndTableName,par_cAlias) class hb_orm_SQLData
 local l_iPos
 
 if pcount() > 0
-    ::p_TableName = par_cName
-    if pcount() >= 2
-        ::p_TableAlias := par_Alias
-    else
-        ::p_TableAlias := ::p_TableName
-    endif
 
-    if ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_iPos := at(".",::p_TableName)
-        if empty(l_iPos)
-            //If the schema of the table is not already present, add the current schema name
-            ::p_TableName := ::p_oSQLConnection:GetCurrentSchemaName()+"."+::p_TableName
-        endif
-    endif
-    
-    ::p_Key     := 0
-    ::p_EventId := ""
+    // hb_HCaseMatch(::p_AliasToSchemaAndTableNames,.f.)     No Need to make it case insensitive since Aliases are always converted to lower case
+    hb_HClear(::p_AliasToSchemaAndTableNames)
 
     hb_HClear(::p_FieldsAndValues)
     
@@ -107,9 +93,40 @@ if pcount() > 0
     
     ::p_ExplainMode := 0
 
+    if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
+        ::p_SchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
+        if pcount() >= 2 .and. !empty(par_cAlias)
+            ::p_TableAlias := lower(par_cAlias)
+        else
+            ::p_TableAlias := lower(::p_SchemaAndTableName)
+        endif
+    else
+        l_iPos = at(".",par_cSchemaAndTableName)
+        if empty(l_iPos)
+            ::p_SchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
+            l_iPos = at(".",::p_SchemaAndTableName)
+        else
+            ::p_SchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
+        endif
+        if pcount() >= 2 .and. !empty(par_cAlias)
+            ::p_TableAlias := lower(par_cAlias)
+        else
+            ::p_TableAlias := lower(substr(::p_SchemaAndTableName,l_iPos+1))
+        endif
+    endif
+    if empty(::p_SchemaAndTableName)
+        ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".]
+        hb_orm_SendToDebugView(::p_ErrorMessage)
+    else
+      ::p_AliasToSchemaAndTableNames[::p_TableAlias] := ::p_SchemaAndTableName
+    endif
+    
+    ::p_Key     := 0
+    ::p_EventId := ""
+
 endif
 
-return ::p_TableName
+return ::p_SchemaAndTableName
 //-----------------------------------------------------------------------------------------------------------------
 method SetEventId(par_xId) class hb_orm_SQLData
 if ValType(par_xId) == "N"
@@ -154,11 +171,11 @@ local l_FieldName
 local l_HashPos
 
 if !empty(par_cName)
-    l_FieldName := vfp_strtran(vfp_strtran(allt(par_cName),::p_TableName+"->","",-1,-1,1),::p_TableName+".","",-1,-1,1)  //Remove the table alias and "->", in case it was used
+    l_FieldName := vfp_strtran(vfp_strtran(allt(par_cName),::p_SchemaAndTableName+"->","",-1,-1,1),::p_SchemaAndTableName+".","",-1,-1,1)  //Remove the table alias and "->", in case it was used
 
-    l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[::p_TableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
+    l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
     if l_HashPos > 0
-        l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[::p_TableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
+        l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
     else
         //_M_ Report Failed to Find Field
     endif
@@ -184,13 +201,13 @@ method Add(par_Key) class hb_orm_SQLData                                     //A
 local l_Fields
 local l_select
 local l_SQLCommand
-local l_TableName
 local l_FieldName,l_FieldInfo
 local l_Value
 local l_Values
 local l_oField
 local l_aAutoTrimmedFields := {}
 local l_aErrors := {}
+local l_KeyFieldValue
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
@@ -205,19 +222,13 @@ if empty(::p_ErrorMessage)
     case len(::p_FieldsAndValues) == 0
         ::p_ErrorMessage = [Missing Fields]
         
-    case empty(::p_TableName)
+    case empty(::p_SchemaAndTableName)
         ::p_ErrorMessage = [Missing Table]
         
     otherwise
         l_select := iif(used(),select(),0)
         
-        l_TableName = ::p_oSQLConnection:CaseTableName(::p_TableName)
-
         do case
-        case empty(l_TableName)
-            ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+::p_TableName+[".]
-            hb_orm_SendToDebugView(::p_ErrorMessage)
-
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             
             if pcount() == 1
@@ -230,14 +241,14 @@ if empty(::p_ErrorMessage)
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_TableName,l_oField:__enumKey())
+                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
                 if empty(l_FieldName)
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+l_TableName+[".])
+                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+::p_SchemaAndTableName+[".])
                 else
-                    l_FieldInfo := ::p_oSQLConnection:p_Schema[l_TableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
+                    l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
                     l_Value     := l_oField:__enumValue()
                     
-                    if !el_AUnpack(::PrepValueForMySQL("adding",l_Value,l_TableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                    if !el_AUnpack(::PrepValueForMySQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
                         loop
                     endif
 
@@ -250,7 +261,7 @@ if empty(::p_ErrorMessage)
                 endif
 
             endfor
-            l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(l_TableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[)]
+            l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[)]
             
             l_SQLCommand := strtran(l_SQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
@@ -299,14 +310,14 @@ if empty(::p_ErrorMessage)
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := ::p_oSQLConnection:CaseFieldName(l_TableName,l_oField:__enumKey())
+                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
                 if empty(l_FieldName)
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+l_TableName+[".])
+                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+::p_SchemaAndTableName+[".])
                 else
-                    l_FieldInfo := ::p_oSQLConnection:p_Schema[l_TableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
+                    l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
                     l_Value     := l_oField:__enumValue()
 
-                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_Value,l_TableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
                         loop
                     endif
 
@@ -319,7 +330,7 @@ if empty(::p_ErrorMessage)
                 endif
 
             endfor
-            l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(l_TableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)
+            l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)
             
             l_SQLCommand := strtran(l_SQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
@@ -331,10 +342,11 @@ if empty(::p_ErrorMessage)
                     
                 otherwise
                     ::Tally := 1
-                    if Valtype(c_DB_Result->key) == "C"
-                        ::p_Key := val(c_DB_Result->key)
+                    l_KeyFieldValue := c_DB_Result->(FieldGet(FieldPos(::p_PKFN)))
+                    if Valtype(l_KeyFieldValue) == "C"
+                        ::p_Key := val(l_KeyFieldValue)
                     else
-                        ::p_Key := c_DB_Result->key
+                        ::p_Key := l_KeyFieldValue
                     endif
                     // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_SQLCommand+[ -> Key = ]+trans(::p_Key))
                     
@@ -356,7 +368,7 @@ endif
 
 if empty(::p_ErrorMessage)
     if len(l_aAutoTrimmedFields) > 0
-        ::p_oSQLConnection:LogAutoTrimEvent(::p_EventId,l_TableName,::p_KEY,l_aAutoTrimmedFields)
+        ::p_oSQLConnection:LogAutoTrimEvent(::p_EventId,::p_SchemaAndTableName,::p_KEY,l_aAutoTrimmedFields)
     endif
 else
     ::p_Key = -1
@@ -373,7 +385,6 @@ method Delete(par_1,par_2) class hb_orm_SQLData                              //D
 
 local l_select
 local l_SQLCommand
-local l_TableName
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
@@ -396,7 +407,7 @@ endif
 
 if empty(::p_ErrorMessage)
     do case
-    case empty(::p_TableName)
+    case empty(::p_SchemaAndTableName)
         ::p_ErrorMessage := [Missing Table]
         
     case empty(::p_KEY)
@@ -405,21 +416,15 @@ if empty(::p_ErrorMessage)
     otherwise
         l_select := iif(used(),select(),0)
         
-        l_TableName = ::p_oSQLConnection:CaseTableName(::p_TableName)
-
         do case
-        case empty(l_TableName)
-            ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+::p_TableName+[".]
-            hb_orm_SendToDebugView(::p_ErrorMessage)
-
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             
-            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(l_TableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[=]+trans(::p_KEY)
+            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[=]+trans(::p_KEY)
             ::p_LastSQLCommand = l_SQLCommand
             
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             
-            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(l_TableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[=]+trans(::p_KEY)
+            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[=]+trans(::p_KEY)
             ::p_LastSQLCommand = l_SQLCommand
             
         endcase
@@ -449,7 +454,6 @@ method Update(par_Key) class hb_orm_SQLData                                  //U
 
 local l_select
 local l_SQLCommand
-local l_TableName
 local l_FieldName,l_FieldInfo
 local l_Value
 local l_oField
@@ -474,7 +478,7 @@ if empty(::p_ErrorMessage)
     case len(::p_FieldsAndValues) == 0
         ::p_ErrorMessage = [Missing Fields]
         
-    case empty(::p_TableName)
+    case empty(::p_SchemaAndTableName)
         ::p_ErrorMessage = [Missing Table]
         
     case empty(::p_KEY)
@@ -483,34 +487,28 @@ if empty(::p_ErrorMessage)
     otherwise
         l_select = iif(used(),select(),0)
         
-        l_TableName = ::p_oSQLConnection:CaseTableName(::p_TableName)
-
         do case
-        case empty(l_TableName)
-            ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+::p_TableName+[".]
-            hb_orm_SendToDebugView(::p_ErrorMessage)
-
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             // M_ find a way to integrade the same concept as the code below. Should the update be a stored Procedure ?
             *if !empty(::p_LastDateTimeOfChangeFieldName)
-            *	replace (l_TableName+"->"+::p_LastDateTimeOfChangeFieldName) with v_LocalTime
+            *	replace (::p_SchemaAndTableName+"->"+::p_LastDateTimeOfChangeFieldName) with v_LocalTime
             *endif
             
             l_SQLCommand := ""
             
             //sysm field
             // l_VFPFieldValue = [']+strtran(ttoc(v_LocalTime,3),"T"," ")+[']
-            // l_SQLCommand +=  [`]+l_TableName+[`.`sysm`=]+l_VFPFieldValue
+            // l_SQLCommand +=  [`]+::p_SchemaAndTableName+[`.`sysm`=]+l_VFPFieldValue
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := ::p_oSQLConnection:CaseFieldName(l_TableName,l_oField:__enumKey())
+                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
                 if empty(l_FieldName)
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+l_TableName+[".])
+                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+::p_SchemaAndTableName+[".])
                 else
-                    l_FieldInfo := ::p_oSQLConnection:p_Schema[l_TableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
+                    l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
                     l_Value     := l_oField:__enumValue()
 
-                    if !el_AUnpack(::PrepValueForMySQL("updating",l_Value,l_TableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                    if !el_AUnpack(::PrepValueForMySQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
                         loop
                     endif
                     
@@ -522,7 +520,7 @@ if empty(::p_ErrorMessage)
 
             endfor
             
-            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(l_TableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)
+            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)
             ::p_LastSQLCommand = l_SQLCommand
             
             if ::p_oSQLConnection:SQLExec(l_SQLCommand)
@@ -537,24 +535,24 @@ if empty(::p_ErrorMessage)
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             // M_ find a way to integrate the same concept as the code below. Should the update be a stored Procedure ?
             *if !empty(::p_LastDateTimeOfChangeFieldName)
-            *	replace (l_TableName+"->"+::p_LastDateTimeOfChangeFieldName) with v_LocalTime
+            *	replace (::p_SchemaAndTableName+"->"+::p_LastDateTimeOfChangeFieldName) with v_LocalTime
             *endif
                         
             l_SQLCommand := ""
             
             //sysm field
             // l_VFPFieldValue = [']+strtran(ttoc(v_LocalTime,3),"T"," ")+[']
-            // l_SQLCommand +=  [`]+l_TableName+[`.`sysm`=]+l_VFPFieldValue
+            // l_SQLCommand +=  [`]+::p_SchemaAndTableName+[`.`sysm`=]+l_VFPFieldValue
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := ::p_oSQLConnection:CaseFieldName(l_TableName,l_oField:__enumKey())
+                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
                 if empty(l_FieldName)
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+l_TableName+[".])
+                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+::p_SchemaAndTableName+[".])
                 else
-                    l_FieldInfo := ::p_oSQLConnection:p_Schema[l_TableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
+                    l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
                     l_Value     := l_oField:__enumValue()
 
-                    if !el_AUnpack(::PrepValueForPostgreSQL("updating",l_Value,l_TableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                    if !el_AUnpack(::PrepValueForPostgreSQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
                         loop
                     endif
 
@@ -566,7 +564,7 @@ if empty(::p_ErrorMessage)
 
             endfor
             
-            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(l_TableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)
+            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)
 
             ::p_LastSQLCommand = l_SQLCommand
             
@@ -588,7 +586,7 @@ endif
 
 if empty(::p_ErrorMessage)
     if len(l_aAutoTrimmedFields) > 0
-        ::p_oSQLConnection:LogAutoTrimEvent(::p_EventId,l_TableName,::p_KEY,l_aAutoTrimmedFields)
+        ::p_oSQLConnection:LogAutoTrimEvent(::p_EventId,::p_SchemaAndTableName,::p_KEY,l_aAutoTrimmedFields)
     endif
 else
     ::Tally = -1
@@ -743,7 +741,7 @@ endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Join(par_Type,par_cSchemaTableName,par_cTableName_Alias,par_expression,...) class hb_orm_SQLData    // Join Tables. Will return a handle that can be used later by ReplaceJoin()
+method Join(par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...) class hb_orm_SQLData    // Join Tables. Will return a handle that can be used later by ReplaceJoin()
 local l_cSchemaAndTableName
 local l_cAlias
 local l_iPos
@@ -752,34 +750,40 @@ if empty(par_Type)
     //Used to reserve a Join Position
     AAdd(::p_Join,{})
 else
-    if ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_cAlias := allt(hb_DefaultValue(par_cTableName_Alias,""))
-        l_iPos := at(".",par_cSchemaTableName)
-        if empty(l_iPos)
-            if empty(l_cAlias)
-                l_cAlias := allt(par_cSchemaTableName)
-            endif
-            l_cSchemaAndTableName := ::p_oSQLConnection:GetCurrentSchemaName()+"."+allt(par_cSchemaTableName)
+    if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
+        l_cSchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
+        if pcount() >= 3 .and. !empty(par_cAlias)
+            l_cAlias := lower(par_cAlias)
         else
-            l_cSchemaAndTableName := allt(par_cSchemaTableName)
-            if empty(l_cAlias)
-                //Extract the table name from the l_cSchemaAndTableName
-                l_cAlias := substr(l_cAlias,l_iPos+1)
-            endif
+            l_cAlias := lower(l_cSchemaAndTableName)
         endif
     else
-        l_cSchemaAndTableName := allt(par_cSchemaTableName)
-        l_cAlias := allt(hb_DefaultValue(par_cTableName_Alias,""))
-        if empty(l_cAlias)
-            l_cAlias := l_cSchemaAndTableName
+        l_iPos = at(".",par_cSchemaAndTableName)
+        if empty(l_iPos)
+            l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
+            l_iPos = at(".",l_cSchemaAndTableName)
+        else
+            l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
+        endif
+        if pcount() >= 3 .and. !empty(par_cAlias)
+            l_cAlias := lower(par_cAlias)
+        else
+            l_cAlias := lower(substr(l_cSchemaAndTableName,l_iPos+1))
         endif
     endif
+    if empty(l_cSchemaAndTableName)
+        ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".]
+        hb_orm_SendToDebugView(::p_ErrorMessage)
+    else
+        ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
+    endif
+
     AAdd(::p_Join,{upper(allt(par_Type)),l_cSchemaAndTableName,l_cAlias,allt(::PrepExpression(par_expression,...))})
 endif
 
 return len(::p_Join)
 //-----------------------------------------------------------------------------------------------------------------
-method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaTableName,par_cTableName_Alias,par_expression,...) class hb_orm_SQLData      // Replace a Join tables definition
+method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...) class hb_orm_SQLData      // Replace a Join tables definition
 local l_cSchemaAndTableName
 local l_cAlias
 local l_iPos
@@ -787,28 +791,57 @@ local l_iPos
 if empty(par_Type)
     ::p_Join[par_JoinNumber] := {}
 else
-    if ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_cAlias := allt(hb_DefaultValue(par_cTableName_Alias,""))
-        l_iPos := at(".",par_cSchemaTableName)
-        if empty(l_iPos)
-            if empty(l_cAlias)
-                l_cAlias := allt(par_cSchemaTableName)
-            endif
-            l_cSchemaAndTableName := ::p_oSQLConnection:GetCurrentSchemaName()+"."+allt(par_cSchemaTableName)
+    // if ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    //     l_cAlias := allt(hb_DefaultValue(par_cAlias,""))
+    //     l_iPos := at(".",par_cSchemaAndTableName)
+    //     if empty(l_iPos)
+    //         if empty(l_cAlias)
+    //             l_cAlias := allt(par_cSchemaAndTableName)
+    //         endif
+    //         l_cSchemaAndTableName := ::p_oSQLConnection:GetCurrentSchemaName()+"."+allt(par_cSchemaAndTableName)
+    //     else
+    //         l_cSchemaAndTableName := allt(par_cSchemaAndTableName)
+    //         if empty(l_cAlias)
+    //             //Extract the table name from the l_cSchemaAndTableName
+    //             l_cAlias := substr(l_cAlias,l_iPos+1)
+    //         endif
+    //     endif
+    // else
+    //     l_cSchemaAndTableName := allt(par_cSchemaAndTableName)
+    //     l_cAlias := allt(hb_DefaultValue(par_cAlias,""))
+    //     if empty(l_cAlias)
+    //         l_cAlias := l_cSchemaAndTableName
+    //     endif
+    // endif
+
+    if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
+        l_cSchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
+        if pcount() >= 4 .and. !empty(par_cAlias)
+            l_cAlias := lower(par_cAlias)
         else
-            l_cSchemaAndTableName := allt(par_cSchemaTableName)
-            if empty(l_cAlias)
-                //Extract the table name from the l_cSchemaAndTableName
-                l_cAlias := substr(l_cAlias,l_iPos+1)
-            endif
+            l_cAlias := lower(l_cSchemaAndTableName)
         endif
     else
-        l_cSchemaAndTableName := allt(par_cSchemaTableName)
-        l_cAlias := allt(hb_DefaultValue(par_cTableName_Alias,""))
-        if empty(l_cAlias)
-            l_cAlias := l_cSchemaAndTableName
+        l_iPos = at(".",par_cSchemaAndTableName)
+        if empty(l_iPos)
+            l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
+            l_iPos = at(".",l_cSchemaAndTableName)
+        else
+            l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
+        endif
+        if pcount() >= 4 .and. !empty(par_cAlias)
+            l_cAlias := lower(par_cAlias)
+        else
+            l_cAlias := lower(substr(l_cSchemaAndTableName,l_iPos+1))
         endif
     endif
+    if empty(l_cSchemaAndTableName)
+        ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".]
+        hb_orm_SendToDebugView(::p_ErrorMessage)
+    else
+        ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
+    endif
+
     ::p_Join[par_JoinNumber] := {upper(allt(par_Type)),l_cSchemaAndTableName,l_cAlias,allt(::PrepExpression(par_expression,...))}
 endif
 
@@ -1012,23 +1045,23 @@ return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method ExpressionToMYSQL(par_Expression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
 //_M_
-return ::FixTableAndFieldNameCasingInExpression(par_Expression)
+return ::FixAliasAndFieldNameCasingInExpression(par_Expression)
 //-----------------------------------------------------------------------------------------------------------------
 method ExpressionToPostgreSQL(par_Expression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
 //_M_
-return ::FixTableAndFieldNameCasingInExpression(par_Expression)
+return ::FixAliasAndFieldNameCasingInExpression(par_Expression)
 //-----------------------------------------------------------------------------------------------------------------
-method FixTableAndFieldNameCasingInExpression(par_expression) class hb_orm_SQLData   //_M_
+method FixAliasAndFieldNameCasingInExpression(par_expression) class hb_orm_SQLData   //_M_
 local l_HashPos
 local l_result := ""
-local l_TableName,l_FieldName
+local l_AliasName,l_FieldName
 local l_SchemaAndTableName
 local l_TokenDelimiterLeft,l_TokenDelimiterRight
 local l_Byte
 local l_ByteIsToken
 local l_TableFieldDetection := 0
 local l_StreamBuffer        := ""
-local l_SchemaPrefix
+//local l_SchemaPrefix
 local l_iPos
 
 // if par_expression == "table003.Bit"
@@ -1039,35 +1072,35 @@ do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_TokenDelimiterLeft  := [`]
     l_TokenDelimiterRight := [`]
-    l_SchemaPrefix        := ""
+    //l_SchemaPrefix        := ""
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_TokenDelimiterLeft  := ["]
     l_TokenDelimiterRight := ["]
-    l_SchemaPrefix        := ::p_oSQLConnection:GetCurrentSchemaName()+"."
+    //l_SchemaPrefix        := ::p_SchemaName+"."  // ::p_oSQLConnection:GetCurrentSchemaName()+"."
 endcase
 
 for each l_Byte in @par_expression
     l_ByteIsToken := (l_Byte $ "0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
     do case
-    case l_TableFieldDetection == 0  // Not in <TableName>.<FieldName> pattern
+    case l_TableFieldDetection == 0  // Not in <AliasName>.<FieldName> pattern
         if l_ByteIsToken
             l_TableFieldDetection := 1
             l_StreamBuffer        := l_Byte
-            l_TableName           := l_Byte
+            l_AliasName           := l_Byte
             l_FieldName           := ""
         else
             l_result += l_Byte
         endif
-    case l_TableFieldDetection == 1 // in <TableName>
+    case l_TableFieldDetection == 1 // in <AliasName>
         do case
         case l_ByteIsToken
             l_StreamBuffer        += l_Byte
-            l_TableName           += l_Byte
+            l_AliasName           += l_Byte
         case l_byte == "."
             l_TableFieldDetection := 2
             l_StreamBuffer        += l_Byte
         otherwise
-            // Not a <TableName>.<FieldName> pattern
+            // Not a <AliasName>.<FieldName> pattern
             l_TableFieldDetection := 0
             l_result              += l_StreamBuffer+l_Byte
             l_StreamBuffer        := ""
@@ -1093,26 +1126,27 @@ for each l_Byte in @par_expression
             l_StreamBuffer        := ""
         otherwise // End of pattern
             l_TableFieldDetection := 0
+            l_AliasName := lower(l_AliasName)   //Alias are always converted to lowercase.
 
-            // Fix The Casing of l_TableName and l_FieldName based on the actual on file tables.
-            l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema,l_SchemaPrefix+l_TableName)
+            // Fix The Casing of l_AliasName and l_FieldName based on the actual on file tables.
+            l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema,::p_AliasToSchemaAndTableNames[l_AliasName])
             if l_HashPos > 0
                 l_SchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_HashPos)
-                l_iPos := at(".",l_SchemaAndTableName)
-                if !empty(l_iPos)
-                    l_TableName := substr(l_SchemaAndTableName,l_iPos+1)
-                endif
+                // l_iPos := at(".",l_SchemaAndTableName)
+                // if !empty(l_iPos)
+                //     l_AliasName := substr(l_SchemaAndTableName,l_iPos+1)
+                // endif
                 l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
                 if l_HashPos > 0
                     l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
-                    l_result += l_TokenDelimiterLeft+l_TableName+l_TokenDelimiterRight+"."+l_TokenDelimiterLeft+l_FieldName+l_TokenDelimiterRight+l_Byte
+                    l_result += l_TokenDelimiterLeft+l_AliasName+l_TokenDelimiterRight+"."+l_TokenDelimiterLeft+l_FieldName+l_TokenDelimiterRight+l_Byte
                 else
                     l_result += l_StreamBuffer+l_Byte
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_FieldName+[" in table "]+l_TableName+[".])
+                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_FieldName+[" in alias "]+l_AliasName+[".])
                 endif
             else
                 l_result += l_StreamBuffer+l_Byte
-                hb_orm_SendToDebugView([Auto-Casing Error: Failed To find table "]+l_TableName+[".])
+                hb_orm_SendToDebugView([Auto-Casing Error: Failed To find alias "]+l_AliasName+[".])
             endif
             l_StreamBuffer := ""
 
@@ -1122,18 +1156,20 @@ for each l_Byte in @par_expression
 endfor
 
 if l_TableFieldDetection == 3
-    // Fix The Casing of l_TableName and l_FieldName based on he actual on file tables.
-    l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema,l_SchemaPrefix+l_TableName)
+    // Fix The Casing of l_AliasName and l_FieldName based on he actual on file tables.
+    l_AliasName := lower(l_AliasName)   //Alias are always converted to lowercase.
+
+    l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema,::p_AliasToSchemaAndTableNames[l_AliasName])
     if l_HashPos > 0
         l_SchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_HashPos) 
-        l_iPos := at(".",l_SchemaAndTableName)
-        if !empty(l_iPos)
-            l_TableName := substr(l_SchemaAndTableName,l_iPos+1)
-        endif
+        // l_iPos := at(".",l_SchemaAndTableName)
+        // if !empty(l_iPos)
+        //     l_AliasName := substr(l_SchemaAndTableName,l_iPos+1)
+        // endif
         l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
         if l_HashPos > 0
             l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
-            l_result += l_TokenDelimiterLeft+l_TableName+l_TokenDelimiterRight+"."+l_TokenDelimiterLeft+l_FieldName+l_TokenDelimiterRight
+            l_result += l_TokenDelimiterLeft+l_AliasName+l_TokenDelimiterRight+"."+l_TokenDelimiterLeft+l_FieldName+l_TokenDelimiterRight
         else
             //_M_ Report Failed to Find Field
             l_result += l_StreamBuffer
@@ -1147,6 +1183,9 @@ else
 endif
 
 return l_result
+
+//l_TableName
+
 //-----------------------------------------------------------------------------------------------------------------
 method BuildSQL() class hb_orm_SQLData   // Used internally
 
@@ -1185,10 +1224,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         endfor
     endif
     
-    if ::p_TableName == ::p_TableAlias
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_TableName)
+    if ::p_SchemaAndTableName == ::p_TableAlias
+        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
     else
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_TableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
     endif
     
     for l_Counter = 1 to l_NumberOfJoins
@@ -1300,10 +1339,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         endfor
     endif
     
-    if ::p_TableName == ::p_TableAlias
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_TableName)
+    if ::p_SchemaAndTableName == ::p_TableAlias
+        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
     else
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_TableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
     endif
     
     for l_Counter = 1 to l_NumberOfJoins
@@ -1569,7 +1608,6 @@ else
             else
                 l_result := ""
 
-                // altd()
                 select (l_CursorTempName)
                 l_NumberOfFields := fcount()
                 dbGoTop()
@@ -1844,7 +1882,7 @@ otherwise
             endfor
         endif
         
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_TableName)
+        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
         l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)+[)]
         
         l_SQLCommand := strtran(l_SQLCommand,[->],[.])
@@ -1871,7 +1909,7 @@ otherwise
             endfor
         endif
         
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_TableName)
+        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
         l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)+[)]
         
         l_SQLCommand := strtran(l_SQLCommand,[->],[.])
@@ -1905,7 +1943,6 @@ otherwise
     else
         ::Tally = -1
         ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
-// altd()
         hb_orm_SendToDebugView("Error in method get()",::p_ErrorMessage)
     endif
     

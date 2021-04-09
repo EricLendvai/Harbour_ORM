@@ -13,35 +13,37 @@ class hb_orm_SQLData
         data p_SchemaName            init ""
         data p_PKFN                  init "key"        // Primary Key Field Name
 
-        data p_TableName             init ""
+        data p_SchemaAndTableName    init ""
         data p_EventId               init ""
         data p_TableAlias            init ""
 
         data p_Key                   init 0
         data p_ErrorMessage          init ""
 
-        data p_FieldsAndValues       init {=>}   // p_FieldsAndValues[FieldName] := FieldValue
+        data p_AliasToSchemaAndTableNames init {=>}  //Used by method FixAliasAndFieldNameCasingInExpression() to fix casing of field names
 
-        data p_FieldToReturn          init {}
+        data p_FieldsAndValues            init {=>}   // p_FieldsAndValues[FieldName] := FieldValue
+
+        data p_FieldToReturn              init {}
                // 1 - ""   Expression
                // 2 - ""   Alias
 
-        data p_Join                   init {}
+        data p_Join                       init {}
                // 1 - 0    Type (1=inner,2=left outer join)
-               // 2 - ""   Table
+               // 2 - ""   SchemaAndTable Name
                // 3 - ""   Tables Alias
                // 4 - ""   Expression
 
-        data p_Where                  init {}
+        data p_Where                      init {}
                // 1 - ""   Expression
 
-        data p_GroupBy                init {}
+        data p_GroupBy                    init {}
                // 1 - ""   Expression
 
-        data p_Having          init {}
+        data p_Having                     init {}
                // 1 - ""   Expression
 
-        data p_OrderBy init {}
+        data p_OrderBy                    init {}
                // 1 - ""    Column Name
                // 2 - .t.   .t. = Ascending  .f. = Descending
 
@@ -83,7 +85,7 @@ class hb_orm_SQLData
         method PrepExpression(par_Expression,...)                               //Used to "Freeze" parameters as values in "^" places
         method ExpressionToMYSQL(par_Expression)                                //_M_  to generalize UDF translation to backend
         method ExpressionToPostgreSQL(par_Expression)                           //_M_  to generalize UDF translation to backend
-        method FixTableAndFieldNameCasingInExpression(par_Expression)           // to handle the casing of tables and fields, by using the connection's :p_schema
+        method FixAliasAndFieldNameCasingInExpression(par_Expression)           // to handle the casing of tables and fields, by using the connection's :p_schema Since it is more of alias.field for now will assume alias same as table name and will use ::p_SchemaName
         method BuildSQL()                                                       // Used to build the SQL commands to send to server
         method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
@@ -95,7 +97,7 @@ class hb_orm_SQLData
         method Init()          constructor  //Harbour does not call the constructor by default (BIG design mistake)
         method UseConnection(par_oSQLConnection)
         method Echo(par_Text)
-        method Table(par_cName,par_Alias)
+        method Table(par_cSchemaAndTableName,par_cAlias)
         method SetEventId(par_xId)                                 //Used to identify query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
         method UsedInUnion(par_o_dl)
         method Distinct(par_Mode)
@@ -112,8 +114,8 @@ class hb_orm_SQLData
         
         method Column(par_Expression,par_Columns_Alias,...)     //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
 
-        method Join(par_Type,par_cSchemaTableName,par_cTableName_Alias,par_expression,...)                        // Join Tables
-        method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaTableName,par_cTableName_Alias,par_expression,...)  // Replace a Join tables definition
+        method Join(par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...)                        // Join Tables
+        method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaAndTableName,par_cTableName_Alias,par_expression,...)  // Replace a Join tables definition
 
         method Where(par_Expression,...)                                                             // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
         method ReplaceWhere(par_WhereNumber,par_Expression,...)                                      // Replace a Where definition
