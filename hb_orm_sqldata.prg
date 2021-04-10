@@ -1261,7 +1261,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_SQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,2])
         
         // if !empty(::p_Join[l_Counter,3])   the ::Join() method ensured it is never empty
-            l_SQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,3])
+            l_SQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_Counter,3]))
         // endif
 
         l_SQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_Counter,4])
@@ -1376,7 +1376,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,2])
         
         // if !empty(::p_Join[l_Counter,3])   the ::Join() method ensured it is never empty
-            l_SQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,3])
+            l_SQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_Counter,3]))
         // endif
         
         l_SQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_Counter,4])
@@ -1853,6 +1853,8 @@ local l_select
 local l_SQLCommand
 local l_ErrorOccured
 
+//_M_ enhance to allow joins, as long as only one related record.
+
 if pcount() = 2
     ::Table(par_1)
     ::p_Key = par_2
@@ -1895,7 +1897,7 @@ otherwise
             endfor
         endif
         
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
+        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
         l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)+[)]
         
         l_SQLCommand := strtran(l_SQLCommand,[->],[.])
@@ -1922,7 +1924,7 @@ otherwise
             endfor
         endif
         
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
+        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
         l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)+[)]
         
         l_SQLCommand := strtran(l_SQLCommand,[->],[.])
