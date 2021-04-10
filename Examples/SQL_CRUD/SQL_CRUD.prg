@@ -29,6 +29,8 @@ local l_LastError
 local l_Version
 
 local l_cPreviousSchemaName
+local l_LastSQL
+
 
 hb_cdpSelect("UTF8") 
 
@@ -536,9 +538,13 @@ if l_oSQLConnection2:Connected
         :Column("table002.children","table002_children")
         :Where("table001.key < 4")
         :Where("table001.fname = ^","Ingrid")
-        :Where("table002.children = ^","bbbb")
+        // :Where("table002.children = ^","bbbb")
+        :Where("table002.children = ^","127.0.0.1")
         :Join("inner","table002","","table002.p_table001 = table001.key")
         :SQL(10002,"AllRecords")
+
+        // l_LastSQL := :LastSQL()
+        // altd()
 
         if :Tally < 0
             ? :ErrorMessage()

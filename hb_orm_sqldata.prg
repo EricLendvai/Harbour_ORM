@@ -2,6 +2,8 @@
 
 #include "hb_orm.ch"
 
+#define INVALUEWITCH chr(1)
+
 //=================================================================================================================
 #include "hb_orm_sqldata_class_definition.prg"
 //-----------------------------------------------------------------------------------------------------------------
@@ -623,31 +625,31 @@ if pcount() > 1 .and. "^" $ par_Expression
                 switch valtype(l_Value)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_result += '"'+hb_StrReplace( l_Value, { "'" => "\'",;
-                                                            '"' => '\"',;
-                                                            '\' => '\\'} )+'"'
+                    l_result += INVALUEWITCH+'"'+hb_StrReplace( l_Value, { "'" => "\'",;
+                                                                            '"' => '\"',;
+                                                                            '\' => '\\'} )+'"'+INVALUEWITCH
                     exit
 
                 case "N"  // Numeric
-                    l_result += hb_ntoc(l_Value)
+                    l_result += INVALUEWITCH+hb_ntoc(l_Value)+INVALUEWITCH
                     exit
 
                 case "D"  // Date   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
                     // l_Value := '"'+hb_DtoC(l_Value,"YYYY-MM-DD")+'"'           //_M_  Test on 1753-01-01
-                    l_result += ::FormatDateForSQLUpdate(l_Value)
+                    l_result += INVALUEWITCH+::FormatDateForSQLUpdate(l_Value)+INVALUEWITCH
                     exit
 
                 case "T"  // TimeStamp (*)   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
                     // l_Value := '"'+hb_TtoC(l_Value,"YYYY-MM-DD","hh:mm:ss")+'"'           //_M_  Test on 1753-01-01
-                    l_result += ::FormatDateTimeForSQLUpdate(l_Value)
+                    l_result += INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_Value)+INVALUEWITCH
                     exit
 
                 case "L"  // Boolean (logical)   https://dev.mysql.com/doc/refman/8.0/en/boolean-literals.html
-                    l_result += iif(l_Value,"TRUE","FALSE")
+                    l_result += INVALUEWITCH+iif(l_Value,"TRUE","FALSE")+INVALUEWITCH
                     exit
 
                 case "U"  // Undefined (NIL)
-                    l_result += "NULL"
+                    l_result += INVALUEWITCH+"NULL"+INVALUEWITCH
                     exit
 
                 // case "A"  // Array
@@ -677,31 +679,31 @@ if pcount() > 1 .and. "^" $ par_Expression
                 switch valtype(l_Value)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_result += "'"+hb_StrReplace( l_Value, { "'" => "\'",;
-                                                            '"' => '\"',;
-                                                            '\' => '\\'} )+"'"
+                    l_result += INVALUEWITCH+"'"+hb_StrReplace( l_Value, { "'" => "\'",;
+                                                                            '"' => '\"',;
+                                                                            '\' => '\\'} )+"'"+INVALUEWITCH
                     exit
 
                 case "N"  // Numeric
-                    l_result += hb_ntoc(l_Value)
+                    l_result += INVALUEWITCH+hb_ntoc(l_Value)+INVALUEWITCH
                     exit
 
                 case "D"  // Date   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
                     // l_Value := "'"+hb_DtoC(l_Value,"YYYY-MM-DD")+"'"          //_M_  Test on 1753-01-01
-                    l_result += ::FormatDateForSQLUpdate(l_Value)
+                    l_result += INVALUEWITCH+::FormatDateForSQLUpdate(l_Value)+INVALUEWITCH
                     exit
 
                 case "T"  // TimeStamp (*)   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
                     // l_Value := "'" +hb_TtoC(l_Value,"YYYY-MM-DD","hh:mm:ss")+"'"            //_M_  Test on 1753-01-01
-                    l_result += ::FormatDateTimeForSQLUpdate(l_Value)
+                    l_result += INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_Value)+INVALUEWITCH
                     exit
 
                 case "L"  // Boolean (logical)   https://dev.mysql.com/doc/refman/8.0/en/boolean-literals.html
-                    l_result += iif(l_Value,"TRUE","FALSE")
+                    l_result += INVALUEWITCH+iif(l_Value,"TRUE","FALSE")+INVALUEWITCH
                     exit
 
                 case "U"  // Undefined (NIL)
-                    l_result += "NULL"
+                    l_result += INVALUEWITCH+"NULL"+INVALUEWITCH
                     exit
 
                 // case "A"  // Array
@@ -1063,6 +1065,7 @@ local l_TableFieldDetection := 0
 local l_StreamBuffer        := ""
 //local l_SchemaPrefix
 local l_iPos
+local l_lValueMode := .f.
 
 // if par_expression == "table003.Bit"
 //     altd()
@@ -1080,6 +1083,16 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 endcase
 
 for each l_Byte in @par_expression
+
+    if l_Byte == INVALUEWITCH
+        l_lValueMode := !l_lValueMode
+        loop
+    endif
+    if l_lValueMode
+        l_result += l_Byte
+        loop
+    endif
+
     l_ByteIsToken := (l_Byte $ "0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
     do case
     case l_TableFieldDetection == 0  // Not in <AliasName>.<FieldName> pattern
