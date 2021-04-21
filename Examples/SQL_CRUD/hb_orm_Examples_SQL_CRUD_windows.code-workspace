@@ -1,0 +1,21 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.autoSave": "onFocusChange",
+        "harbour.compilerExecutable": "/etc/harbour/bin/linux/gcc/harbour",
+        "harbour.extraOptions": "-i/etc/harbour/include/",
+        "harbour.extraIncludePaths":["/etc/harbour/include/",
+                                     "/etc/Harbour_ORM/",
+                                     "/etc/Harbour_VFP/"],
+        "harbour.warningLevel":1,
+        "harbour.decorator":true,
+        "local-history.path": "/etc/VSCode_History/Harbour_ORM",
+        "local-history.treeLocation": "localHistory",
+        "local-history.daysLimit": 0,
+        "local-history.maxDisplay": 5
+    }
+}

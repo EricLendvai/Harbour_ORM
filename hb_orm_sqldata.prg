@@ -16,7 +16,7 @@ method  IsConnected() class hb_orm_SQLData    //Return .t. if has a connection
 return (::p_oSQLConnection != NIL .and.  ::p_oSQLConnection:GetHandle() > 0)
 //-----------------------------------------------------------------------------------------------------------------
 method UseConnection(par_oSQLConnection) class hb_orm_SQLData
-::p_oSQLConnection     := par_oSQLConnection
+::p_oSQLConnection      := par_oSQLConnection
 ::p_SQLEngineType       := ::p_oSQLConnection:GetSQLEngineType()
 ::p_ConnectionNumber    := ::p_oSQLConnection:GetConnectionNumber()
 ::p_Database            := ::p_oSQLConnection:GetDatabase()
@@ -45,7 +45,7 @@ return par_text
 method destroy() class hb_orm_SQLData
 hb_orm_SendToDebugView("hb_orm destroy")
 ::p_ReferenceForSQLDataStrings := NIL
-::p_oSQLConnection            := NIL
+::p_oSQLConnection             := NIL
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
 method Table(par_cSchemaAndTableName,par_cAlias) class hb_orm_SQLData
@@ -160,7 +160,7 @@ method NoTrack() class hb_orm_SQLData
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method Key(par_Key) class hb_orm_SQLData                                     //Set the key or retrieve the last used key
-if pcount() = 1
+if pcount() == 1
     ::p_Key := par_Key
 else
     return ::p_Key
@@ -271,7 +271,7 @@ if empty(::p_ErrorMessage)
 
             if ::p_oSQLConnection:SQLExec(l_SQLCommand)
                 do case
-                case pcount() = 1
+                case pcount() == 1
                     ::p_Key = par_key
                     
                 otherwise
@@ -339,7 +339,7 @@ if empty(::p_ErrorMessage)
             ::p_LastSQLCommand = l_SQLCommand
             if ::p_oSQLConnection:SQLExec(l_SQLCommand,"c_DB_Result")
                 do case
-                case pcount() = 1
+                case pcount() == 1
                     ::p_Key = par_key
                     
                 otherwise
@@ -462,7 +462,7 @@ local l_oField
 local l_aAutoTrimmedFields := {}
 local l_aErrors := {}
 
-if pcount() = 1
+if pcount() == 1
     ::p_KEY = par_key
 endif
 
@@ -1005,7 +1005,7 @@ return NIL
 method OrderBy(par_Expression,par_Direction) class hb_orm_SQLData       // Add an Order By definition    par_Direction = "A"scending or "D"escending
 
 if !empty(par_Expression)
-    if pcount() = 2
+    if pcount() == 2
         AAdd(::p_OrderBy,{allt(par_Expression),(upper(left(par_Direction,1)) == "A")})
     else
         AAdd(::p_OrderBy,{allt(par_Expression),.t.})
@@ -1022,7 +1022,7 @@ return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method ReadWrite(par_value) class hb_orm_SQLData            // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable
 
-if pcount() = 0 .or. par_value
+if pcount() == 0 .or. par_value
     ::p_CursorUpdatable := .t.
 else
     ::p_CursorUpdatable := .f.
@@ -1313,7 +1313,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                 l_SQLCommand += [ , ]
             endif
             l_SQLCommand += ::ExpressionToMYSQL(::p_OrderBy[l_Counter,1])
-            if ::p_OrderBy(l_Counter,2)
+            if ::p_OrderBy[l_Counter,2]
                 l_SQLCommand += [ ASC]
             else
                 l_SQLCommand += [ DESC]
@@ -1322,7 +1322,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     endif
     
     if ::p_Limit > 0
-        l_SQLCommand += [LIMIT ]+trans(::p_Limit)+[ ]
+        l_SQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
     endif
     
     l_SQLCommand := strtran(l_SQLCommand,[->],[.])
@@ -1428,7 +1428,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_SQLCommand += [ , ]
             endif
             l_SQLCommand += ::ExpressionToPostgreSQL(::p_OrderBy[l_Counter,1])
-            if ::p_OrderBy(l_Counter,2)
+            if ::p_OrderBy[l_Counter,2]
                 l_SQLCommand += [ ASC]
             else
                 l_SQLCommand += [ DESC]
@@ -1437,7 +1437,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     endif
     
     if ::p_Limit > 0
-        l_SQLCommand += [LIMIT ]+trans(::p_Limit)+[ ]
+        l_SQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
     endif
     
     l_SQLCommand := strtran(l_SQLCommand,[->],[.])
@@ -1525,7 +1525,7 @@ case pcount() == 2
         endif
     endif
     
-case pcount() = 1
+case pcount() == 1
     do case
     case valtype(par_1) == "A"   // Have to test first it an array, because if the first element is an array valtype(par_1) will be "N"
         l_OutputType := 2
@@ -1855,7 +1855,7 @@ local l_ErrorOccured
 
 //_M_ enhance to allow joins, as long as only one related record.
 
-if pcount() = 2
+if pcount() == 2
     ::Table(par_1)
     ::p_Key = par_2
 else

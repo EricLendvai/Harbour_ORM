@@ -22,108 +22,218 @@
         },
         {
             "label": "CompileDebug",
-            "type": "shell",
-            "command": "${workspaceFolder}\\..\\BuildEXE.bat",
-            "options": {
-                "cwd": "${workspaceFolder}",
-                "env": {
-                    "HB_VFP_ROOT":"c:\\Harbour_vfp",
-                    "HB_ORM_ROOT":"c:\\Harbour_orm",
-                    "EXEName":"SQL_CRUD",
-                    "BuildMode":"debug",
-                    // "HB_COMPILER":"${input:CCompiler}"
-                    "RunAfterCompile":"no",
-                    "HB_COMPILER":"mingw64"
+            "windows":{
+                "type": "shell",
+                "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "env": {
+                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "EXEName":"SQL_CRUD",
+                        "BuildMode":"debug",
+                        // "HB_COMPILER":"${input:CCompiler}"
+                        "RunAfterCompile":"no",
+                        "HB_COMPILER":"mingw64"
+                    },
+                    "statusbar": {"label" : "<Compile Debug>","hide" : false}
                 },
-                "statusbar": {"label" : "<Compile Debug>","hide" : false}
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
             },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "shared",
-                "showReuseMessage": false,
-                "clear": true
+            "linux":{
+                "type": "shell",
+                "command": "${workspaceFolder}/../BuildEXE.sh",
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "env": {
+                        "HB_VFP_ROOT":"/etc/Harbour_VFP",
+                        "HB_ORM_ROOT":"/etc/Harbour_ORM",
+                        "EXEName":"SQL_CRUD",
+                        "BuildMode":"debug",
+                        "RunAfterCompile":"no",
+                        "HB_COMPILER":"gcc"
+                    },
+                    "statusbar": {"label" : "<Compile Debug>","hide" : false}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
             }
         },
         {
             "label": "CompileAndRunRelease",
-            "type": "shell",
-            "command": "${workspaceFolder}\\..\\BuildEXE.bat",
-            "options": {
-                "cwd": "${workspaceFolder}",
-                "env": {
-                    "HB_VFP_ROOT":"c:\\Harbour_vfp",
-                    "HB_ORM_ROOT":"c:\\Harbour_orm",
-                    "EXEName":"SQL_CRUD",
-                    "BuildMode":"release",
-                    "RunAfterCompile":"yes",
-                    "HB_COMPILER":"${input:CCompiler}"
+            "windows":{
+                "type": "shell",
+                "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "env": {
+                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "EXEName":"SQL_CRUD",
+                        "BuildMode":"release",
+                        "RunAfterCompile":"yes",
+                        "HB_COMPILER":"${input:CCompiler}"
+                    },
+                    "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
                 },
-                "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
             },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "shared",
-                "showReuseMessage": false,
-                "clear": true
+            "linux":{
+                "type": "shell",
+                "command": "${workspaceFolder}/../BuildEXE.sh",
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "env": {
+                        "HB_VFP_ROOT":"/etc/Harbour_VFP",
+                        "HB_ORM_ROOT":"/etc/Harbour_ORM",
+                        "EXEName":"SQL_CRUD",
+                        "BuildMode":"release",
+                        "RunAfterCompile":"yes",
+                        "HB_COMPILER":"gcc"
+                    },
+                    "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
             }
         },
         {
             "label": "CompileRelease",
-            "type": "shell",
-            "command": "${workspaceFolder}\\..\\BuildEXE.bat",
-            "options": {
-                "cwd": "${workspaceFolder}",
-                "env": {
-                    "HB_VFP_ROOT":"c:\\Harbour_vfp",
-                    "HB_ORM_ROOT":"c:\\Harbour_orm",
-                    "EXEName":"SQL_CRUD",
-                    "BuildMode":"release",
-                    "RunAfterCompile":"no",
-                    "HB_COMPILER":"${input:CCompiler}"
+            "windows":{
+                "type": "shell",
+                "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "env": {
+                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "EXEName":"SQL_CRUD",
+                        "BuildMode":"release",
+                        "RunAfterCompile":"no",
+                        "HB_COMPILER":"${input:CCompiler}"
+                    },
+                    "statusbar": {"label" : "<Compile Release>","hide" : false}
                 },
-                "statusbar": {"label" : "<Compile Release>","hide" : false}
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
             },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "shared",
-                "showReuseMessage": false,
-                "clear": true
+            "linux":{
+                "type": "shell",
+                "command": "${workspaceFolder}/../BuildEXE.sh",
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "env": {
+                        "HB_VFP_ROOT":"/etc/Harbour_VFP",
+                        "HB_ORM_ROOT":"/etc/Harbour_ORM",
+                        "EXEName":"SQL_CRUD",
+                        "BuildMode":"release",
+                        "RunAfterCompile":"no",
+                        "HB_COMPILER":"gcc"
+                    },
+                    "statusbar": {"label" : "<Compile Release>","hide" : false}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
             }
         },
         {
             "label": "RunReleaseMingw64",
-            "type": "shell",
-            "command": "${workspaceFolder}\\mingw64\\release\\SQL_CRUD.exe",
-            "options": {
-                "statusbar": {"label" : "<Run Release Mingw64>","hide" : false}
+            "windows":{
+                "type": "shell",
+                "command": "${workspaceFolder}\\mingw64\\release\\SQL_CRUD.exe",
+                "options": {
+                    "statusbar": {"label" : "<Run Release Mingw64>","hide" : false}
+                },
+                "presentation": {"reveal": "never"}
             },
-            "presentation": {"reveal": "never"}
+            "linux":{
+                "type": "shell",
+                "command": "${workspaceFolder}/gcc/release/SQL_CRUD.exe",
+                "options": {
+                    "statusbar": {"label" : "<Run Release gcc>","hide" : false}
+                },
+                "presentation": {"reveal": "never"}
+            }
         },
         {
             "label": "Run Release msvc64",
-            "type": "shell",
-            "command": "${workspaceFolder}\\msvc64\\release\\SQL_CRUD.exe",
-            "options": {
-                "statusbar": {"label" : "<Run Release msvc64>","hide" : false}
+            "windows":{
+                "type": "shell",
+                "command": "${workspaceFolder}\\msvc64\\release\\SQL_CRUD.exe",
+                "options": {
+                    "statusbar": {"label" : "<Run Release msvc64>","hide" : false}
+                },
+                "presentation": {"reveal": "never"}
             },
-            "presentation": {"reveal": "never"}
+            "linux":{
+                "type": "shell",
+                "command": "${workspaceFolder}/gcc/release/SQL_CRUD.exe",
+                "options": {
+                    "statusbar": {"label" : "<Run Release gcc>","hide" : true}
+                },
+                "presentation": {"reveal": "never"}
+            }
         },
         {
             "label": "DelAllPPO",
-            "type": "shell",
-            "command": "del *.ppo",
-            "isBackground": true,
-            "options": {
-                "cwd": "${workspaceFolder}",
-                "statusbar": {"label" : "<Del All PPO>","hide" : false}
+            "windows":{
+                "type": "shell",
+                "command": "del *.ppo",
+                "isBackground": true,
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "statusbar": {"label" : "<Del All PPO>","hide" : false}
+                },
+                "presentation": {"reveal": "never"}
             },
-            "presentation": {"reveal": "never"}
+            "linux":{
+                "type": "shell",
+                "command": "rm *.ppo",
+                "isBackground": true,
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "statusbar": {"label" : "<Del All PPO>","hide" : false}
+                },
+                "presentation": {"reveal": "never"}
+            }
         }
     ],
     "inputs": [

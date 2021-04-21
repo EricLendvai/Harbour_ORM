@@ -8,8 +8,8 @@ if %EXEName%. == . goto MissingEnvironmentVariables
 if %BuildMode%. == . goto MissingEnvironmentVariables
 if %HB_COMPILER%. ==. goto MissingEnvironmentVariables
 
-if not exist %EXEName%.hbp (
-    echo Invalid Workspace Folder. Missing file %EXEName%.hbp
+if not exist %EXEName%_windows.hbp (
+    echo Invalid Workspace Folder. Missing file %EXEName%_windows.hbp
     goto End
 )
 
@@ -51,10 +51,10 @@ if exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
 
 if %BuildMode% == debug (
     copy ..\debugger_on.hbm ..\debugger.hbm
-    hbmk2 %EXEName%.hbp -b -p -w3 -dDONOTINCLUDE
+    hbmk2 %EXEName%_windows.hbp -b -p -w3 -dDONOTINCLUDE
 ) else (
     copy ..\debugger_off.hbm ..\debugger.hbm
-    hbmk2 %EXEName%.hbp -w3 -dDONOTINCLUDE
+    hbmk2 %EXEName%_windows.hbp -w3 -dDONOTINCLUDE
 )
 
 rem the following will output the current datetime

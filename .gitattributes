@@ -1,5 +1,7 @@
 * text=auto
 
+*.sh text eol=lf
+
 *.bmp binary
 *.dbf binary
 *.cdx binary

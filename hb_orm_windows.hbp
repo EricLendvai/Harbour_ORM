@@ -1,0 +1,43 @@
+-hblib
+
+#To enabled progressing recompilation uncomment the following line
+#-inc
+
+#Will not include it here. Should be included in the final EXE
+#sddodbc.hbc
+
+
+#To include the hb_vfp module, and even alow its debugging
+-incpath=${HB_VFP_ROOT}\
+#Update the Path where the HB_VFP package is installed
+-L${HB_VFP_ROOT}\${HB_COMPILER}\${BuildMode}
+-lhb_vfp
+#following will force linking of all hb_vfp modules
+${HB_VFP_ROOT}\${HB_COMPILER}\${BuildMode}\hb_vfp_windows.hbx
+
+
+-workdir=${HB_COMPILER}\${BuildMode}\hbmk2\
+
+-o${HB_COMPILER}\${BuildMode}\hb_orm
+
+#The following settings are done via the BuildLIB.bat
+#-w3 -es2
+
+#To generate non pcode source code
+-gc3
+
+#To generate an hbx file that could be consumed by client exes and other libs
+-hbx=hb_orm_windows.hbx
+
+
+hb_orm_core.prg
+hb_orm_c.c
+
+hb_orm_sqldata.prg
+hb_orm_sqlconnect.prg
+hb_orm_cursor.prg
+hb_orm_cursor_c.c
+
+ExportTableToHtmlFile.prg
+
+debugger.hbm

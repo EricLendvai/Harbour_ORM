@@ -6,8 +6,6 @@
     //Will add a unit testing module later. 
     "version": "0.2.0",
     "configurations": [
-/*
-All debugs must be done from one of the actual examples.
-*/
+//All debugs must be done from one of the actual examples.
     ]
 }

@@ -65,7 +65,7 @@ Please review the file .\Examples\SQL_CRUD\SQL_CRUD.prg file to see examples for
 
 Please review the file .\Examples\Cursors\Cursors.prg file to see how to create an in-memory table from scratch.
 
-They are 3 VSCode workspace files (.code-workspace) in this repo. One for the core source code, and one per example. Please update any references of "r:\Harbour_orm\" in the .code-workspace, .vscode\launch.json and .vscode\tasks.json files to your local install of this repo.
+They are 3 VSCode workspace files (.code-workspace) in this repo. One for the core source code, and one per example. Please update any references of "R:\Harbour_ORM\" in the .code-workspace, .vscode\launch.json and .vscode\tasks.json files to your local install of this repo.
 
 ## Use notes
 - Do not created / specify indexes on primary keys. They are automatically added and managed by both engine types (PostgreSQL and MySQL).

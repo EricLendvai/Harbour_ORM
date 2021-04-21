@@ -8,18 +8,34 @@
             "type": "harbour-dbg",
             "request": "launch",
             "name": "Launch ORM Example Cursors",
-            "program": "${workspaceFolder}\\mingw64\\debug\\Cursors.exe",
-            "stopOnEntry": false,
-            //In the followin "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
-            "terminalType": "integrated",
-            "preLaunchTask": "CompileDebug",
-            "postDebugTask": "",
-            "workingDir": "${workspaceFolder}\\",
-            "sourcePaths": [
-                "${workspaceFolder}\\",
-                "C:\\Harbour_ORM\\",
-                "C:\\Harbour_VFP\\"
-            ]
+            "windows":{
+                "program": "${workspaceFolder}\\mingw64\\debug\\Cursors.exe",
+                "stopOnEntry": false,
+                //In the followin "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
+                "terminalType": "integrated",
+                "preLaunchTask": "CompileDebug",
+                "postDebugTask": "",
+                "workingDir": "${workspaceFolder}\\",
+                "sourcePaths": [
+                    "${workspaceFolder}\\",
+                    "C:\\Harbour_ORM\\",
+                    "C:\\Harbour_VFP\\"
+                ]
+            },
+            "linux":{
+                "program": "${workspaceFolder}/gcc/debug/Cursors.exe",
+                "stopOnEntry": false,
+                //In the followin "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
+                "terminalType": "integrated",
+                "preLaunchTask": "CompileDebug",
+                "postDebugTask": "",
+                "workingDir": "${workspaceFolder}/",
+                "sourcePaths": [
+                    "${workspaceFolder}/",
+                    "/etc/Harbour_ORM/",
+                    "/etc/Harbour_VFP/"
+                ]
+            }
         }
     ]
 }

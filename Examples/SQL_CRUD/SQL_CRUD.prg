@@ -31,6 +31,8 @@ local l_Version
 local l_cPreviousSchemaName
 local l_LastSQL
 
+local l_oCursorTable003Records
+
 
 hb_cdpSelect("UTF8") 
 
@@ -500,13 +502,12 @@ if l_oSQLConnection2:Connected
         :Column("table003.time"       ,"table003_Time")
         :Column("table003.Boolean"    ,"table003_Boolean")
         :SQL(10010,"Table003Records")
+        l_oCursorTable003Records := :p_oCursor  //Will Allow to keep a reference to the cursor and keep it open, even when o_DB2:SQL() would be called
 
         // l_Tally        := :tally
         // l_LastSQLError := :ErrorMessage()
         // l_LastSQL      := :LastSQL()
         ExportTableToHtmlFile("Table003Records","PostgreSQL_Table003Records.html","From PostgreSQL",,25,.t.)
-
-
 
         :Table("table001")
         :SetEventId("Postgres 9")
@@ -542,6 +543,8 @@ if l_oSQLConnection2:Connected
         :Where("table002.children = ^","127.0.0.1")
         :Join("inner","table002","","table002.p_table001 = table001.key")
         :SQL(10002,"AllRecords")
+
+// altd()  //l_oCursorTable003Records
 
         // l_LastSQL := :LastSQL()
         // altd()

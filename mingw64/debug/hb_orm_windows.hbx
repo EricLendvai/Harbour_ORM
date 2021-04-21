@@ -1,0 +1,49 @@
+/* --------------------------------------------------------------------
+ * NOTE: You can add manual override which functions to include or
+ *       exclude from automatically generated EXTERNAL/DYNAMIC list.
+ *          Syntax: // HB_FUNC_INCLUDE <func>
+ *                  // HB_FUNC_EXCLUDE <func>
+ */
+
+/* --------------------------------------------------------------------
+ * WARNING: Automatically generated code below. DO NOT EDIT! (except casing)
+ *          Regenerate using hbmk2 '-hbx=' option.
+ */
+
+#ifndef __HBEXTERN_CH__HB_ORM_WINDOWS__
+#define __HBEXTERN_CH__HB_ORM_WINDOWS__
+
+#if defined( __HBEXTREQ__ ) .OR. defined( __HBEXTERN__HB_ORM_WINDOWS__ANNOUNCE )
+   ANNOUNCE __HBEXTERN__HB_ORM_WINDOWS__
+#endif
+
+#if defined( __HBEXTREQ__ ) .OR. defined( __HBEXTERN__HB_ORM_WINDOWS__REQUEST )
+   #command DYNAMIC <fncs,...> => EXTERNAL <fncs>
+#endif
+
+DYNAMIC EXPORTTABLETOHTMLFILE
+DYNAMIC FIELDPUTALLOWNULL
+DYNAMIC HB_CURSOR
+DYNAMIC HB_ORM_BUILDINFO
+DYNAMIC HB_ORM_CHECKTIMEFORMATVALIDITY
+DYNAMIC HB_ORM_CURSOR
+DYNAMIC HB_ORM_DATA
+DYNAMIC HB_ORM_GETAPPLICATIONSTACK
+DYNAMIC HB_ORM_OUTPUTDEBUGSTRING
+DYNAMIC HB_ORM_SENDTODEBUGVIEW
+DYNAMIC HB_ORM_SQLCONNECT
+DYNAMIC HB_ORM_SQLDATA
+DYNAMIC HB_ORM_TESTDEBUGGER
+DYNAMIC HB_SQLCONNECT
+DYNAMIC HB_SQLDATA
+DYNAMIC ISBEGSEQ
+DYNAMIC __DBGENTRY
+DYNAMIC __DEBUGITEM
+DYNAMIC __GETLASTRETURN
+DYNAMIC __PIDNUM
+
+#if defined( __HBEXTREQ__ ) .OR. defined( __HBEXTERN__HB_ORM_WINDOWS__REQUEST )
+   #uncommand DYNAMIC <fncs,...> => EXTERNAL <fncs>
+#endif
+
+#endif

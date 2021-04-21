@@ -1,0 +1,41 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.autoSave": "onFocusChange",
+        "harbour.compilerExecutable": "/etc/harbour/bin/linux/gcc/harbour",
+        "harbour.extraOptions": "-i/etc/harbour/include/",
+        "harbour.extraIncludePaths":["/etc/harbour/include/",
+                                     "/etc/Harbour_ORM/",
+                                     "/etc/Harbour_VFP/"],
+        "harbour.warningLevel": 1,
+        "local-history.path": "/etc/VSCode_History/Harbour_ORM",
+        "local-history.treeLocation": "localHistory",
+        "local-history.daysLimit": 0,
+        "local-history.maxDisplay": 5,	
+        "cSpell.words": [
+            "changeddata",
+            "class",
+            "defined",
+            "defined hb orm sqldata class",
+            "definition",
+            "hb",
+            "hb orm sqlconnect class definition",
+            "hbclass",
+            "isnull",
+            "last",
+            "orm",
+            "orm isnull",
+            "p last update changeddata",
+            "p pkfn",
+            "pkfn",
+            "sqlconnect",
+            "sqldata",
+            "update"
+        ],
+        "cSpell.language": "en,en-US"
+    }
+}
