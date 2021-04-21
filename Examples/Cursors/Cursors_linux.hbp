@@ -6,14 +6,14 @@
 #used for VSCODE debugger
 #-gtcgi
 # Only use gtwin instead of gtcgi if using the browse() function to visualize table content or keyboards.
--gtwin
+-gtstd
 
 #If did not wanted any RDD file
 #-nulrdd
 
 -trace
 
--o${HB_COMPILER}/${BuildMode}/${EXEName}
+-o${HB_COMPILER}/${BuildMode}/${EXEName}.exe
 
 
 #The following method will be for debugging of the hb_vfp and hb_orm packages as well

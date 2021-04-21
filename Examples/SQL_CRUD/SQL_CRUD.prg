@@ -3,7 +3,7 @@
 REQUEST HB_CODEPAGE_UTF8
 
 #include "hb_orm.ch"
-#include "hb_VFP.ch"
+#include "hb_vfp.ch"
 
 //=================================================================================================================
 Function Main()

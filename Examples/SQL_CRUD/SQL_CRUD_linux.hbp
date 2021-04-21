@@ -9,11 +9,11 @@
 
 # Only use gtwin instead of gtcgi if using the browse()  function to visualize table content.
 # Will make the EXE Synchronous if called from CMD prompt
--gtwin
+-gtstd
 
 -trace
 
--o${HB_COMPILER}/${BuildMode}/${EXEName}
+-o${HB_COMPILER}/${BuildMode}/${EXEName}.exe
 
 
 
@@ -36,7 +36,7 @@ ${HB_ORM_ROOT}/${HB_COMPILER}/${BuildMode}/hb_orm_linux.hbx
 
 
 sddodbc.hbc
-gtwvg.hbc
+#gtwvg.hbc
 
 #for the export to html file
 hbct.hbc
@@ -54,5 +54,3 @@ hbct.hbc
 SQL_CRUD.prg
 
 ../debugger.hbm
-
-

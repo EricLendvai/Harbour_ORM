@@ -9,9 +9,9 @@
 #include "dbinfo.ch"   // for the export to html file
 
 //Needed for table004 and table005 example
-REQUEST VFPCDX
-REQUEST DBFCDX
-REQUEST HB_MEMIO
+// REQUEST VFPCDX
+// REQUEST DBFCDX
+// REQUEST HB_MEMIO
 
 REQUEST HB_CODEPAGE_UTF8
 
@@ -94,7 +94,7 @@ with object l_oCursor1
     ExportTableToHtmlFile("table008","Cursor_table008Records","SQLMix",10,20,.t.)
 
     l_TimeStamp1  := hb_DateTime()
-    for l_loop :=1 to 1000000
+    for l_loop :=1 to 1000    //000
         :AppendBlank()
         //dbAppend()
     endfor
