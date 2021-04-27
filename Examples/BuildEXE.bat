@@ -34,12 +34,14 @@ echo HB_PATH     = %HB_PATH%
 echo HB_COMPILER = %HB_COMPILER%
 echo PATH        = %PATH%
 
-md %HB_COMPILER% 2>nul
-md %HB_COMPILER%\%BuildMode% 2>nul
-md %HB_COMPILER%\%BuildMode%\hbmk2 2>nul
+md build 2>nul
+md build\win64 2>nul
+md build\win64\%HB_COMPILER% 2>nul
+md build\win64\%HB_COMPILER%\%BuildMode% 2>nul
+md build\win64\%HB_COMPILER%\%BuildMode%\hbmk2 2>nul
 
-del %HB_COMPILER%\%BuildMode%\%EXEName%.exe 2>nul
-if exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
+del build\win64\%HB_COMPILER%\%BuildMode%\%EXEName%.exe 2>nul
+if exist build\win64\%HB_COMPILER%\%BuildMode%\%EXEName%.exe (
     echo Could not delete previous version of %EXEName%.exe
     goto End
 )
@@ -51,10 +53,11 @@ if exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
 
 if %BuildMode% == debug (
     copy ..\debugger_on.hbm ..\debugger.hbm
-    hbmk2 %EXEName%_windows.hbp -b -p -w3 -dDONOTINCLUDE
+    rem Had to use -static since with -shared this would create linking issues when using this library in actual programs (hb_ntoc)
+    hbmk2 %EXEName%_windows.hbp -b -p -w3 -dDONOTINCLUDE -static
 ) else (
     copy ..\debugger_off.hbm ..\debugger.hbm
-    hbmk2 %EXEName%_windows.hbp -w3 -dDONOTINCLUDE
+    hbmk2 %EXEName%_windows.hbp -w3 -dDONOTINCLUDE -fullstatic
 )
 
 rem the following will output the current datetime
@@ -62,7 +65,7 @@ for /F "tokens=2" %%i in ('date /t') do set mydate=%%i
 set mytime=%time%
 echo Current time is %mydate% %mytime%
 
-if not exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
+if not exist build\win64\%HB_COMPILER%\%BuildMode%\%EXEName%.exe (
     echo Failed To build %EXEName%.exe
 ) else (
     if errorlevel 0 (
@@ -73,7 +76,7 @@ if not exist %HB_COMPILER%\%BuildMode%\%EXEName%.exe (
         if %BuildMode% == release (
             if %RunAfterCompile% == yes (
                 echo -----------------------------------------------------------------------------------------------
-                %HB_COMPILER%\release\%EXEName%
+                build\win64\%HB_COMPILER%\release\%EXEName%
                 echo.
                 echo -----------------------------------------------------------------------------------------------
             )

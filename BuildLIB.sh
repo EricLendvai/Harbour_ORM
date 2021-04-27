@@ -19,15 +19,17 @@ else
 
         echo "HB_COMPILER = ${HB_COMPILER}"
 
-        mkdir "${HB_COMPILER}" 2>/dev/null
-        mkdir "${HB_COMPILER}/${BuildMode}" 2>/dev/null
-        mkdir "${HB_COMPILER}/${BuildMode}/hbmk2" 2>/dev/null
+        mkdir "build" 2>/dev/null
+        mkdir "build/lin64" 2>/dev/null
+        mkdir "build/lin64/${HB_COMPILER}" 2>/dev/null
+        mkdir "build/lin64/${HB_COMPILER}/${BuildMode}" 2>/dev/null
+        mkdir "build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2" 2>/dev/null
 
         now=$(date +'%m/%d/%Y %H:%M:%S')
         echo local l_cBuildInfo := \"${HB_COMPILER} ${BuildMode} ${now}\">BuildInfo.txt
 
-        rm "${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" 2>/dev/null
-        if [ -f "${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" ] ; then
+        rm "build/lin64/${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" 2>/dev/null
+        if [ -f "build/lin64/${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" ] ; then
             echo "Could not delete previous version of lib${LIBName}.a"
         else
 
@@ -37,23 +39,23 @@ else
             #  -gc3      = Pure C code with no HVM
             #  -p        = Leave generated ppo files
 
-            cp *.ch ${HB_COMPILER}/${BuildMode}/
-            rm ${HB_COMPILER}/${BuildMode}/*.ppo
+            cp *.ch build/lin64/${HB_COMPILER}/${BuildMode}/
+            rm build/lin64/${HB_COMPILER}/${BuildMode}/*.ppo
             #since this is a library will also fail on warnings.
             if [ "${BuildMode}" == "debug" ] ; then
                 cp debugger_on.hbm debugger.hbm
-                hbmk2 "${LIBName}_linux.hbp" -b -p -w3 -dDONOTINCLUDE
+                hbmk2 "${LIBName}_linux.hbp" -b -p -w3 -dDONOTINCLUDE -shared
             else
                 cp debugger_off.hbm debugger.hbm
-                hbmk2 "${LIBName}_linux.hbp" -w3 -dDONOTINCLUDE
+                hbmk2 "${LIBName}_linux.hbp" -w3 -dDONOTINCLUDE -fullstatic
             fi
 
             nHbmk2Status=$?
-            if [ ! -f  "${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" ]; then
+            if [ ! -f  "build/lin64/${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" ]; then
                 echo "Failed To build lib${LIBName}.a"
             else
                 if [ $nHbmk2Status -eq 0 ]; then
-                    cp ${LIBName}_linux.hbx ${HB_COMPILER}/${BuildMode}/ >nul
+                    cp ${LIBName}_linux.hbx build/lin64/${HB_COMPILER}/${BuildMode}/ >nul
                     rm ${LIBName}_linux.hbx >nul
 
                     echo ""

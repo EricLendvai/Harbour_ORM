@@ -177,7 +177,7 @@
             "label": "RunReleaseMingw64",
             "windows":{
                 "type": "shell",
-                "command": "${workspaceFolder}\\mingw64\\release\\Cursors.exe",
+                "command": "${workspaceFolder}\\build\\win64\\mingw64\\release\\Cursors.exe",
                 "options": {
                     "statusbar": {"label" : "<Run Release Mingw64>","hide" : false}
                 },
@@ -185,7 +185,7 @@
             },
             "linux":{
                 "type": "shell",
-                "command": "${workspaceFolder}/gcc/release/Cursors.exe",
+                "command": "${workspaceFolder}/build/lin64/gcc/release/Cursors.exe",
                 "options": {
                     "statusbar": {"label" : "<Run Release gcc>","hide" : false}
                 },
@@ -196,7 +196,7 @@
             "label": "Run Release msvc64",
             "windows":{
                 "type": "shell",
-                "command": "${workspaceFolder}\\msvc64\\release\\Cursors.exe",
+                "command": "${workspaceFolder}\\build\\win64\\msvc64\\release\\Cursors.exe",
                 "options": {
                     "statusbar": {"label" : "<Run Release msvc64>","hide" : false}
                 },
@@ -204,7 +204,7 @@
             },
             "linux":{
                 "type": "shell",
-                "command": "${workspaceFolder}/gcc/release/Cursors.exe",
+                "command": "${workspaceFolder}/build/lin64/gcc/release/Cursors.exe",
                 "options": {
                     "statusbar": {"label" : "<Run Release gcc>","hide" : true}
                 },

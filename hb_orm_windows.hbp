@@ -10,15 +10,15 @@
 #To include the hb_vfp module, and even alow its debugging
 -incpath=${HB_VFP_ROOT}\
 #Update the Path where the HB_VFP package is installed
--L${HB_VFP_ROOT}\${HB_COMPILER}\${BuildMode}
+-L${HB_VFP_ROOT}\build\win64\${HB_COMPILER}\${BuildMode}
 -lhb_vfp
 #following will force linking of all hb_vfp modules
-${HB_VFP_ROOT}\${HB_COMPILER}\${BuildMode}\hb_vfp_windows.hbx
+${HB_VFP_ROOT}\build\win64\${HB_COMPILER}\${BuildMode}\hb_vfp_windows.hbx
 
 
--workdir=${HB_COMPILER}\${BuildMode}\hbmk2\
+-workdir=build\win64\${HB_COMPILER}\${BuildMode}\hbmk2\
 
--o${HB_COMPILER}\${BuildMode}\hb_orm
+-obuild\win64\${HB_COMPILER}\${BuildMode}\hb_orm
 
 #The following settings are done via the BuildLIB.bat
 #-w3 -es2

@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Launch ORM Example Cursors",
             "windows":{
-                "program": "${workspaceFolder}\\mingw64\\debug\\Cursors.exe",
+                "program": "${workspaceFolder}\\build\\win64\\mingw64\\debug\\Cursors.exe",
                 "stopOnEntry": false,
                 //In the followin "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
                 "terminalType": "integrated",
@@ -23,7 +23,7 @@
                 ]
             },
             "linux":{
-                "program": "${workspaceFolder}/gcc/debug/Cursors.exe",
+                "program": "${workspaceFolder}/build/lin64/gcc/debug/Cursors.exe",
                 "stopOnEntry": false,
                 //In the followin "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
                 "terminalType": "integrated",

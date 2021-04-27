@@ -18,15 +18,17 @@ else
     else
         echo "HB_COMPILER = ${HB_COMPILER}"
 
-        mkdir "${HB_COMPILER}" 2>/dev/null
-        mkdir "${HB_COMPILER}/${BuildMode}" 2>/dev/null
-        mkdir "${HB_COMPILER}/${BuildMode}/hbmk2" 2>/dev/null
+        mkdir "build" 2>/dev/null
+        mkdir "build/lin64" 2>/dev/null
+        mkdir "build/lin64/${HB_COMPILER}" 2>/dev/null
+        mkdir "build/lin64/${HB_COMPILER}/${BuildMode}" 2>/dev/null
+        mkdir "build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2" 2>/dev/null
 
         now=$(date +'%m/%d/%Y %H:%M:%S')
         echo local l_cBuildInfo := \"${HB_COMPILER} ${BuildMode} ${now}\">BuildInfo.txt
 
-        rm "${HB_COMPILER}/${BuildMode}/${EXEName}.exe" 2>/dev/null
-        if [ -f "${HB_COMPILER}/${BuildMode}/${EXEName}.exe" ] ; then
+        rm "build/lin64/${HB_COMPILER}/${BuildMode}/${EXEName}.exe" 2>/dev/null
+        if [ -f "build/lin64/${HB_COMPILER}/${BuildMode}/${EXEName}.exe" ] ; then
             echo "Could not delete previous version of ${EXEName}.exe"
         else
 
@@ -38,13 +40,13 @@ else
 
             if [ "${BuildMode}" == "debug" ] ; then
                 cp ../debugger_on.hbm ../debugger.hbm
-                hbmk2 "${EXEName}_linux.hbp" -b  -p -w3 -dDONOTINCLUDE
+                hbmk2 "${EXEName}_linux.hbp" -b  -p -w3 -dDONOTINCLUDE -static
             else
                 cp ../debugger_off.hbm ../debugger.hbm
-                hbmk2 "${EXEName}_linux.hbp" -w3 -dDONOTINCLUDE
+                hbmk2 "${EXEName}_linux.hbp" -w3 -dDONOTINCLUDE -fullstatic
             fi
             nHbmk2Status=$?
-            if [ ! -f  "${HB_COMPILER}/${BuildMode}/${EXEName}.exe" ]; then
+            if [ ! -f  "build/lin64/${HB_COMPILER}/${BuildMode}/${EXEName}.exe" ]; then
                 echo "Failed To build ${EXEName}.exe"
             else
                 if [ $nHbmk2Status -eq 0 ]; then
@@ -57,7 +59,7 @@ else
                     if [ "${BuildMode}" == "release" ] ; then
                         if [ "${RunAfterCompile}" == "yes" ] ; then
                             echo "-----------------------------------------------------------------------------------------------"
-                            ./${HB_COMPILER}/release/${EXEName}.exe
+                            ./build/lin64/${HB_COMPILER}/release/${EXEName}.exe
                             echo ""
                             echo "-----------------------------------------------------------------------------------------------"
                         fi
