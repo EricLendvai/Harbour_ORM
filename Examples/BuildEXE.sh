@@ -43,7 +43,8 @@ else
                 hbmk2 "${EXEName}_linux.hbp" -b  -p -w3 -dDONOTINCLUDE -static
             else
                 cp ../debugger_off.hbm ../debugger.hbm
-                hbmk2 "${EXEName}_linux.hbp" -w3 -dDONOTINCLUDE -fullstatic
+                # following does not work: -fullstatic so switched to -static
+                hbmk2 "${EXEName}_linux.hbp" -w3 -dDONOTINCLUDE -static
             fi
             nHbmk2Status=$?
             if [ ! -f  "build/lin64/${HB_COMPILER}/${BuildMode}/${EXEName}.exe" ]; then

@@ -2048,7 +2048,7 @@ DECLARE
   audit_query TEXT;
   r RECORD;
 BEGIN
-  IF tg_tag = 'DROP TABLE' OR tg_tag = 'DROP INDEX' THEN
+  IF tg_tag = 'DROP TABLE' OR tg_tag = 'DROP INDEX' OR tg_tag = 'DROP SCHEMA' THEN
     --Do nothing since the schema_log_ddl_drop will also be triggered
   ELSE
     FOR r IN SELECT * FROM pg_event_trigger_ddl_commands() LOOP
@@ -2075,7 +2075,7 @@ DECLARE
   audit_query TEXT;
   r RECORD;
 BEGIN
-  IF tg_tag = 'DROP TABLE' OR tg_tag = 'DROP INDEX' THEN
+  IF tg_tag = 'DROP TABLE' OR tg_tag = 'DROP INDEX' OR tg_tag = 'DROP SCHEMA' THEN
     FOR r IN SELECT * FROM pg_event_trigger_dropped_objects() LOOP
       IF position('SchemaCache' in r.object_identity) = 0 THEN
         IF r.object_type = 'sequence' THEN
