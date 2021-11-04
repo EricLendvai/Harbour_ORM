@@ -262,7 +262,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                             l_cIndexName      := hb_orm_RootIndexName(l_TableName,l_cIndexName)
 
                             l_IndexExpression := trim(field->index_columns)
-                            if !(lower(l_IndexExpression) == lower(::p_PKFN))   // No reason to record the index of the PRIMARY key
+                            if !(lower(l_IndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
                                 l_IndexUnique     := (field->is_unique == 1)
                                 l_IndexType       := field->index_type
                                 l_Schema_Indexes[l_cIndexName] := {,l_IndexExpression,l_IndexUnique,l_IndexType}
@@ -596,7 +596,7 @@ SELECT pk
                                 l_pos4 := hb_rat(")",l_IndexDefinition,l_pos1)
                                 l_IndexExpression := substr(l_IndexDefinition,l_pos3+1,l_pos4-l_pos3-1)
 
-                                if !(lower(l_IndexExpression) == lower(::p_PKFN))   // No reason to record the index of the PRIMARY key
+                                if !(lower(l_IndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
                                     l_IndexUnique     := ("UNIQUE INDEX" $ l_IndexDefinition)
                                     l_IndexType       := upper(substr(l_IndexDefinition,l_pos2+1,l_pos3-l_pos2-2))
                                     l_Schema_Indexes[l_cIndexName] := {,l_IndexExpression,l_IndexUnique,l_IndexType}
@@ -721,7 +721,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
                 do while l_iArrayPos > 0
 
                     if l_BackendType $ hb_DefaultValue(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_BACKEND_TYPES],"MP")
-                        if !(lower(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PKFN))   // Don't Create and index, since PRIMARY will already do so. This should not happen since no loaded in p_Schema to start with. But this method accepts any p_Schema hash arrays.
+                        if !(lower(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so. This should not happen since no loaded in p_Schema to start with. But this method accepts any p_Schema hash arrays.
                             l_SQLScript += ::AddIndex(l_cSchemaName,l_cTableName,l_hFields,l_cIndexName,l_aIndexDefinition)  //Passing l_hFields to help with index expressions
                         endif
                     endif
@@ -764,7 +764,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
                     l_FieldAllowNull            := ("N" $ l_FieldAttributes)
                     l_FieldAutoIncrement        := ("+" $ l_FieldAttributes)
 
-                    if lower(l_cFieldName) == lower(::p_PKFN)
+                    if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
                         l_FieldAutoIncrement := .t.
                     endif
                     if l_FieldAutoIncrement .and. empty(el_inlist(l_FieldType,"I","IB"))  //Only those fields types may be flagged as Auto-Increment
@@ -878,7 +878,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
                 do while l_iArrayPos > 0
                     
                     if l_BackendType $ hb_DefaultValue(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_BACKEND_TYPES],"MP")
-                        if !(lower(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PKFN))   // Don't Create and index, since PRIMARY will already do so.
+                        if !(lower(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so.
                             
                             if hb_IsNIL(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_INDEX])
                                 l_aCurrentIndexDefinition := NIL
@@ -1019,7 +1019,7 @@ for each l_aField in par_hStructure
             l_FieldAllowNull     := ("N" $ l_FieldAttributes)
             l_FieldAutoIncrement := ("+" $ l_FieldAttributes)
 
-            if lower(l_FieldName) == lower(::p_PKFN)
+            if lower(l_FieldName) == lower(::p_PrimaryKeyFieldName)
                 l_FieldAutoIncrement := .t.
             endif
             if l_FieldAutoIncrement .and. empty(el_inlist(l_FieldType,"I","IB"))  //Only those fields types may be flagged as Auto-Increment
@@ -1055,7 +1055,7 @@ for each l_aField in par_hStructure
                     endcase
 
                     do case
-                    // case lower(l_FieldName) == lower(::p_PKFN)
+                    // case lower(l_FieldName) == lower(::p_PrimaryKeyFieldName)
                     //     l_SQLFields += [ NOT NULL AUTO_INCREMENT]
                     //     l_SQLExtra  += [,PRIMARY KEY (]+::FormatIdentifier(l_FieldName)+[) USING BTREE]
                     //     // l_SQLFields += [ NOT NULL AUTO_INCREMENT]
@@ -1171,7 +1171,7 @@ for each l_aField in par_hStructure
                     endcase
 
                     do case
-                    // case lower(l_FieldName) == lower(::p_PKFN)
+                    // case lower(l_FieldName) == lower(::p_PrimaryKeyFieldName)
                     //     l_SQLFields += [ NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 ), PRIMARY KEY (]+::FormatIdentifier(l_FieldName)+[)]
                     case l_FieldAutoIncrement
                         // l_SQLFields += [ NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 )]
@@ -1319,7 +1319,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         case l_FieldAutoIncrement
             l_SQLCommandCycle2 += [ NOT NULL AUTO_INCREMENT]
             
-            // if lower(par_cFieldName) == lower(::p_PKFN)
+            // if lower(par_cFieldName) == lower(::p_PrimaryKeyFieldName)
                 l_SQLCommandCycle2 += [,ADD PRIMARY KEY (]+l_FormattedFieldName+[)]
             // endif
         case l_FieldAllowNull
@@ -1473,7 +1473,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             endcase
         endif
 
-        // if lower(par_cFieldName) == lower(::p_PKFN) .or. l_FieldAutoIncrement
+        // if lower(par_cFieldName) == lower(::p_PrimaryKeyFieldName) .or. l_FieldAutoIncrement
         if l_FieldAutoIncrement
             // Will always name the constraints in lower case
             l_SQLCommandCycle1 += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_pkey PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
@@ -1619,7 +1619,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         case l_FieldAutoIncrement
             l_SQLCommand += [ NOT NULL AUTO_INCREMENT]
             
-            // if lower(par_cFieldName) == lower(::p_PKFN)
+            // if lower(par_cFieldName) == lower(::p_PrimaryKeyFieldName)
                 l_SQLCommand += [ PRIMARY KEY]
             // endif
         case l_FieldAllowNull
@@ -1735,7 +1735,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         case l_FieldAutoIncrement
             l_SQLCommand += [ NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 )]
             
-            // if lower(par_cFieldName) == lower(::p_PKFN)
+            // if lower(par_cFieldName) == lower(::p_PrimaryKeyFieldName)
                 // Will always name the constraints in lower case
                 // l_SQLCommand += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_]+lower(par_cFieldName)+[ PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
                 l_SQLCommand += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_pkey PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
@@ -1942,7 +1942,7 @@ for each l_hTableDefinition in ::p_Schema
         l_FieldAllowNull     := ("N" $ l_FieldAttributes)
         l_FieldAutoIncrement := ("+" $ l_FieldAttributes)
 
-        if lower(l_cFieldName) == lower(::p_PKFN)
+        if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
             l_FieldAutoIncrement := .t.
         endif
         if l_FieldAutoIncrement .and. empty(el_inlist(l_FieldType,"I","IB"))  //Only those fields types may be flagged as Auto-Increment

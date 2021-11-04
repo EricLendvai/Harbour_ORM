@@ -1,6 +1,7 @@
 //Copyright (c) 2021 Eric Lendvai MIT License
 
 #include "hb_orm.ch"
+#include "dbinfo.ch"   // for hb_orm_isnull
 
 //=================================================================================================================
 //Class Constructors
@@ -46,46 +47,66 @@ return NIL
 
 //=================================================================================================================
 function hb_orm_SendToDebugView(par_cStep,par_xValue)
-local l_cTypeOfxValue
-local l_cValue := "Unknown Value"
 
-l_cTypeOfxValue := ValType(par_xValue)
+#ifdef DEBUGVIEW
+    local l_cTypeOfxValue
+    local l_cValue := "Unknown Value"
 
-do case
-case pcount() < 2
-    l_cValue := ""
-case l_cTypeOfxValue $ "AH" // Array or Hash
-    l_cValue := hb_ValToExp(par_xValue)
-case l_cTypeOfxValue == "B" // Block
-    //Not coded yet
-case l_cTypeOfxValue == "C" // Character (string)
-    l_cValue := par_xValue
-    //Not coded yet
-case l_cTypeOfxValue == "D" // Date
-    l_cValue := DTOC(par_xValue)
-case l_cTypeOfxValue == "L" // Logical
-    l_cValue := IIF(par_xValue,"True","False")
-case l_cTypeOfxValue == "M" // Memo
-    //Not coded yet
-case l_cTypeOfxValue == "N" // Numeric
-    l_cValue := alltrim(str(par_xValue))
-case l_cTypeOfxValue == "O" // Object
-    //Not coded yet
-case l_cTypeOfxValue == "P" // Pointer
-    //Not coded yet
-case l_cTypeOfxValue == "S" // Symbol
-    //Not coded yet
-case l_cTypeOfxValue == "U" // NIL
-    l_cValue := "Null"
-endcase
+    l_cTypeOfxValue := ValType(par_xValue)
 
-if empty(l_cValue)
-    hb_orm_OutputDebugString("[Harbour] ORM "+par_cStep)
-else
-    hb_orm_OutputDebugString("[Harbour] ORM "+par_cStep+" - "+l_cValue)
-endif
-    
+    do case
+    case pcount() < 2
+        l_cValue := ""
+    case l_cTypeOfxValue $ "AH" // Array or Hash
+        l_cValue := hb_ValToExp(par_xValue)
+    case l_cTypeOfxValue == "B" // Block
+        //Not coded yet
+    case l_cTypeOfxValue == "C" // Character (string)
+        l_cValue := par_xValue
+        //Not coded yet
+    case l_cTypeOfxValue == "D" // Date
+        l_cValue := DTOC(par_xValue)
+    case l_cTypeOfxValue == "L" // Logical
+        l_cValue := IIF(par_xValue,"True","False")
+    case l_cTypeOfxValue == "M" // Memo
+        //Not coded yet
+    case l_cTypeOfxValue == "N" // Numeric
+        l_cValue := alltrim(str(par_xValue))
+    case l_cTypeOfxValue == "O" // Object
+        //Not coded yet
+    case l_cTypeOfxValue == "P" // Pointer
+        //Not coded yet
+    case l_cTypeOfxValue == "S" // Symbol
+        //Not coded yet
+    case l_cTypeOfxValue == "U" // NIL
+        l_cValue := "Null"
+    endcase
+
+    if empty(l_cValue)
+        hb_orm_OutputDebugString("[Harbour] ORM "+par_cStep)
+    else
+        hb_orm_OutputDebugString("[Harbour] ORM "+par_cStep+" - "+l_cValue)
+    endif
+#endif
+
 return .T.
+//=================================================================================================================
+function hb_orm_isnull(par_cAliasName,par_cFieldName)
+local l_l_result := .f.
+local l_FieldValue
+local l_FieldCounter
+local l_FieldNilInfo
+
+if ((select(par_cAliasName)>0)) //Alias is in use.
+    l_FieldCounter := (par_cAliasName)->(FieldPos(par_cFieldName))
+    if l_FieldCounter > 0
+        l_FieldValue   := (par_cAliasName)->(FieldGet(l_FieldCounter))
+        l_FieldNilInfo := (par_cAliasName)->(DBFieldInfo( DBS_ISNULL, l_FieldCounter ))
+        l_l_result := ((!hb_IsNIL(l_FieldNilInfo) .and. l_FieldNilInfo) .or. hb_IsNIL(l_FieldValue))   //Method to handle mem:tables and SQLMIX tables
+    endif
+endif
+
+return l_l_result
 //=================================================================================================================
 function hb_orm_buildinfo()
 #include "BuildInfo.txt"

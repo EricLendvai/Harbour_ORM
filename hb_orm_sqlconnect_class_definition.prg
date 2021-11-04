@@ -17,7 +17,9 @@ class hb_orm_SQLConnect
         data p_Password                   init ""
         data p_Database                   init ""
         data p_SchemaName                 init "public"     // Refers to the current Schema Namespace  (In MSSQL this would be "dbo")
-        data p_PKFN                       init "key"        // Primary Key Field Name
+        data p_PrimaryKeyFieldName        init "key"        // Primary Key Field Name
+        data p_CreationTimeFieldName      init "sysc"       // Creation Time Field Name
+        data p_ModificationTimeFieldName  init "sysm"       // Modification Time Field Name
         data p_ErrorMessage               init ""
         data p_Locks                      init {}
         data p_LockTimeout                init 20   //In Seconds
@@ -45,8 +47,12 @@ class hb_orm_SQLConnect
         method SetPassword(par_password)
         method SetDatabase(par_cName)
         method SetCurrentSchemaName(par_cName)             //only used for PostgreSQL     Return the name of the schema before being set
-        method GetPrimaryKeyFieldName() inline ::p_PKFN
+        method GetPrimaryKeyFieldName() inline ::p_PrimaryKeyFieldName
         method SetPrimaryKeyFieldName(par_cName)
+        method GetCreationTimeFieldName() inline ::p_CreationTimeFieldName
+        method SetCreationTimeFieldName(par_cName)
+        method GetModificationTimeFieldName() inline ::p_ModificationTimeFieldName
+        method SetModificationTimeFieldName(par_cName)
         method SetAllSettings(par_BackendType,par_Driver,par_Server,par_Port,par_User,par_Password,par_Database,par_Schema,par_PKFN)
         method Connect()
         method Disconnect()
@@ -74,6 +80,8 @@ class hb_orm_SQLConnect
 
         method UpdateSchemaCache(par_Force) // To help with speed problems especially in PostgreSQL
 
+        method CheckIfStillConnected() // Returns .t. if connected. Will test if the connection is still present
+
         //Set any of the following properties BEFORE calling Connect() method
         data PostgreSQLIdentifierCasing                 init 1
                                                                         // HB_ORM_POSTGRESQL_CASE_INSENSITIVE = 0 = Case Insensitive (displayed as lower case) except reserved words always lower case, 
@@ -94,7 +102,8 @@ class hb_orm_SQLConnect
         method DeleteIndex(par_cSchemaAndTableName,par_cIndexName)          // will only delete indexes created / managed by the orm. Restricted by index on file naming convention.
         method DeleteField(par_cSchemaAndTableName,par_xFieldNames)         // par_xFieldNames can be an array of field names or a single field name
 
-        method TableExists(par_cSchemaAndTableName)         // Tests if the table exists
+        method TableExists(par_cSchemaAndTableName)                        // Tests if the table exists
+        // method FieldExists(par_cSchemaAndTableName,par_cFieldName)         // Tests if the table.field exists   NOT IMPLEMENTED YET
 
         method UpdateORMSupportSchema()                            //Create / Update Tables used by the ORM
         method UpdateORMSchemaTableNumber()                        //Update ORM Table SchemaTableNumber by adding all tables names in the dictionary/catalog

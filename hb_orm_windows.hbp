@@ -1,7 +1,7 @@
 -hblib
 
 #To enabled progressing recompilation uncomment the following line
-#-inc
+-inc
 
 #Will not include it here. Should be included in the final EXE
 #sddodbc.hbc

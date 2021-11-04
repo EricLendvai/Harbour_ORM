@@ -133,8 +133,16 @@ local l_cPreviousSchemaName := ::p_SchemaName
 return l_cPreviousSchemaName
 //-----------------------------------------------------------------------------------------------------------------
 method SetPrimaryKeyFieldName(par_cName) class hb_orm_SQLConnect
-::p_PKFN := par_cName
-return ::p_PKFN
+::p_PrimaryKeyFieldName := par_cName
+return ::p_PrimaryKeyFieldName
+//-----------------------------------------------------------------------------------------------------------------
+method SetCreationTimeFieldName(par_cName) class hb_orm_SQLConnect
+::p_CreationTimeFieldName := par_cName
+return ::p_CreationTimeFieldName
+//-----------------------------------------------------------------------------------------------------------------
+method SetModificationTimeFieldName(par_cName) class hb_orm_SQLConnect
+::p_ModificationTimeFieldName := par_cName
+return ::p_ModificationTimeFieldName
 //-----------------------------------------------------------------------------------------------------------------
 method SetAllSettings(par_BackendType,par_Driver,par_Server,par_Port,par_User,par_Password,par_Database,par_Schema,par_PKFN) class hb_orm_SQLConnect
 if !hb_IsNil(par_BackendType)
@@ -812,6 +820,29 @@ endcase
 ::p_DoNotReportErrors := l_lDoNotReportErrors
 
 return NIL
+
+//-----------------------------------------------------------------------------------------------------------------
+method CheckIfStillConnected() class hb_orm_SQLConnect // Returns .t. if connected. Will test if the connection is still present
+local l_Result := .f.  // By default assume not connected
+
+if ::Connected
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        if ::SQLExec([select current_time;])
+            l_Result := .t.
+        endif
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        if ::SQLExec([select current_time;])
+            l_Result := .t.
+        endif
+    endcase
+    if l_Result == .f.
+        hb_orm_SendToDebugView("SQL Connection was lost")
+        ::Disconnect()
+    endif
+endif
+
+return l_Result
 //-----------------------------------------------------------------------------------------------------------------
 function hb_orm_GetApplicationStack()
 local l_cInfo := ""

@@ -5,20 +5,22 @@
 
 class hb_orm_SQLData
     hidden:
-        data p_oSQLConnection        init NIL
-        data p_SQLEngineType         init 0
-        data p_SQLConnection         init -1
-        data p_ConnectionNumber      init 0
-        data p_Database              init ""
-        data p_SchemaName            init ""
-        data p_PKFN                  init "key"        // Primary Key Field Name
+        data p_oSQLConnection             init NIL
+        data p_SQLEngineType              init 0
+        data p_SQLConnection              init -1
+        data p_ConnectionNumber           init 0
+        data p_Database                   init ""
+        data p_SchemaName                 init ""
+        data p_PrimaryKeyFieldName        init "key"        // Primary Key Field Name
+        data p_CreationTimeFieldName      init "sysc"       // Creation Time Field Name
+        data p_ModificationTimeFieldName  init "sysm"       // Modification Time Field Name
 
-        data p_SchemaAndTableName    init ""
-        data p_EventId               init ""
-        data p_TableAlias            init ""
+        data p_SchemaAndTableName         init ""
+        data p_EventId                    init ""
+        data p_TableAlias                 init ""
 
-        data p_Key                   init 0
-        data p_ErrorMessage          init ""
+        data p_Key                        init 0
+        data p_ErrorMessage               init ""
 
         data p_AliasToSchemaAndTableNames init {=>}  //Used by method FixAliasAndFieldNameCasingInExpression() to fix casing of field names
 
@@ -105,7 +107,7 @@ class hb_orm_SQLData
         method Force(par_Mode)                                  //Used for VFP ORM, to disabled rushmore optimizer
         method NoTrack()
         method Key(par_Key)                                     //Set the key or retrieve the last used key
-        method Field(par_cName,par_Value)                       //To set a field (par_cName) in the Table() to the value (par_value). If par_Value is not provided, will return the value from previous set field value
+        method Field(par_cName,par_Value                     )  //To set a field (par_cName) in the Table() to the value (par_value). If par_Value is not provided, will return the value from previous set field value. If par_Value is an array, the first element tell how to handle the following one. It {"S",<string>} will be handled 
         method ErrorMessage()                                   //Retrieve the error text of the last call to .SQL() or .Get() 
         // method GetFormattedErrorMessage()                    //Retrieve the error text of the last call to .SQL() or .Get()  in an HTML formatted Fasion  (ELS)
         method Add(par_Key)                                     //Adds a record. par_Key is optional and can only be used with table with non auto-increment key field

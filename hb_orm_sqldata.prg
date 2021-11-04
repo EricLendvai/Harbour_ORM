@@ -16,12 +16,14 @@ method  IsConnected() class hb_orm_SQLData    //Return .t. if has a connection
 return (::p_oSQLConnection != NIL .and.  ::p_oSQLConnection:GetHandle() > 0)
 //-----------------------------------------------------------------------------------------------------------------
 method UseConnection(par_oSQLConnection) class hb_orm_SQLData
-::p_oSQLConnection      := par_oSQLConnection
-::p_SQLEngineType       := ::p_oSQLConnection:GetSQLEngineType()
-::p_ConnectionNumber    := ::p_oSQLConnection:GetConnectionNumber()
-::p_Database            := ::p_oSQLConnection:GetDatabase()
-::p_SchemaName          := ::p_oSQLConnection:GetCurrentSchemaName()   // Will "Freeze" the current connection p_SchemaName
-::p_PKFN                := ::p_oSQLConnection:GetPrimaryKeyFieldName() //  p_PKFN
+::p_oSQLConnection            := par_oSQLConnection
+::p_SQLEngineType             := ::p_oSQLConnection:GetSQLEngineType()
+::p_ConnectionNumber          := ::p_oSQLConnection:GetConnectionNumber()
+::p_Database                  := ::p_oSQLConnection:GetDatabase()
+::p_SchemaName                := ::p_oSQLConnection:GetCurrentSchemaName()   // Will "Freeze" the current connection p_SchemaName
+::p_PrimaryKeyFieldName       := ::p_oSQLConnection:GetPrimaryKeyFieldName()
+::p_CreationTimeFieldName     := ::p_oSQLConnection:GetCreationTimeFieldName()
+::p_ModificationTimeFieldName := ::p_oSQLConnection:GetModificationTimeFieldName()
 return Self
 //-----------------------------------------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------------------------------------
@@ -175,6 +177,7 @@ local l_HashPos
 if !empty(par_cName)
     l_FieldName := vfp_strtran(vfp_strtran(allt(par_cName),::p_SchemaAndTableName+"->","",-1,-1,1),::p_SchemaAndTableName+".","",-1,-1,1)  //Remove the table alias and "->", in case it was used
 
+    //Get field name with correct casing
     l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
     if l_HashPos > 0
         l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
@@ -235,11 +238,31 @@ if empty(::p_ErrorMessage)
             
             if pcount() == 1
                 //Used in case the KEY field is not auto-increment
-                l_Fields := ::p_oSQLConnection:FormatIdentifier(::p_PKFN)
+                l_Fields := ::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
                 l_Values := Trans(par_key)
             else
                 l_Fields := ""
                 l_Values := ""
+            endif
+            
+            //Check if a CreationTimeFieldName exists and if yes, set it to now()
+            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
+                if !empty(l_Fields)
+                    l_Fields += ","
+                    l_Values += ","
+                endif
+                l_Fields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
+                l_Values += "now()"
+            endif
+            
+            //Check if a ModificationTimeFieldName exists and if yes, set it to now()
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+                if !empty(l_Fields)
+                    l_Fields += ","
+                    l_Values += ","
+                endif
+                l_Fields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
+                l_Values += "now()"
             endif
             
             for each l_oField in ::p_FieldsAndValues
@@ -249,9 +272,13 @@ if empty(::p_ErrorMessage)
                 else
                     l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
                     l_Value     := l_oField:__enumValue()
-                    
-                    if !el_AUnpack(::PrepValueForMySQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
-                        loop
+
+                    if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
+                        l_Value := l_Value[2]
+                    else
+                        if !el_AUnpack(::PrepValueForMySQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                            loop
+                        endif
                     endif
 
                     if !empty(l_Fields)
@@ -304,11 +331,31 @@ if empty(::p_ErrorMessage)
             
             if pcount() == 1
                 //Used in case the KEY field is not auto-increment
-                l_Fields := ::p_oSQLConnection:FormatIdentifier(::p_PKFN)
+                l_Fields := ::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
                 l_Values := Trans(par_key)
             else
                 l_Fields := ""
                 l_Values := ""
+            endif
+            
+            //Check if a CreationTimeFieldName exists and if yes, set it to now()
+            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
+                if !empty(l_Fields)
+                    l_Fields += ","
+                    l_Values += ","
+                endif
+                l_Fields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
+                l_Values += "now()"
+            endif
+            
+            //Check if a ModificationTimeFieldName exists and if yes, set it to now()
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+                if !empty(l_Fields)
+                    l_Fields += ","
+                    l_Values += ","
+                endif
+                l_Fields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
+                l_Values += "now()"
             endif
             
             for each l_oField in ::p_FieldsAndValues
@@ -319,8 +366,12 @@ if empty(::p_ErrorMessage)
                     l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
                     l_Value     := l_oField:__enumValue()
 
-                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
-                        loop
+                    if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
+                        l_Value := l_Value[2]
+                    else
+                        if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                            loop
+                        endif
                     endif
 
                     if !empty(l_Fields)
@@ -332,7 +383,7 @@ if empty(::p_ErrorMessage)
                 endif
 
             endfor
-            l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)
+            l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
             
             l_SQLCommand := strtran(l_SQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
@@ -344,7 +395,7 @@ if empty(::p_ErrorMessage)
                     
                 otherwise
                     ::Tally := 1
-                    l_KeyFieldValue := c_DB_Result->(FieldGet(FieldPos(::p_PKFN)))
+                    l_KeyFieldValue := c_DB_Result->(FieldGet(FieldPos(::p_PrimaryKeyFieldName)))
                     if Valtype(l_KeyFieldValue) == "C"
                         ::p_Key := val(l_KeyFieldValue)
                     else
@@ -413,7 +464,7 @@ if empty(::p_ErrorMessage)
         ::p_ErrorMessage := [Missing Table]
         
     case empty(::p_KEY)
-        ::p_ErrorMessage := [Missing ]+upper(::p_PKFN)
+        ::p_ErrorMessage := [Missing ]+upper(::p_PrimaryKeyFieldName)
         
     otherwise
         l_select := iif(used(),select(),0)
@@ -421,12 +472,12 @@ if empty(::p_ErrorMessage)
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             
-            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[=]+trans(::p_KEY)
+            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(::p_KEY)
             ::p_LastSQLCommand = l_SQLCommand
             
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             
-            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[=]+trans(::p_KEY)
+            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(::p_KEY)
             ::p_LastSQLCommand = l_SQLCommand
             
         endcase
@@ -484,7 +535,7 @@ if empty(::p_ErrorMessage)
         ::p_ErrorMessage = [Missing Table]
         
     case empty(::p_KEY)
-        ::p_ErrorMessage = [Missing ]+::p_PKFN
+        ::p_ErrorMessage = [Missing ]+::p_PrimaryKeyFieldName
         
     otherwise
         l_select = iif(used(),select(),0)
@@ -498,9 +549,13 @@ if empty(::p_ErrorMessage)
             
             l_SQLCommand := ""
             
-            //sysm field
-            // l_VFPFieldValue = [']+strtran(ttoc(v_LocalTime,3),"T"," ")+[']
-            // l_SQLCommand +=  [`]+::p_SchemaAndTableName+[`.`sysm`=]+l_VFPFieldValue
+            //Check if a ModificationTimeFieldName exists and if yes, set it to now()
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+                if !empty(l_SQLCommand)
+                    l_SQLCommand += ","
+                endif
+                l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)+[ = now()]
+            endif
             
             for each l_oField in ::p_FieldsAndValues
                 l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
@@ -510,8 +565,12 @@ if empty(::p_ErrorMessage)
                     l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
                     l_Value     := l_oField:__enumValue()
 
-                    if !el_AUnpack(::PrepValueForMySQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
-                        loop
+                    if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
+                        l_Value := l_Value[2]
+                    else
+                        if !el_AUnpack(::PrepValueForMySQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                            loop
+                        endif
                     endif
                     
                     if !empty(l_SQLCommand)
@@ -522,7 +581,7 @@ if empty(::p_ErrorMessage)
 
             endfor
             
-            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)
+            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
             ::p_LastSQLCommand = l_SQLCommand
             
             if ::p_oSQLConnection:SQLExec(l_SQLCommand)
@@ -542,9 +601,13 @@ if empty(::p_ErrorMessage)
                         
             l_SQLCommand := ""
             
-            //sysm field
-            // l_VFPFieldValue = [']+strtran(ttoc(v_LocalTime,3),"T"," ")+[']
-            // l_SQLCommand +=  [`]+::p_SchemaAndTableName+[`.`sysm`=]+l_VFPFieldValue
+            //Check if a ModificationTimeFieldName exists and if yes, set it to now()
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+                if !empty(l_SQLCommand)
+                    l_SQLCommand += ","
+                endif
+                l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)+[ = now()]
+            endif
             
             for each l_oField in ::p_FieldsAndValues
                 l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
@@ -554,8 +617,12 @@ if empty(::p_ErrorMessage)
                     l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
                     l_Value     := l_oField:__enumValue()
 
-                    if !el_AUnpack(::PrepValueForPostgreSQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
-                        loop
+                    if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
+                        l_Value := l_Value[2]
+                    else
+                        if !el_AUnpack(::PrepValueForPostgreSQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                            loop
+                        endif
                     endif
 
                     if !empty(l_SQLCommand)
@@ -566,7 +633,7 @@ if empty(::p_ErrorMessage)
 
             endfor
             
-            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)
+            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
 
             ::p_LastSQLCommand = l_SQLCommand
             
@@ -1067,7 +1134,7 @@ local l_StreamBuffer        := ""
 local l_iPos
 local l_lValueMode := .f.
 
-// if par_expression == "table003.Bit"
+// if par_expression == "table.pk"
 //     altd()
 // endif
 
@@ -1203,6 +1270,7 @@ return l_result
 method BuildSQL() class hb_orm_SQLData   // Used internally
 
 local l_Counter
+local l_CounterColumns
 local l_SQLCommand
 local l_NumberOfOrderBys       := len(::p_OrderBy)
 local l_NumberOfHavings        := len(::p_Having)
@@ -1210,6 +1278,9 @@ local l_NumberOfGroupBys       := len(::p_GroupBy)
 local l_NumberOfWheres         := len(::p_Where)
 local l_NumberOfJoins          := len(::p_Join)
 local l_NumberOfFieldsToReturn := len(::p_FieldToReturn)
+local l_OrderByColumn
+local l_OrderByColumnUpper
+local l_FirstOrderBy
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -1221,7 +1292,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     
     // _M_ add support to "*"
     if empty(l_NumberOfFieldsToReturn)
-        l_SQLCommand += [ ]+::p_TableAlias+[.]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)
+        l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
     else
         for l_Counter := 1 to l_NumberOfFieldsToReturn
             if l_Counter > 1
@@ -1305,18 +1376,42 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         endfor
         l_SQLCommand += [)]
     endcase
-        
+
     if l_NumberOfOrderBys > 0
-        l_SQLCommand += [ ORDER BY ]
+        l_FirstOrderBy := .t.
         for l_Counter = 1 to l_NumberOfOrderBys
-            if l_Counter > 1
-                l_SQLCommand += [ , ]
-            endif
-            l_SQLCommand += ::ExpressionToMYSQL(::p_OrderBy[l_Counter,1])
-            if ::p_OrderBy[l_Counter,2]
-                l_SQLCommand += [ ASC]
+
+            //Find the column we are referring to, so to ensure we use the same casing. That is the reason to compare using the upper() functions.
+            l_OrderByColumn := ""
+            l_OrderByColumnUpper := upper(::p_OrderBy[l_Counter,1])
+            for l_CounterColumns := 1 to l_NumberOfFieldsToReturn
+                if !empty(::p_FieldToReturn[l_CounterColumns,2])
+                    if upper(::p_FieldToReturn[l_CounterColumns,2]) == l_OrderByColumnUpper
+                        l_OrderByColumn := ::p_FieldToReturn[l_CounterColumns,2]
+                        exit
+                    endif
+                else
+                    if upper(strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])) == l_OrderByColumnUpper
+                        l_OrderByColumn := strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])
+                    endif
+                endif
+            endfor
+
+            if empty(l_OrderByColumn)
+                ::p_oSQLConnection:LogErrorEvent(,hb_orm_GetApplicationStack(),{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_Counter,1]}})
             else
-                l_SQLCommand += [ DESC]
+                if l_FirstOrderBy
+                    l_SQLCommand += [ ORDER BY ]
+                    l_FirstOrderBy := .f.
+                else
+                    l_SQLCommand += [,]
+                endif
+                l_SQLCommand += [`]+l_OrderByColumn+[`]
+                if ::p_OrderBy[l_Counter,2]
+                    l_SQLCommand += [ ASC]
+                else
+                    l_SQLCommand += [ DESC]
+                endif
             endif
         endfor
     endif
@@ -1336,7 +1431,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     
     // _M_ add support to "*"
     if empty(l_NumberOfFieldsToReturn)
-        l_SQLCommand += [ ]+::p_TableAlias+[.]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)
+// Altd()
+        l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
     else
         for l_Counter := 1 to l_NumberOfFieldsToReturn
             if l_Counter > 1
@@ -1422,16 +1518,40 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     endcase
         
     if l_NumberOfOrderBys > 0
-        l_SQLCommand += [ ORDER BY ]
+        l_FirstOrderBy := .t.
         for l_Counter = 1 to l_NumberOfOrderBys
-            if l_Counter > 1
-                l_SQLCommand += [ , ]
-            endif
-            l_SQLCommand += ::ExpressionToPostgreSQL(::p_OrderBy[l_Counter,1])
-            if ::p_OrderBy[l_Counter,2]
-                l_SQLCommand += [ ASC]
+
+            //Find the column we are referring to, so to ensure we use the same casing. That is the reason to compare using the upper() functions.
+            l_OrderByColumn := ""
+            l_OrderByColumnUpper := upper(::p_OrderBy[l_Counter,1])
+            for l_CounterColumns := 1 to l_NumberOfFieldsToReturn
+                if !empty(::p_FieldToReturn[l_CounterColumns,2])
+                    if upper(::p_FieldToReturn[l_CounterColumns,2]) == l_OrderByColumnUpper
+                        l_OrderByColumn := ::p_FieldToReturn[l_CounterColumns,2]
+                        exit
+                    endif
+                else
+                    if upper(strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])) == l_OrderByColumnUpper
+                        l_OrderByColumn := strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])
+                    endif
+                endif
+            endfor
+
+            if empty(l_OrderByColumn)
+                ::p_oSQLConnection:LogErrorEvent(,hb_orm_GetApplicationStack(),{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_Counter,1]}})
             else
-                l_SQLCommand += [ DESC]
+                if l_FirstOrderBy
+                    l_SQLCommand += [ ORDER BY ]
+                    l_FirstOrderBy := .f.
+                else
+                    l_SQLCommand += [,]
+                endif
+                l_SQLCommand += ["]+l_OrderByColumn+["]
+                if ::p_OrderBy[l_Counter,2]
+                    l_SQLCommand += [ ASC]
+                else
+                    l_SQLCommand += [ DESC]
+                endif
             endif
         endfor
     endif
@@ -1527,7 +1647,7 @@ case pcount() == 2
     
 case pcount() == 1
     do case
-    case valtype(par_1) == "A"   // Have to test first it an array, because if the first element is an array valtype(par_1) will be "N"
+    case valtype(par_1) == "A"   // Have to test first if it is an array, because if the first element is an array valtype(par_1) will be "N"
         l_OutputType := 2
         l_ParameterHoldingTheReferenceToTheArray := par_1
         
@@ -1581,7 +1701,6 @@ if !empty(::p_ErrorMessage)
 else
     if .t. //::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         //_M_ Add support to ::p_AddLeadingBlankRecord
-        
         l_SQLCommand := ::BuildSQL()
         
         ::p_LastSQLCommand := l_SQLCommand
@@ -1898,7 +2017,7 @@ otherwise
         endif
         
         l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
-        l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)+[)]
+        l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
         
         l_SQLCommand := strtran(l_SQLCommand,[->],[.])
         ::p_LastSQLCommand := l_SQLCommand
@@ -1925,7 +2044,7 @@ otherwise
         endif
         
         l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
-        l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PKFN)+[ = ]+trans(::p_KEY)+[)]
+        l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
         
         l_SQLCommand := strtran(l_SQLCommand,[->],[.])
         ::p_LastSQLCommand := l_SQLCommand

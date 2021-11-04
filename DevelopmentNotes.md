@@ -23,7 +23,7 @@
 
 
 # Other Ideas and Todos
-- Create an orm_isnull() function that is more like the hb_isnil()
+- Create an hb_orm_isnull() function that is more like the hb_isnil()
 - Add support to SQLite
 - Use in-memory SQLite for post local SQL commands.
 
