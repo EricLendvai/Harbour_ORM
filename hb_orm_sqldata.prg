@@ -1029,7 +1029,22 @@ if !empty(par_Keywords)
         l_word := strtran(l_word,"]","")  // To Prevent Injections
         l_word := left(l_word,250)        // To Ensure it is not too long.
         
-        l_condi += l_CondiOperand + "["+l_word+"] $ g_upper("+par_FieldToSearchFor+")"
+        //The following is the "VFP" way
+        // l_condi += l_CondiOperand + "["+l_word+"] $ g_upper("+par_FieldToSearchFor+")"
+
+
+        do case
+        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+            //_M_  Needs testing
+            l_condi += l_CondiOperand + [(lower(]+ par_FieldToSearchFor +[) LIKE '%]+lower(l_word)+[%')]
+
+        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+            // l_condi += l_CondiOperand + [(lower(]+ par_FieldToSearchFor +[) LIKE '%]+lower(l_word)+[%')]
+            l_condi += l_CondiOperand + [(]+ par_FieldToSearchFor +[ ILIKE '%]+l_word+[%')]
+
+        endcase
+
+
 
         if l_pos+1 > len(l_line)   //Work around needed to avoid error 62 in DLL Mode
             exit
