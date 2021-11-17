@@ -45,7 +45,7 @@ method Echo(par_text) class hb_orm_SQLData
 return par_text
 //-----------------------------------------------------------------------------------------------------------------
 method destroy() class hb_orm_SQLData
-hb_orm_SendToDebugView("hb_orm destroy")
+// hb_orm_SendToDebugView("hb_orm destroy")
 ::p_ReferenceForSQLDataStrings := NIL
 ::p_oSQLConnection             := NIL
 return .t.
@@ -172,24 +172,29 @@ return NIL
 method Field(par_cName,par_Value) class hb_orm_SQLData                        //To set a field (par_cName) in the Table() to the value (par_value). If par_Value is not provided, will return the value from previous set field value
 local l_xResult := NIL
 local l_FieldName
-local l_HashPos
+local l_aErrors := {}
+local l_nPos
+// local l_HashPos
 
 if !empty(par_cName)
-    l_FieldName := vfp_strtran(vfp_strtran(allt(par_cName),::p_SchemaAndTableName+"->","",-1,-1,1),::p_SchemaAndTableName+".","",-1,-1,1)  //Remove the table alias and "->", in case it was used
-
-    //Get field name with correct casing
-    l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
-    if l_HashPos > 0
-        l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
-    else
-        //_M_ Report Failed to Find Field
+    // Due to handling SchemaName+TableName or only TableName, the simplest is to ignore table names info in par_cName.
+    l_FieldName := Strtran(allt(par_cName),"->",".")  // in case Harbour field notification was used instead of SQL notification.
+    l_nPos := rat(".",l_FieldName)
+    if l_nPos > 0
+        l_FieldName := substr(l_FieldName,l_nPos+1)
     endif
 
-    if pcount() == 2
-        ::p_FieldsAndValues[l_FieldName] := par_Value
-        l_xResult := par_Value
+    l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_FieldName)
+    if empty(l_FieldName)
+        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["]})
+        ::p_oSQLConnection:LogErrorEvent(NIL,hb_orm_GetApplicationStack(),l_aErrors)
     else
-        l_xResult = hb_HGetDef(::p_FieldsAndValues, l_FieldName, NIL)
+        if pcount() == 2
+            ::p_FieldsAndValues[l_FieldName] := par_Value
+            l_xResult := par_Value
+        else
+            l_xResult = hb_HGetDef(::p_FieldsAndValues, l_FieldName, NIL)
+        endif
     endif
 endif
 
@@ -266,28 +271,24 @@ if empty(::p_ErrorMessage)
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
-                if empty(l_FieldName)
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+::p_SchemaAndTableName+[".])
+                l_FieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
+                l_Value     := l_oField:__enumValue()
+
+                if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
+                    l_Value := l_Value[2]
                 else
-                    l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
-                    l_Value     := l_oField:__enumValue()
-
-                    if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
-                        l_Value := l_Value[2]
-                    else
-                        if !el_AUnpack(::PrepValueForMySQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
-                            loop
-                        endif
+                    if !el_AUnpack(::PrepValueForMySQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                        loop
                     endif
-
-                    if !empty(l_Fields)
-                        l_Fields += ","
-                        l_Values += ","
-                    endif
-                    l_Fields += ::p_oSQLConnection:FormatIdentifier(l_FieldName)
-                    l_Values += l_Value
                 endif
+
+                if !empty(l_Fields)
+                    l_Fields += ","
+                    l_Values += ","
+                endif
+                l_Fields += ::p_oSQLConnection:FormatIdentifier(l_FieldName)
+                l_Values += l_Value
 
             endfor
             l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[)]
@@ -359,28 +360,24 @@ if empty(::p_ErrorMessage)
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
-                if empty(l_FieldName)
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+::p_SchemaAndTableName+[".])
+                l_FieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
+                l_Value     := l_oField:__enumValue()
+
+                if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
+                    l_Value := l_Value[2]
                 else
-                    l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
-                    l_Value     := l_oField:__enumValue()
-
-                    if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
-                        l_Value := l_Value[2]
-                    else
-                        if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
-                            loop
-                        endif
+                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                        loop
                     endif
-
-                    if !empty(l_Fields)
-                        l_Fields += ","
-                        l_Values += ","
-                    endif
-                    l_Fields += ::p_oSQLConnection:FormatIdentifier(l_FieldName)
-                    l_Values += l_Value
                 endif
+
+                if !empty(l_Fields)
+                    l_Fields += ","
+                    l_Values += ","
+                endif
+                l_Fields += ::p_oSQLConnection:FormatIdentifier(l_FieldName)
+                l_Values += l_Value
 
             endfor
             l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
@@ -558,26 +555,22 @@ if empty(::p_ErrorMessage)
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
-                if empty(l_FieldName)
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+::p_SchemaAndTableName+[".])
-                else
-                    l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
-                    l_Value     := l_oField:__enumValue()
+                l_FieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
+                l_Value     := l_oField:__enumValue()
 
-                    if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
-                        l_Value := l_Value[2]
-                    else
-                        if !el_AUnpack(::PrepValueForMySQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
-                            loop
-                        endif
+                if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
+                    l_Value := l_Value[2]
+                else
+                    if !el_AUnpack(::PrepValueForMySQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                        loop
                     endif
-                    
-                    if !empty(l_SQLCommand)
-                        l_SQLCommand += ","
-                    endif
-                    l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(l_FieldName)+[ = ]+l_Value
                 endif
+                
+                if !empty(l_SQLCommand)
+                    l_SQLCommand += ","
+                endif
+                l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(l_FieldName)+[ = ]+l_Value
 
             endfor
             
@@ -610,26 +603,22 @@ if empty(::p_ErrorMessage)
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_oField:__enumKey())
-                if empty(l_FieldName)
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_oField:__enumKey()+[" in table "]+::p_SchemaAndTableName+[".])
+                l_FieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
+                l_Value     := l_oField:__enumValue()
+
+                if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
+                    l_Value := l_Value[2]
                 else
-                    l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
-                    l_Value     := l_oField:__enumValue()
-
-                    if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
-                        l_Value := l_Value[2]
-                    else
-                        if !el_AUnpack(::PrepValueForPostgreSQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
-                            loop
-                        endif
+                    if !el_AUnpack(::PrepValueForPostgreSQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                        loop
                     endif
-
-                    if !empty(l_SQLCommand)
-                        l_SQLCommand += ","
-                    endif
-                    l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(l_FieldName)+[ = ]+l_Value
                 endif
+
+                if !empty(l_SQLCommand)
+                    l_SQLCommand += ","
+                endif
+                l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(l_FieldName)+[ = ]+l_Value
 
             endfor
             
@@ -1145,8 +1134,6 @@ local l_Byte
 local l_ByteIsToken
 local l_TableFieldDetection := 0
 local l_StreamBuffer        := ""
-//local l_SchemaPrefix
-local l_iPos
 local l_lValueMode := .f.
 
 // if par_expression == "table.pk"
@@ -1227,10 +1214,6 @@ for each l_Byte in @par_expression
             l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema,::p_AliasToSchemaAndTableNames[l_AliasName])
             if l_HashPos > 0
                 l_SchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_HashPos)
-                // l_iPos := at(".",l_SchemaAndTableName)
-                // if !empty(l_iPos)
-                //     l_AliasName := substr(l_SchemaAndTableName,l_iPos+1)
-                // endif
                 l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
                 if l_HashPos > 0
                     l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
@@ -1282,7 +1265,7 @@ return l_result
 //l_TableName
 
 //-----------------------------------------------------------------------------------------------------------------
-method BuildSQL() class hb_orm_SQLData   // Used internally
+method BuildSQL(par_cAction) class hb_orm_SQLData   // Used internally. par_cAction can be "Count" "Fetch"
 
 local l_Counter
 local l_CounterColumns
@@ -1305,10 +1288,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_SQLCommand += [DISTINCT ]
     endif
     
-    // _M_ add support to "*"
-    if empty(l_NumberOfFieldsToReturn)
+    do case
+    case par_cAction == "Count"
+        l_SQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")
+
+    case empty(l_NumberOfFieldsToReturn)
         l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
-    else
+
+    otherwise
+        // _M_ add support to "*"
         for l_Counter := 1 to l_NumberOfFieldsToReturn
             if l_Counter > 1
                 l_SQLCommand += [,]
@@ -1321,7 +1309,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                 l_SQLCommand += [ AS `]+strtran(::p_FieldToReturn[l_Counter,1],[.],[_])+[`]
             endif
         endfor
-    endif
+
+    endcase
     
     if ::p_SchemaAndTableName == ::p_TableAlias
         l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
@@ -1392,7 +1381,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_SQLCommand += [)]
     endcase
 
-    if l_NumberOfOrderBys > 0
+    if l_NumberOfOrderBys > 0 .and. par_cAction <> "Count"
         l_FirstOrderBy := .t.
         for l_Counter = 1 to l_NumberOfOrderBys
 
@@ -1431,7 +1420,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         endfor
     endif
     
-    if ::p_Limit > 0
+    if ::p_Limit > 0 .and. par_cAction <> "Count"
         l_SQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
     endif
     
@@ -1444,11 +1433,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_SQLCommand += [DISTINCT ]
     endif
     
-    // _M_ add support to "*"
-    if empty(l_NumberOfFieldsToReturn)
-// Altd()
+    do case
+    case par_cAction == "Count"
+        l_SQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")
+
+    case empty(l_NumberOfFieldsToReturn)
         l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
-    else
+
+    otherwise
+        // _M_ add support to "*"
         for l_Counter := 1 to l_NumberOfFieldsToReturn
             if l_Counter > 1
                 l_SQLCommand += [,]
@@ -1461,7 +1454,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_SQLCommand += [ AS "]+strtran(::p_FieldToReturn[l_Counter,1],[.],[_])+["]
             endif
         endfor
-    endif
+
+    endcase
     
     if ::p_SchemaAndTableName == ::p_TableAlias
         l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
@@ -1532,7 +1526,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_SQLCommand += [)]
     endcase
         
-    if l_NumberOfOrderBys > 0
+    if l_NumberOfOrderBys > 0 .and. par_cAction <> "Count"
         l_FirstOrderBy := .t.
         for l_Counter = 1 to l_NumberOfOrderBys
 
@@ -1571,7 +1565,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         endfor
     endif
     
-    if ::p_Limit > 0
+    if ::p_Limit > 0 .and. par_cAction <> "Count"
         l_SQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
     endif
     
@@ -1716,7 +1710,7 @@ if !empty(::p_ErrorMessage)
 else
     if .t. //::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         //_M_ Add support to ::p_AddLeadingBlankRecord
-        l_SQLCommand := ::BuildSQL()
+        l_SQLCommand := ::BuildSQL("Fetch")
         
         ::p_LastSQLCommand := l_SQLCommand
         
@@ -1974,6 +1968,47 @@ else
 endif
 
 return l_result
+//-----------------------------------------------------------------------------------------------------------------
+method Count(par_SQLID) class hb_orm_SQLData                                          // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error.
+
+local l_CursorTempName
+local l_select := iif(used(),select(),0)
+local l_SQLID  := 0
+local l_SQLCommand
+local l_TimeEnd
+local l_TimeStart
+local l_SQLResult
+
+::Tally          := -1
+::p_ErrorMessage := ""
+
+if pcount() == 1 .and. valtype(par_SQLID) == "N"
+    l_SQLID := par_SQLID
+endif
+
+l_SQLCommand := ::BuildSQL("Count")
+
+::p_LastSQLCommand := l_SQLCommand
+
+l_CursorTempName := "c_DB_Temp"
+
+l_TimeStart := seconds()
+l_SQLResult := ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
+l_TimeEnd := seconds()
+::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
+
+if !l_SQLResult
+    hb_orm_SendToDebugView("Failed SQLExec. SQLId="+trans(l_SQLID)+"  Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage())
+else
+    if (l_CursorTempName)->(reccount()) == 1
+        ::Tally := (l_CursorTempName)->(FieldGet(1))
+    endif
+endif
+CloseAlias(l_CursorTempName)
+
+select (l_select)
+    
+return ::Tally
 //-----------------------------------------------------------------------------------------------------------------
 method Get(par_1,par_2) class hb_orm_SQLData             // Returns an Object with properties matching a record referred by primary key
 

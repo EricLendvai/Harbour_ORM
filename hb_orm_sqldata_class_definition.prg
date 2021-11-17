@@ -88,7 +88,7 @@ class hb_orm_SQLData
         method ExpressionToMYSQL(par_Expression)                                //_M_  to generalize UDF translation to backend
         method ExpressionToPostgreSQL(par_Expression)                           //_M_  to generalize UDF translation to backend
         method FixAliasAndFieldNameCasingInExpression(par_Expression)           // to handle the casing of tables and fields, by using the connection's :p_schema Since it is more of alias.field for now will assume alias same as table name and will use ::p_SchemaName
-        method BuildSQL()                                                       // Used to build the SQL commands to send to server
+        method BuildSQL(par_cAction)                                            //  par_cAction can be "Count" "Fetch"
         method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         
@@ -117,7 +117,7 @@ class hb_orm_SQLData
         method Column(par_Expression,par_Columns_Alias,...)     //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
 
         method Join(par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...)                        // Join Tables
-        method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaAndTableName,par_cTableName_Alias,par_expression,...)  // Replace a Join tables definition
+        method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...)  // Replace a Join tables definition
 
         method Where(par_Expression,...)                                                             // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
         method ReplaceWhere(par_WhereNumber,par_Expression,...)                                      // Replace a Where definition
@@ -138,6 +138,7 @@ class hb_orm_SQLData
 
         method SetExplainMode(par_mode)                                                               // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
         method SQL(par_1,par_2)                                                                       // Assemble and Run SQL command
+        method Count(par_SQLID)                                                                       // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error. The par_SQLID is optional (used if reporting error info).
 
         method LastSQL()       INLINE ::p_LastSQLCommand                                              // Get the last sent SQL command executed
         method LastRunTime()   INLINE ::p_LastRunTime                                                 // Get the last execution time in seconds
