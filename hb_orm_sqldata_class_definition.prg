@@ -91,6 +91,7 @@ class hb_orm_SQLData
         method BuildSQL(par_cAction)                                            //  par_cAction can be "Count" "Fetch"
         method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
+        method SetEventId(par_xId)                                              // Called by Table() and Delete(). Used to identify SQL(), Add(), Update(), Delete() query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
         
     exported:
         data Tally init 0 READONLY
@@ -99,22 +100,21 @@ class hb_orm_SQLData
         method Init()          constructor  //Harbour does not call the constructor by default (BIG design mistake)
         method UseConnection(par_oSQLConnection)
         method Echo(par_Text)
-        method Table(par_cSchemaAndTableName,par_cAlias)
-        method SetEventId(par_xId)                                 //Used to identify query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
+        method Table(par_xEventId,par_cSchemaAndTableName,par_cAlias)      // par_EventId can be a numeric or string. Will help in case of errors and should be unique across an application. par_cAlias is optional
         method UsedInUnion(par_o_dl)
         method Distinct(par_Mode)
         method Limit(par_Limit)
-        method Force(par_Mode)                                  //Used for VFP ORM, to disabled rushmore optimizer
+        method Force(par_Mode)                                           //Used for VFP ORM, to disabled rushmore optimizer
         method NoTrack()
-        method Key(par_Key)                                     //Set the key or retrieve the last used key
-        method Field(par_cName,par_Value                     )  //To set a field (par_cName) in the Table() to the value (par_value). If par_Value is not provided, will return the value from previous set field value. If par_Value is an array, the first element tell how to handle the following one. It {"S",<string>} will be handled 
-        method ErrorMessage()                                   //Retrieve the error text of the last call to .SQL() or .Get() 
-        // method GetFormattedErrorMessage()                    //Retrieve the error text of the last call to .SQL() or .Get()  in an HTML formatted Fasion  (ELS)
-        method Add(par_Key)                                     //Adds a record. par_Key is optional and can only be used with table with non auto-increment key field
-        method Delete(par_1,par_2)                              //Delete record. Should be called as .Delete(Key) or .Delete(TableName,Key). The first form require a previous call to .Table(TableName)
-        method Update(par_Key)                                  //Update a record in .Table(TableName)  where .Field(...) was called first
+        method Key(par_Key)                                              //Set the key or retrieve the last used key
+        method Field(par_cName,par_Value)                                //To set a field (par_cName) in the Table() to the value (par_value). If par_Value is not provided, will return the value from previous set field value. If par_Value is an array, the first element tell how to handle the following one. It {"S",<string>} will be handled 
+        method ErrorMessage()                                            //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add(), :Update(), :Delete()
+        // method GetFormattedErrorMessage()                             //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add(), :Update(), :Delete() in an HTML formatted Fasion  (ELS)
+        method Add(par_Key)                                              //Adds a record. par_Key is optional and can only be used with table with non auto-increment key field
+        method Delete(par_xEventId,par_cSchemaAndTableName,par_iKey)     //Delete record. Should be called as .Delete(uuid,TableName,Key).
+        method Update(par_Key)                                           //Update a record in .Table(TableName)  where .Field(...) was called first
         
-        method Column(par_Expression,par_Columns_Alias,...)     //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
+        method Column(par_Expression,par_Columns_Alias,...)              //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
 
         method Join(par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...)                        // Join Tables
         method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...)  // Replace a Join tables definition
@@ -137,13 +137,14 @@ class hb_orm_SQLData
         method AddLeadingRecords(par_CursorName)                                                      // Specify to add records from par_CursorName as leading record to the future result cursor
 
         method SetExplainMode(par_mode)                                                               // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
-        method SQL(par_1,par_2)                                                                       // Assemble and Run SQL command
-        method Count(par_SQLID)                                                                       // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error. The par_SQLID is optional (used if reporting error info).
+        method SQL(par_1)                                                                             // Assemble and Run SQL command
+        method Count()                                                                                // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error. The par_SQLID is optional (used if reporting error info).
 
         method LastSQL()       INLINE ::p_LastSQLCommand                                              // Get the last sent SQL command executed
         method LastRunTime()   INLINE ::p_LastRunTime                                                 // Get the last execution time in seconds
 
-        method Get(par_1,par_2)                                                                       // Returns an Object with properties matching a record referred by primary key
+        method Get(par_iKey)                                                                          // Returns an Object with properties matching a record referred by primary key 
+                                                                                                      //Either use (<par_cSchemaAndTableName>,<par_iKey>)   or  (<par_iKey>))  as parameters
 
         method FormatDateForSQLUpdate(par_Date)
         method FormatDateTimeForSQLUpdate(par_Dati,par_nPrecision)

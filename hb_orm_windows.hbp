@@ -40,4 +40,6 @@ hb_orm_cursor_c.c
 
 ExportTableToHtmlFile.prg
 
+#bcrypt.c  Under integration
+
 debugger.hbm

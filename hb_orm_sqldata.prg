@@ -50,10 +50,12 @@ method destroy() class hb_orm_SQLData
 ::p_oSQLConnection             := NIL
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
-method Table(par_cSchemaAndTableName,par_cAlias) class hb_orm_SQLData
+method Table(par_xEventId,par_cSchemaAndTableName,par_cAlias) class hb_orm_SQLData
 local l_iPos
+local l_aErrors := {}
 
 if pcount() > 0
+    ::SetEventId(par_xEventId)
 
     // hb_HCaseMatch(::p_AliasToSchemaAndTableNames,.f.)     No Need to make it case insensitive since Aliases are always converted to lower case
     hb_HClear(::p_AliasToSchemaAndTableNames)
@@ -71,7 +73,6 @@ if pcount() > 0
     ::p_NumberOfSQLDataStrings := 0
     asize(::p_SQLDataStrings,0)
     
-    ::p_ErrorMessage    := ""
     ::Tally             := 0
     
     ::p_TableFullPath   := ""
@@ -99,7 +100,7 @@ if pcount() > 0
 
     if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
         ::p_SchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-        if pcount() >= 2 .and. !empty(par_cAlias)
+        if pcount() >= 3 .and. !empty(par_cAlias)
             ::p_TableAlias := lower(par_cAlias)
         else
             ::p_TableAlias := lower(::p_SchemaAndTableName)
@@ -112,21 +113,20 @@ if pcount() > 0
         else
             ::p_SchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
         endif
-        if pcount() >= 2 .and. !empty(par_cAlias)
+        if pcount() >= 3 .and. !empty(par_cAlias)
             ::p_TableAlias := lower(par_cAlias)
         else
             ::p_TableAlias := lower(substr(::p_SchemaAndTableName,l_iPos+1))
         endif
     endif
     if empty(::p_SchemaAndTableName)
-        ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".]
-        hb_orm_SendToDebugView(::p_ErrorMessage)
+        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
+        ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
     else
       ::p_AliasToSchemaAndTableNames[::p_TableAlias] := ::p_SchemaAndTableName
     endif
     
     ::p_Key     := 0
-    ::p_EventId := ""
 
 endif
 
@@ -186,8 +186,8 @@ if !empty(par_cName)
 
     l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_FieldName)
     if empty(l_FieldName)
-        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["]})
-        ::p_oSQLConnection:LogErrorEvent(NIL,hb_orm_GetApplicationStack(),l_aErrors)
+        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
+        ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
     else
         if pcount() == 2
             ::p_FieldsAndValues[l_FieldName] := par_Value
@@ -200,7 +200,7 @@ endif
 
 return l_xResult
 //-----------------------------------------------------------------------------------------------------------------
-method ErrorMessage() class hb_orm_SQLData                                   //Retrieve the error text of the last call to .SQL() or .Get() 
+method ErrorMessage() class hb_orm_SQLData                                   //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add() :Update()  :Delete()
 return ::p_ErrorMessage
 //-----------------------------------------------------------------------------------------------------------------
 // method GetFormattedErrorMessage() class hb_orm_SQLData                       //Retrieve the error text of the last call to .SQL() or .Get()  in an HTML formatted Fasion  (ELS)
@@ -426,12 +426,12 @@ else
 endif
 
 if len(l_aErrors) > 0
-    ::p_oSQLConnection:LogErrorEvent(::p_EventId,hb_orm_GetApplicationStack(),l_aErrors)
+    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
 endif
 
 return (::p_Key > 0)
 //-----------------------------------------------------------------------------------------------------------------
-method Delete(par_1,par_2) class hb_orm_SQLData                              //Delete record. Should be called as .Delete(Key) or .Delete(TableName,Key). The first form require a previous call to .Table(TableName)
+method Delete(par_xEventId,par_cSchemaAndTableName,par_iKey) class hb_orm_SQLData                              //Delete record. Should be called as .Delete(Key) or .Delete(TableName,Key). The first form require a previous call to .Table(TableName)
 
 local l_select
 local l_SQLCommand
@@ -439,15 +439,12 @@ local l_SQLCommand
 ::p_ErrorMessage := ""
 ::Tally          := 0
 
-do case
-case pcount() == 2
-    ::Table(par_1)
-    ::p_KEY := par_2
-case pcount() == 1
-    ::p_KEY := par_1
-otherwise
+if pcount() == 3
+    ::Table(par_xEventId,par_cSchemaAndTableName)
+    ::p_KEY := par_iKey
+else
     ::p_ErrorMessage := [Invalid number of parameters when calling :Delete()]
-endcase
+endif
 
 if empty(::p_ErrorMessage)
     if !::IsConnected()
@@ -651,7 +648,7 @@ else
 endif
 
 if len(l_aErrors) > 0
-    ::p_oSQLConnection:LogErrorEvent(::p_EventId,hb_orm_GetApplicationStack(),l_aErrors)
+    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
 endif
 
 return empty(::p_ErrorMessage)
@@ -664,6 +661,7 @@ local l_MergeCodeNumber
 local l_pos
 local l_result
 local l_Value
+local l_aErrors := {}
 
 if pcount() > 1 .and. "^" $ par_Expression
     l_result := ""
@@ -715,8 +713,8 @@ if pcount() > 1 .and. "^" $ par_Expression
                 // case "P"  // Pointer to function, procedure or method (*)
                 // case "S"  // Symbolic name (*)
                 otherwise
-                    ::p_ErrorMessage = [Wrong Parameter Type in Where()]
-                    
+                    AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Wrong Parameter Type in PrepExpression()],hb_orm_GetApplicationStack()})
+                    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
                 endswitch
             else
                 l_result += l_char
@@ -769,7 +767,8 @@ if pcount() > 1 .and. "^" $ par_Expression
                 // case "P"  // Pointer to function, procedure or method (*)
                 // case "S"  // Symbolic name (*)
                 otherwise
-                    ::p_ErrorMessage = [Wrong Parameter Type in Where()]
+                    AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Wrong Parameter Type in PrepExpression()],hb_orm_GetApplicationStack()})
+                    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
                     
                 endswitch
             else
@@ -803,6 +802,7 @@ method Join(par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...) clas
 local l_cSchemaAndTableName
 local l_cAlias
 local l_iPos
+local l_aErrors := {}
 
 if empty(par_Type)
     //Used to reserve a Join Position
@@ -830,8 +830,8 @@ else
         endif
     endif
     if empty(l_cSchemaAndTableName)
-        ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".]
-        hb_orm_SendToDebugView(::p_ErrorMessage)
+        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
+        ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
     else
         ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
     endif
@@ -845,6 +845,7 @@ method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaAndTableName,par_cAlias,pa
 local l_cSchemaAndTableName
 local l_cAlias
 local l_iPos
+local l_aErrors := {}
 
 if empty(par_Type)
     ::p_Join[par_JoinNumber] := {}
@@ -894,8 +895,8 @@ else
         endif
     endif
     if empty(l_cSchemaAndTableName)
-        ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".]
-        hb_orm_SendToDebugView(::p_ErrorMessage)
+        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
+        ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
     else
         ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
     endif
@@ -1402,7 +1403,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             endfor
 
             if empty(l_OrderByColumn)
-                ::p_oSQLConnection:LogErrorEvent(,hb_orm_GetApplicationStack(),{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_Counter,1]}})
+                ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_Counter,1],hb_orm_GetApplicationStack()}})
             else
                 if l_FirstOrderBy
                     l_SQLCommand += [ ORDER BY ]
@@ -1547,7 +1548,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             endfor
 
             if empty(l_OrderByColumn)
-                ::p_oSQLConnection:LogErrorEvent(,hb_orm_GetApplicationStack(),{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_Counter,1]}})
+                ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_Counter,1],hb_orm_GetApplicationStack()}})
             else
                 if l_FirstOrderBy
                     l_SQLCommand += [ ORDER BY ]
@@ -1582,7 +1583,7 @@ method SetExplainMode(par_mode) class hb_orm_SQLData                            
     ::p_ExplainMode := par_mode
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method SQL(par_1,par_2) class hb_orm_SQLData                                          // Assemble and Run SQL command
+method SQL(par_1) class hb_orm_SQLData                                          // Assemble and Run SQL command
 
 local l_CursorTempName
 local l_FieldCounter
@@ -1595,16 +1596,15 @@ local l_ParameterHoldingTheReferenceToTheArray
 local l_result
 local l_o_record
 local l_select := iif(used(),select(),0)
-local l_SQLID  := 0
 local l_SQLResult
 local l_SQLCommand
 local l_TimeEnd
 local l_TimeStart
-local l_ErrorOccured
+local l_ErrorOccurred
 local l_NumberOfFields
 local l_RecordFieldValues := {}
-
-local v_InELSOffice := .f.
+local l_aErrors := {}
+// local v_InELSOffice := .f.
 
 l_result := NIL
 
@@ -1612,84 +1612,29 @@ l_result := NIL
 ::p_ErrorMessage := ""
 
 *!*	l_OutputType
-*!*	 0 = none
-*!*	 1 = cursor
-*!*	 2 = array
-*!*	 3 = object
-*!*	 4 = Table on disk
+*!*	 0 = none Only useful for :tally       // No parameters are provided and no fields where defined
+*!*	 1 = cursor                            // The parameter is a string
+*!*	 2 = array                             // The parameter is a reference to an array
+*!*	 3 = object                            // No parameter is provided and at least one field was defined.
 
 l_ParameterHoldingTheReferenceToTheArray := ""
 
 do case
-case pcount() == 2
-    if valtype(par_1) == "N"
-        l_SQLID := par_1
-        
-        do case
-        case valtype(par_2) == "A"
-            l_OutputType := 2
-            l_ParameterHoldingTheReferenceToTheArray := par_2
-        case valtype(par_2) == "C"
-            if "\" $ par_2
-                ::p_TableFullPath := par_2
-                l_OutputType      := 4
-            else
-                ::p_TableFullPath := ""
-                ::p_CursorName    := par_2
-                l_OutputType      := 1
-                ::p_oCursor       := NIL
-                CloseAlias(::p_CursorName)
-            endif
-        otherwise
-            ::p_ErrorMessage := "Invalid .SQL parameters"
-            if v_InELSOffice
-                //_M_ error 10
-            endif
-        endcase
-        
-    else
-        ::p_ErrorMessage := "Invalid .SQL parameters"
-        if v_InELSOffice
-            //_M_ error 10
-        endif
-    endif
-    
 case pcount() == 1
     do case
     case valtype(par_1) == "A"   // Have to test first if it is an array, because if the first element is an array valtype(par_1) will be "N"
         l_OutputType := 2
         l_ParameterHoldingTheReferenceToTheArray := par_1
         
-    case valtype(par_1) == "N"
-        l_SQLID := par_1
-        
-        //Threat as no parameter
-        do case
-        case empty(len(::p_FieldToReturn))
-            l_OutputType := 0
-        case empty(::p_CursorName)
-            l_OutputType := 3
-        otherwise
-            l_OutputType := 1
-            CloseAlias(::p_CursorName)
-        endcase
-        
     case valtype(par_1) == "C"
-        if "\" $ par_1
-            ::p_TableFullPath := par_1
-            l_OutputType      := 4
-        else
-            ::p_TableFullPath := ""
-            ::p_CursorName    := par_1
-            l_OutputType      := 1
-            ::p_oCursor       := NIL
-            CloseAlias(::p_CursorName)
-        endif
+        ::p_TableFullPath := ""
+        ::p_CursorName    := par_1
+        l_OutputType      := 1
+        ::p_oCursor       := NIL
+        CloseAlias(::p_CursorName)
+
     otherwise
         ::p_ErrorMessage := "Invalid .SQL parameters"
-        if v_InELSOffice
-            //_M_ error 10
-        endif
     endcase
     
 otherwise
@@ -1704,7 +1649,7 @@ otherwise
 endcase
 
 if !empty(::p_ErrorMessage)
-    // ::SQLSendToLogFileAndMonitoringSystem(0,1,::p_ErrorMessage)
+    AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,::p_ErrorMessage,hb_orm_GetApplicationStack()})
     ::Tally := -1
     
 else
@@ -1714,7 +1659,7 @@ else
         
         ::p_LastSQLCommand := l_SQLCommand
         
-        l_ErrorOccured := .t.   //Assumed it failed
+        l_ErrorOccurred := .t.   //Assumed it failed
         
         do case
         case ::p_ExplainMode > 0
@@ -1745,7 +1690,7 @@ else
             ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
             
             if !l_SQLResult
-                hb_orm_SendToDebugView("Failed SQLExec. SQLId="+trans(l_SQLID)+"  Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage())
+                AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
                 l_result := ""
 
@@ -1792,7 +1737,7 @@ else
                     dbSkip()
                 enddo
 
-                l_ErrorOccured := .f.
+                l_ErrorOccurred := .f.
                 ::Tally        := (l_CursorTempName)->(reccount())
             endif
             CloseAlias(l_CursorTempName)
@@ -1807,14 +1752,14 @@ else
             ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
             
             if !l_SQLResult
-                hb_orm_SendToDebugView("Failed SQLExec. SQLId="+trans(l_SQLID)+"  Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage())
+                AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
                 //  _M_
                 // if (l_TimeEnd - l_TimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                    // ::SQLSendPerformanceIssueToMonitoringSystem(l_SQLID,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
+                    // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
                 // endif
                 
-                l_ErrorOccured := .f.
+                l_ErrorOccurred := .f.
                 ::Tally        := (l_CursorTempName)->(reccount())
                 
             endif
@@ -1828,15 +1773,15 @@ else
             ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
             
             if !l_SQLResult
-                hb_orm_SendToDebugView("Failed SQLExec. SQLId="+trans(l_SQLID)+"  Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage())
+                AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
                 select (::p_CursorName)
                 //_M_
                 // if (l_TimeEnd - l_TimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                    // ::SQLSendPerformanceIssueToMonitoringSystem(l_SQLID,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
+                    // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
                 // endif
                 
-                l_ErrorOccured := .f.
+                l_ErrorOccurred := .f.
                 ::Tally        := (::p_CursorName)->(reccount())
                 
                 ::p_oCursor := hb_orm_Cursor():Init():Associate(::p_CursorName)
@@ -1861,13 +1806,13 @@ else
             ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
             
             if !l_SQLResult
-                hb_orm_SendToDebugView("Failed SQLExec. SQLId="+trans(l_SQLID)+"  Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage())
+                AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
                 // if (l_TimeEnd - l_TimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                // 	// ::SQLSendPerformanceIssueToMonitoringSystem(l_SQLID,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
+                // 	// ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
                 // endif
                 
-                l_ErrorOccured := .f.
+                l_ErrorOccurred := .f.
                 ::Tally        := (l_CursorTempName)->(reccount())
                 
                 if ::Tally > 0
@@ -1898,16 +1843,16 @@ else
             ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
             
             if !l_SQLResult
-                hb_orm_SendToDebugView("Failed SQLExec. SQLId="+trans(l_SQLID)+"  Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage())
+                AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
                 select (l_CursorTempName)
 
                 // if (l_TimeEnd - l_TimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                // 	::SQLSendPerformanceIssueToMonitoringSystem(l_SQLID,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
+                // 	::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
                 // endif
                 
                 ::Tally          := reccount()
-                l_ErrorOccured   := .f.
+                l_ErrorOccurred   := .f.
                 l_NumberOfFields := fcount()
                 
                 do case
@@ -1943,7 +1888,7 @@ else
             
         endcase
         
-        if l_ErrorOccured
+        if l_ErrorOccurred
             ::Tally := -1
             
             if l_OutputType == 1   //Into Cursor
@@ -1952,7 +1897,7 @@ else
                 select (l_select)
             endif
             
-            // ::SQLSendToLogFileAndMonitoringSystem(l_SQLID,1,l_SQLCommand+[ -> ]+::p_ErrorMessage)
+            // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,1,l_SQLCommand+[ -> ]+::p_ErrorMessage)
             
         else
             if l_OutputType == 1   //Into Cursor
@@ -1961,30 +1906,30 @@ else
                 select (l_select)
             endif
             
-            // ::SQLSendToLogFileAndMonitoringSystem(l_SQLID,0,l_SQLCommand+[ -> Reccount = ]+trans(::Tally))
+            // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,0,l_SQLCommand+[ -> Reccount = ]+trans(::Tally))
         endif
         
     endif
 endif
 
+if len(l_aErrors) > 0
+    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+endif
+
 return l_result
 //-----------------------------------------------------------------------------------------------------------------
-method Count(par_SQLID) class hb_orm_SQLData                                          // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error.
+method Count() class hb_orm_SQLData                                          // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error.
 
 local l_CursorTempName
 local l_select := iif(used(),select(),0)
-local l_SQLID  := 0
 local l_SQLCommand
 local l_TimeEnd
 local l_TimeStart
 local l_SQLResult
+local l_aErrors := {}
 
 ::Tally          := -1
 ::p_ErrorMessage := ""
-
-if pcount() == 1 .and. valtype(par_SQLID) == "N"
-    l_SQLID := par_SQLID
-endif
 
 l_SQLCommand := ::BuildSQL("Count")
 
@@ -1998,19 +1943,32 @@ l_TimeEnd := seconds()
 ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
 
 if !l_SQLResult
-    hb_orm_SendToDebugView("Failed SQLExec. SQLId="+trans(l_SQLID)+"  Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage())
+    AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Failed SQLExec in :Count().],hb_orm_GetApplicationStack()})
+
 else
     if (l_CursorTempName)->(reccount()) == 1
         ::Tally := (l_CursorTempName)->(FieldGet(1))
+    else
+        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Did not return a single row in :Count().],hb_orm_GetApplicationStack()})
     endif
 endif
 CloseAlias(l_CursorTempName)
 
 select (l_select)
-    
+
+if len(l_aErrors) > 0
+    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+endif
+
 return ::Tally
 //-----------------------------------------------------------------------------------------------------------------
-method Get(par_1,par_2) class hb_orm_SQLData             // Returns an Object with properties matching a record referred by primary key
+method Get(par_iKey) class hb_orm_SQLData             // Returns an Object with properties matching a record referred by primary key
+
+local l_NumberOfJoins          := len(::p_Join)
+local l_NumberOfHavings        := len(::p_Having)
+local l_NumberOfGroupBys       := len(::p_GroupBy)
+local l_NumberOfWheres         := len(::p_Where)
+local l_NumberOfFieldsToReturn := len(::p_FieldToReturn)
 
 local l_Counter
 local l_CursorTempName
@@ -2020,16 +1978,10 @@ local l_FieldValue
 local l_result
 local l_select
 local l_SQLCommand
-local l_ErrorOccured
+local l_ErrorOccurred := .f.
+local l_aErrors := {}
 
-//_M_ enhance to allow joins, as long as only one related record.
-
-if pcount() == 2
-    ::Table(par_1)
-    ::p_Key = par_2
-else
-    ::p_Key = par_1
-endif
+::p_Key = par_iKey
 
 ::Tally          = 0
 ::p_ErrorMessage = ""
@@ -2039,7 +1991,7 @@ l_result := NIL
 do case
 case len(::p_FieldsAndValues) > 0
     ::p_ErrorMessage = [Called Get() while using Fields()!]
-    // ::SQLSendToLogFileAndMonitoringSystem(0,1,::p_ErrorMessage)
+    AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
     
 otherwise
     l_select = iif(used(),select(),0)
@@ -2048,10 +2000,21 @@ otherwise
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_SQLCommand := [SELECT ]
         
-        if empty(len(::p_FieldToReturn))
-            l_SQLCommand += [ *]
+        if ::p_Distinct
+            l_SQLCommand += [DISTINCT ]
+        endif
+
+        if empty(l_NumberOfFieldsToReturn)
+            //Only allowed when no joins are done
+            if empty(l_NumberOfJoins)
+                l_SQLCommand += [ *]
+            else
+                l_ErrorOccurred := .t.
+                ::p_ErrorMessage := "May not get all field when using joins."
+                AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
+            endif
         else
-            for l_Counter = 1 to len(::p_FieldToReturn)
+            for l_Counter = 1 to l_NumberOfFieldsToReturn
                 if l_Counter > 1
                     l_SQLCommand += [,]
                 endif
@@ -2067,18 +2030,84 @@ otherwise
         endif
         
         l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
-        l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
+
+        for l_Counter = 1 to l_NumberOfJoins
+            
+            do case
+            case left(::p_Join[l_Counter,1],1) == "I"  //Inner Join
+                l_SQLCommand += [ INNER JOIN]
+            case left(::p_Join[l_Counter,1],1) == "L"  //Left Outer
+                l_SQLCommand += [ LEFT OUTER JOIN]
+            case left(::p_Join[l_Counter,1],1) == "R"  //Right Outer
+                l_SQLCommand += [ RIGHT OUTER JOIN]
+            case left(::p_Join[l_Counter,1],1) == "F"  //Full Outer
+                l_SQLCommand += [ FULL OUTER JOIN]
+            otherwise
+                loop
+            endcase
+            
+            l_SQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,2])
+            l_SQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_Counter,3]))
+            l_SQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_Counter,4])
+            
+        endfor
+
         
+        if l_NumberOfWheres == 0
+            l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
+        else
+            l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            for l_Counter = 1 to l_NumberOfWheres
+                l_SQLCommand += [ AND (]+::ExpressionToMYSQL(::p_Where[l_Counter])+[)]
+            endfor
+            l_SQLCommand += [)]
+        endif
+
+        if l_NumberOfGroupBys > 0
+            l_SQLCommand += [ GROUP BY ]
+            for l_Counter = 1 to l_NumberOfGroupBys
+                if l_Counter > 1
+                    l_SQLCommand += [,]
+                endif
+                l_SQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_Counter])
+            endfor
+        endif
+
+        do case
+        case l_NumberOfHavings = 1
+            l_SQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])
+        case l_NumberOfHavings > 1
+            l_SQLCommand += [ HAVING (]
+            for l_Counter = 1 to l_NumberOfHavings
+                if l_Counter > 1
+                    l_SQLCommand += [ AND ]
+                endif
+                l_SQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_Counter])+[)]
+            endfor
+            l_SQLCommand += [)]
+        endcase
+
         l_SQLCommand := strtran(l_SQLCommand,[->],[.])
         ::p_LastSQLCommand := l_SQLCommand
         
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL	
         l_SQLCommand := [SELECT ]
         
-        if empty(len(::p_FieldToReturn))
-            l_SQLCommand += [ *]
+        if ::p_Distinct
+            l_SQLCommand += [DISTINCT ]
+        endif
+
+        if empty(l_NumberOfFieldsToReturn)
+            //Only allowed when no joins are done
+            if empty(l_NumberOfJoins)
+                l_SQLCommand += [ *]
+            else
+                l_ErrorOccurred := .t.
+                ::p_ErrorMessage := "May not get all field when using joins."
+                AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
+            endif
         else
-            for l_Counter = 1 to len(::p_FieldToReturn)
+            for l_Counter = 1 to l_NumberOfFieldsToReturn
                 if l_Counter > 1
                     l_SQLCommand += [,]
                 endif
@@ -2094,57 +2123,114 @@ otherwise
         endif
         
         l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
-        l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
-        
+
+        for l_Counter = 1 to l_NumberOfJoins
+            
+            do case
+            case left(::p_Join[l_Counter,1],1) == "I"  //Inner Join
+                l_SQLCommand += [ INNER JOIN]
+            case left(::p_Join[l_Counter,1],1) == "L"  //Left Outer
+                l_SQLCommand += [ LEFT OUTER JOIN]
+            case left(::p_Join[l_Counter,1],1) == "R"  //Right Outer
+                l_SQLCommand += [ RIGHT OUTER JOIN]
+            case left(::p_Join[l_Counter,1],1) == "F"  //Full Outer
+                l_SQLCommand += [ FULL OUTER JOIN]
+            otherwise
+                loop
+            endcase
+            
+            l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,2])
+            l_SQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_Counter,3]))
+            l_SQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_Counter,4])
+            
+        endfor
+
+        if l_NumberOfWheres == 0
+            l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
+        else
+            l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            for l_Counter = 1 to l_NumberOfWheres
+                l_SQLCommand += [ AND (]+::ExpressionToPostgreSQL(::p_Where[l_Counter])+[)]
+            endfor
+            l_SQLCommand += [)]
+        endif
+
+        if l_NumberOfGroupBys > 0
+            l_SQLCommand += [ GROUP BY ]
+            for l_Counter = 1 to l_NumberOfGroupBys
+                if l_Counter > 1
+                    l_SQLCommand += [,]
+                endif
+                l_SQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_Counter])
+            endfor
+        endif
+            
+        do case
+        case l_NumberOfHavings = 1
+            l_SQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])
+        case l_NumberOfHavings > 1
+            l_SQLCommand += [ HAVING (]
+            for l_Counter = 1 to l_NumberOfHavings
+                if l_Counter > 1
+                    l_SQLCommand += [ AND ]
+                endif
+                l_SQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_Counter])+[)]
+            endfor
+            l_SQLCommand += [)]
+        endcase
+
+
         l_SQLCommand := strtran(l_SQLCommand,[->],[.])
         ::p_LastSQLCommand := l_SQLCommand
         
     endcase
 
-    l_ErrorOccured := .t.   // Assumed it failed
-    
-    l_CursorTempName := "c_DB_Temp"
-
-    if ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
-        select (l_CursorTempName)
-        ::Tally        := reccount()
-        l_ErrorOccured := .f.
+    if !l_ErrorOccurred
+        l_ErrorOccurred := .t.   // Assumed it failed
         
-        do case
-        case ::Tally == 0
-        case ::Tally == 1
-            //Build an oject to return
-            l_result := hb_orm_Data()
+        l_CursorTempName := "c_DB_Temp"
+
+        if ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
+            select (l_CursorTempName)
+            ::Tally        := reccount()
+            l_ErrorOccurred := .f.
             
-            for l_FieldCounter := 1 to fcount()
-                l_FieldName  := FieldName(l_FieldCounter)
-                l_FieldValue := FieldGet(l_FieldCounter)
-                l_result:AddField(l_FieldName,l_FieldValue)
-            endfor
-        otherwise
-            //Should not happen. Returned more than 1 record.
-        endcase
-    else
-        ::Tally = -1
-        ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
-        hb_orm_SendToDebugView("Error in method get()",::p_ErrorMessage)
+            do case
+            case ::Tally == 0
+                AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,"Error in method get() did not find record."+CRLF+::LastSQL(),hb_orm_GetApplicationStack()})
+            case ::Tally == 1
+                //Build an object to return
+                l_result := hb_orm_Data()
+                
+                for l_FieldCounter := 1 to fcount()
+                    l_FieldName  := FieldName(l_FieldCounter)
+                    l_FieldValue := FieldGet(l_FieldCounter)
+                    l_result:AddField(l_FieldName,l_FieldValue)
+                endfor
+            otherwise
+                //Should not happen. Returned more than 1 record.
+                AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,"Error in method get() more than 1 record."+CRLF+::LastSQL(),hb_orm_GetApplicationStack()})
+            endcase
+        else
+            ::Tally = -1
+            AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,"Error in method get() "+::p_ErrorMessage,hb_orm_GetApplicationStack()})
+        endif
+        
+        CloseAlias(l_CursorTempName)
     endif
     
-    CloseAlias(l_CursorTempName)
-    
-    if l_ErrorOccured
+    if l_ErrorOccurred
         ::Tally = -1
         select (l_select)
-        
-        // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_SQLCommand+[ -> ]+::p_ErrorMessage)
-        
     else
         select (l_select)
-        
-        // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_SQLCommand+[ -> Reccount = ]+trans(::Tally))
     endif
 
 endcase
+
+if len(l_aErrors) > 0
+    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+endif
 
 return l_result
 //-----------------------------------------------------------------------------------------------------------------
@@ -2240,13 +2326,13 @@ else
     case  "I" // Integer
         if l_ValueType == "N"
             if par_xValue < -2147483648 .or. par_xValue > 2147483647
-                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not in Integer range'})
+                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not in Integer range',hb_orm_GetApplicationStack()})
                 l_result := .f.
             else
                 l_Value := hb_ntoc(par_xValue)
             endif
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Integer'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Integer',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2255,7 +2341,7 @@ else
             // Not Testing if in range
             l_Value := hb_ntoc(par_xValue)
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Big Integer'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Big Integer',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2264,7 +2350,7 @@ else
             // Not Testing if in range Yet
             l_Value := hb_ntoc(par_xValue)
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric / Money'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric / Money',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2274,7 +2360,7 @@ else
             l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
             l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
             if l_FieldLen > 15
-                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric with more than 15 digits.'})
+                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric with more than 15 digits.',hb_orm_GetApplicationStack()})
                 l_result := .f.
             else
                 l_nMaxValue := ((10**l_FieldLen)-1)/(10**l_FieldDec)
@@ -2282,11 +2368,11 @@ else
                     if round(abs(par_xValue),l_FieldDec) == abs(par_xValue)  // Test if decimal is larger than allowed
                         l_Value := hb_ntoc(par_xValue)
                     else
-                        AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Decimals Overflow: '+alltrim(str(par_xValue))})
+                        AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Decimals Overflow: '+alltrim(str(par_xValue)),hb_orm_GetApplicationStack()})
                         l_result := .f.
                     endif
                 else
-                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Overflow: '+alltrim(str(par_xValue))})
+                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Overflow: '+alltrim(str(par_xValue)),hb_orm_GetApplicationStack()})
                     l_result := .f.
                 endif
             endif
@@ -2298,15 +2384,15 @@ else
                 if l_UnsignedLength <= l_FieldLen .and. l_Decimals <= l_FieldDec
                     l_Value := par_xValue
                 else
-                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric String Overflow: '+par_xValue})
+                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric String Overflow: '+par_xValue,hb_orm_GetApplicationStack()})
                     l_result := .f.
                 endif
             else
-                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric String'})
+                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric String',hb_orm_GetApplicationStack()})
                 l_result := .f.
             endif
         otherwise
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric',hb_orm_GetApplicationStack()})
             l_result := .f.
         endcase
         exit
@@ -2323,7 +2409,7 @@ else
                 l_Value := "x'"+hb_StrToHex(left(par_xValue,l_FieldLen))+"'"
             endif
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2336,7 +2422,7 @@ else
                 l_Value := "x'"+hb_StrToHex(par_xValue)+"'"
             endif
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character/Binary'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character/Binary',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2344,7 +2430,7 @@ else
         if l_ValueType == "L"
             l_Value := iif(par_xValue,"TRUE","FALSE")
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Logical'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Logical',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2353,7 +2439,7 @@ else
             // l_Value := '"'+hb_DtoC(par_xValue,"YYYY-MM-DD")+'"'           //_M_  Test on 1753-01-01  Test integrity in MySQL
             l_Value := ::FormatDateForSQLUpdate(par_xValue)
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Date'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Date',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2364,17 +2450,17 @@ else
             l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
             if hb_orm_CheckTimeFormatValidity(par_xValue)
                 if len(par_xValue) > 9 + l_FieldDec
-                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Time String precision Overflow: '+alltrim(par_xValue)})
+                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Time String precision Overflow: '+alltrim(par_xValue),hb_orm_GetApplicationStack()})
                     l_result := .f.
                 else
                     l_Value := '"'+par_xValue+'"'
                 endif
             else
-                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a valid Time String'})
+                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a valid Time String',hb_orm_GetApplicationStack()})
                 l_result := .f.
             endif
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Time String'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Time String',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2386,13 +2472,12 @@ else
             // l_Value := '"'+hb_TtoC(l_Value,"YYYY-MM-DD","hh:mm:ss")+'"'           //_M_  Test on 1753-01-01
             l_Value := ::FormatDateTimeForSQLUpdate(par_xValue,3)
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Datetime'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Datetime',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
     otherwise // "?" Unknown
-        hb_orm_SendToDebugView("Skipped "+par_cAction+" unknown value type: "+l_ValueType)
-        AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" of Unknown type'})
+        AAdd(l_aErrors,{par_cTableName,par_nKey,"Skipped "+par_cAction+" unknown value type: "+l_ValueType+' Field "'+par_cFieldName+'" of Unknown type',hb_orm_GetApplicationStack()})
         l_result := .f.
         exit
     endcase
@@ -2416,13 +2501,13 @@ else
     case  "I" // Integer
         if l_ValueType == "N"
             if par_xValue < -2147483648 .or. par_xValue > 2147483647
-                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not in Integer range'})
+                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not in Integer range',hb_orm_GetApplicationStack()})
                 l_result := .f.
             else
                 l_Value := hb_ntoc(par_xValue)
             endif
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Integer'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Integer',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2431,7 +2516,7 @@ else
             // Not Testing if in range
             l_Value := hb_ntoc(par_xValue)
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Big Integer'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Big Integer',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2440,7 +2525,7 @@ else
             // Not Testing if in range Yet
             l_Value := hb_ntoc(par_xValue)
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric / Money'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric / Money',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2450,7 +2535,7 @@ else
             l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
             l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
             if l_FieldLen > 15
-                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric with more than 15 digits.'})
+                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric with more than 15 digits.',hb_orm_GetApplicationStack()})
                 l_result := .f.
             else
                 l_nMaxValue := ((10**l_FieldLen)-1)/(10**l_FieldDec)
@@ -2458,11 +2543,11 @@ else
                     if round(abs(par_xValue),l_FieldDec) == abs(par_xValue)  // Test if decimal is larger than allowed
                         l_Value := hb_ntoc(par_xValue)
                     else
-                        AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Decimals Overflow: '+alltrim(str(par_xValue))})
+                        AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Decimals Overflow: '+alltrim(str(par_xValue)),hb_orm_GetApplicationStack()})
                         l_result := .f.
                     endif
                 else
-                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Overflow: '+alltrim(str(par_xValue))})
+                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Overflow: '+alltrim(str(par_xValue)),hb_orm_GetApplicationStack()})
                     l_result := .f.
                 endif
             endif
@@ -2474,15 +2559,15 @@ else
                 if l_UnsignedLength <= l_FieldLen .and. l_Decimals <= l_FieldDec
                     l_Value := par_xValue
                 else
-                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric String Overflow: '+par_xValue})
+                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric String Overflow: '+par_xValue,hb_orm_GetApplicationStack()})
                     l_result := .f.
                 endif
             else
-                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric String'})
+                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric String',hb_orm_GetApplicationStack()})
                 l_result := .f.
             endif
         otherwise
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric',hb_orm_GetApplicationStack()})
             l_result := .f.
         endcase
         exit
@@ -2499,7 +2584,7 @@ else
                 l_Value := "E'\x"+hb_StrToHex(left(par_xValue,l_FieldLen),"\x")+"'"
             endif
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2512,7 +2597,7 @@ else
                 l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
             endif
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character/Binary'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character/Binary',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2520,7 +2605,7 @@ else
         if l_ValueType == "L"
             l_Value := iif(par_xValue,"TRUE","FALSE")
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Logical'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Logical',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2529,7 +2614,7 @@ else
             // l_Value := '"'+hb_DtoC(par_xValue,"YYYY-MM-DD")+'"'           //_M_  Test integrity in MySQL
             l_Value := ::FormatDateForSQLUpdate(par_xValue)
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Date'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Date',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2541,17 +2626,17 @@ else
             l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
             if hb_orm_CheckTimeFormatValidity(par_xValue)
                 if len(par_xValue) > 9 + l_FieldDec
-                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Time String precision Overflow: '+alltrim(par_xValue)})
+                    AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Time String precision Overflow: '+alltrim(par_xValue),hb_orm_GetApplicationStack()})
                     l_result := .f.
                 else
                     l_Value := "'"+par_xValue+"'"
                 endif
             else
-                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a valid Time String'})
+                AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a valid Time String',hb_orm_GetApplicationStack()})
                 l_result := .f.
             endif
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Time String'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Time String',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
@@ -2562,13 +2647,12 @@ else
         if l_ValueType == "T"
             l_Value := ::FormatDateTimeForSQLUpdate(par_xValue,3)
         else
-            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Datetime'})
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Datetime',hb_orm_GetApplicationStack()})
             l_result := .f.
         endif
         exit
     otherwise // "?" Unknown
-        hb_orm_SendToDebugView("Skipped "+par_cAction+" unknown value type: "+l_ValueType)
-        AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" of Unknown type'})
+        AAdd(l_aErrors,{par_cTableName,par_nKey,"Skipped "+par_cAction+" unknown value type: "+l_ValueType+' Field "'+par_cFieldName+'" of Unknown type',hb_orm_GetApplicationStack()})
         l_result := .f.
         exit
     endcase

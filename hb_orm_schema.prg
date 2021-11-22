@@ -2491,7 +2491,6 @@ else
         hb_orm_SendToDebugView([Failed Delete Table "]+par_cSchemaAndTableName+[".   Error Text=]+l_LastError)
     endif
 endif
-
 return l_result
 //-----------------------------------------------------------------------------------------------------------------
 method DeleteIndex(par_cSchemaAndTableName,par_cIndexName) class hb_orm_SQLConnect

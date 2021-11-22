@@ -93,26 +93,26 @@ class hb_orm_SQLConnect
         method IsReservedWord(par_cIdentifier)
         method FormatIdentifier(par_cName)
 
-        method CaseTableName(par_cSchemaAndTableName)                                                                                                              // Format the tokens as handled by the SQL Server
-        method CaseFieldName(par_cSchemaAndTableName,par_cFieldName)                                                                                               // Format the tokens as handled by the SQL Server
+        method CaseTableName(par_cSchemaAndTableName)                                                    // Format the tokens as handled by the SQL Server
+        method CaseFieldName(par_cSchemaAndTableName,par_cFieldName)                                     // Format the tokens as handled by the SQL Server
         
         method FixCasingInFieldExpression(par_hFields,par_expression)
 
         method DeleteTable(par_cSchemaAndTableName)
-        method DeleteIndex(par_cSchemaAndTableName,par_cIndexName)          // will only delete indexes created / managed by the orm. Restricted by index on file naming convention.
-        method DeleteField(par_cSchemaAndTableName,par_xFieldNames)         // par_xFieldNames can be an array of field names or a single field name
+        method DeleteIndex(par_cSchemaAndTableName,par_cIndexName)                                      // will only delete indexes created / managed by the orm. Restricted by index on file naming convention.
+        method DeleteField(par_cSchemaAndTableName,par_xFieldNames)                                     // par_xFieldNames can be an array of field names or a single field name
 
-        method TableExists(par_cSchemaAndTableName)                        // Tests if the table exists
-        // method FieldExists(par_cSchemaAndTableName,par_cFieldName)         // Tests if the table.field exists   NOT IMPLEMENTED YET
+        method TableExists(par_cSchemaAndTableName)                                                     // Tests if the table exists
+        // method FieldExists(par_cSchemaAndTableName,par_cFieldName)                                   // Tests if the table.field exists   NOT IMPLEMENTED YET
 
-        method UpdateORMSupportSchema()                            //Create / Update Tables used by the ORM
-        method UpdateORMSchemaTableNumber()                        //Update ORM Table SchemaTableNumber by adding all tables names in the dictionary/catalog
+        method UpdateORMSupportSchema()                                                                 //Create / Update Tables used by the ORM
+        method UpdateORMSchemaTableNumber()                                                             //Update ORM Table SchemaTableNumber by adding all tables names in the dictionary/catalog
 
-        method GetSchemaDefinitionVersion(par_cSchemaDefinitionName)                         // Since calling ::MigrateSchema() is cumulative with different hSchemaDefinition, each can be named and have a different version.
-        method SetSchemaDefinitionVersion(par_cSchemaDefinitionName,par_iVersion)                         // Since calling ::MigrateSchema() is cumulative with different hSchemaDefinition, each can be named and have a different version.
+        method GetSchemaDefinitionVersion(par_cSchemaDefinitionName)                                    // Since calling ::MigrateSchema() is cumulative with different hSchemaDefinition, each can be named and have a different version.
+        method SetSchemaDefinitionVersion(par_cSchemaDefinitionName,par_iVersion)                       // Since calling ::MigrateSchema() is cumulative with different hSchemaDefinition, each can be named and have a different version.
 
         method LogAutoTrimEvent(par_cEventId,par_cSchemaAndTableName,par_nKey,par_aAutoTrimmedFields)
-        method LogErrorEvent(par_cEventId,par_cAppStack,par_aErrors)
+        method LogErrorEvent(par_cEventId,par_aErrors)                                                  // The par_aErrors is an array of arrays like {<cSchemaAndTableName>,<nKey>,<cErrorMessage>,<cAppStack>}
 
     DESTRUCTOR destroy()
         

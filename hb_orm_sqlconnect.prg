@@ -64,7 +64,7 @@ if ::p_SQLConnection > 0
         hb_orm_SendToDebugView(cErrorInfo)
 
         if !::p_DoNotReportErrors
-            ::LogErrorEvent(,hb_orm_GetApplicationStack(),{{,,cErrorInfo}})   // par_cEventId,par_aErrors
+            ::LogErrorEvent(,{{,,cErrorInfo,hb_orm_GetApplicationStack()}})   // par_cEventId,par_aErrors
         endif
     endif
 
@@ -677,13 +677,14 @@ return NIL
 //par_cTableName  par_cSchemaAndTableName
 
 //-----------------------------------------------------------------------------------------------------------------
-method LogErrorEvent(par_cEventId,par_cAppStack,par_aErrors) class hb_orm_SQLConnect
+method LogErrorEvent(par_cEventId,par_aErrors) class hb_orm_SQLConnect
 local l_SQLCommand
 local l_LastErrorMessage
 local l_iErrors
 local l_cSchemaAndTableName,l_nKey,l_cErrorMessage
 local l_lDoNotReportErrors := ::p_DoNotReportErrors
 local l_iPos,l_cSchemaName,l_cTableName
+local l_cAppStack
 
 ::p_DoNotReportErrors := .t.  // To avoid cycling reporting of errors
 
@@ -696,9 +697,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     if !hb_IsNIL(par_cEventId)
         l_SQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
-    if !hb_IsNIL(par_cAppStack)
-        l_SQLCommand += ::FormatIdentifier("appstack")+[,]
-    endif
+
+    l_SQLCommand += ::FormatIdentifier("appstack")+[,]
     l_SQLCommand += ::FormatIdentifier("datetime")+[,]
     l_SQLCommand += ::FormatIdentifier("ip")+[,]
     l_SQLCommand += ::FormatIdentifier("tablename")+[,]
@@ -711,6 +711,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSchemaAndTableName := par_aErrors[l_iErrors][1]
         l_nKey                := par_aErrors[l_iErrors][2]
         l_cErrorMessage       := par_aErrors[l_iErrors][3]
+        l_cAppStack           := par_aErrors[l_iErrors][4]
 
         hb_orm_SendToDebugView("Error Event:"+;
                               iif(hb_IsNIL(l_cSchemaAndTableName) , "" , [  Table = "]+l_cSchemaAndTableName+["])+;
@@ -725,8 +726,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         if !hb_IsNIL(par_cEventId)
             l_SQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
         endif
-        if !hb_IsNIL(par_cAppStack)
-            l_SQLCommand += [x']+hb_StrToHex(par_cAppStack)+[',]
+        if hb_IsNIL(l_cAppStack)
+            l_SQLCommand += [NULL,]
+        else
+            l_SQLCommand += [x']+hb_StrToHex(l_cAppStack)+[',]
         endif
         l_SQLCommand += [now(),]
         l_SQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
@@ -750,9 +753,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     if !hb_IsNIL(par_cEventId)
         l_SQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
-    if !hb_IsNIL(par_cAppStack)
-        l_SQLCommand += ::FormatIdentifier("appstack")+[,]
-    endif
+
+    l_SQLCommand += ::FormatIdentifier("appstack")+[,]
     l_SQLCommand += ::FormatIdentifier("datetime")+[,]
     l_SQLCommand += ::FormatIdentifier("ip")+[,]
     l_SQLCommand += ::FormatIdentifier("schemaname")+[,]
@@ -766,6 +768,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSchemaAndTableName := par_aErrors[l_iErrors][1]
         l_nKey                := par_aErrors[l_iErrors][2]
         l_cErrorMessage       := par_aErrors[l_iErrors][3]
+        l_cAppStack           := par_aErrors[l_iErrors][4]
 
         if hb_IsNIL(l_cSchemaAndTableName)
             l_cSchemaName := NIL
@@ -795,8 +798,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         if !hb_IsNIL(par_cEventId)
             l_SQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
         endif
-        if !hb_IsNIL(par_cAppStack)
-            l_SQLCommand += [E'\x]+hb_StrToHex(par_cAppStack,"\x")+[',]
+        if hb_IsNIL(l_cAppStack)
+            l_SQLCommand += [NULL,]
+        else
+            l_SQLCommand += [E'\x]+hb_StrToHex(l_cAppStack,"\x")+[',]
         endif
         l_SQLCommand += [current_timestamp,]
         l_SQLCommand += [inet_client_addr(),]
