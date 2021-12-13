@@ -556,8 +556,8 @@ SELECT pk
                         l_FieldDec           := 0
                     endswitch
 
-                    l_FieldAllowNull     := (field->field_nullable == "1")
-                    l_FieldAutoIncrement := (field->field_identity_is == "1")                    //{"I",,,,.t.}
+                    l_FieldAllowNull     := field->field_nullable
+                    l_FieldAutoIncrement := field->field_identity_is                    //{"I",,,,.t.}
 
                     l_Schema_Fields[trim(field->field_Name)] := {,l_FieldType,l_FieldLen,l_FieldDec,iif(l_FieldAllowNull,"N","")+iif(l_FieldAutoIncrement,"+","")}
 

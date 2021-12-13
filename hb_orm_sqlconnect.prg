@@ -208,7 +208,7 @@ otherwise
         // See: https://dev.mysql.com/doc/connector-odbc/en/connector-odbc-configuration-connection-parameters.html#codbc-dsn-option-flags
         l_cConnectionString := "SERVER="+::p_Server+";Driver={"+::p_Driver+"};USER="+::p_User+";PASSWORD="+::p_Password+";DATABASE="+::p_Database+";PORT="+AllTrim(str(::p_Port)+";OPTION=67108864;")
     case ::p_BackendType == HB_ORM_BACKENDTYPE_POSTGRESQL   // PostgreSQL
-        l_cConnectionString := "Server="+::p_Server+";Port="+AllTrim(str(::p_Port))+";Driver={"+::p_Driver+"};Uid="+::p_User+";Pwd="+::p_Password+";Database="+::p_Database+";"
+        l_cConnectionString := "Server="+::p_Server+";Port="+AllTrim(str(::p_Port))+";Driver={"+::p_Driver+"};Uid="+::p_User+";Pwd="+::p_Password+";Database="+::p_Database+";BoolsAsChar=0;"
     otherwise
         ::p_ErrorMessage := "Invalid 'Backend Type'"
     endcase
@@ -218,6 +218,7 @@ otherwise
         if l_SQLHandle == 0
             l_SQLHandle := -1
             ::p_ErrorMessage := "Unable connect to the server!"+Chr(13)+Chr(10)+Str(hb_RDDInfo( RDDI_ERRORNO ))+Chr(13)+Chr(10)+hb_RDDInfo( RDDI_ERROR )
+            hb_orm_SendToDebugView("Unable connect to the server! "+::p_Server)
         else
             ::p_SQLConnection    := l_SQLHandle
             ::p_ErrorMessage := ""

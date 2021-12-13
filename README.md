@@ -88,6 +88,7 @@ You may create any other indexes that is not named with a leading "&lt;tablename
 - Numeric (decimal types) Length includes the decimals but does not include the decimal point.
 - Numeric (decimal types) Length is not affected by the sign.
 - Numeric (decimal types) Length can be up to 65 digits. But in Harbour this is limited to 15 digits. To enter larger or higher precisions numerics, you may use the text expression of the number, for example: "123456789012345678.123456789" as a text will be sent "raw" to the server.
+- Boolean columns types are not supported. Will be using "tinyint" type instead, will have to test for Null/0/1.
 
 
 ## PostgreSQL Peculiarities
@@ -103,7 +104,7 @@ You may create any other indexes that is not named with a leading "&lt;tablename
 - Numeric (decimal types) Length includes the decimals but does not include the decimal point.
 - Numeric (decimal types) Length is not affected by the sign.
 - Numeric (decimal types) Length can be over 130000 digits. But in Harbour this is limited to 15 digits. To enter larger or higher precisions numerics, you may use the text expression of the number, for example: "123456789012345678.123456789" as a text will be sent "raw" to the server.
-
+- By default Boolean columns are returned as Character(5). To ensure Boolean columns are returned as Logical values the DNS connections are done use the "BoolsAsChar=0" setting.
 
 ## For VFP Developers
 This package can be used to query SQL backends and create the equivalent of readwrite VFP cursors, with long field names, Null and auto-increment support. Updates to tables (on remove server) must be done by using specify object methods.

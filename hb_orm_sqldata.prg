@@ -2320,7 +2320,12 @@ local l_nMaxValue
 local l_UnsignedLength,l_Decimals
 
 if hb_IsNIL(par_xValue)
-    l_Value  := "NULL"
+    if ("N" $ par_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES])
+        l_Value  := "NULL"
+    else
+        AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" NULL is not allowed',hb_orm_GetApplicationStack()})
+        l_result := .f.
+    endif
 else
     switch l_FieldType
     case  "I" // Integer
@@ -2401,12 +2406,16 @@ else
     case  "B" // binary
     case "BV" // variable length binary (with option max length value)
         if l_ValueType == "C"
-            l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-            if len(par_xValue) <= l_FieldLen
-                l_Value := "x'"+hb_StrToHex(par_xValue)+"'"
+            if empty(par_xValue)  // At this point we already know it is not null
+                l_Value := "''"
             else
-                AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_FieldType,l_FieldLen})
-                l_Value := "x'"+hb_StrToHex(left(par_xValue,l_FieldLen))+"'"
+                l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+                if len(par_xValue) <= l_FieldLen
+                    l_Value := "x'"+hb_StrToHex(par_xValue)+"'"
+                else
+                    AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_FieldType,l_FieldLen})
+                    l_Value := "x'"+hb_StrToHex(left(par_xValue,l_FieldLen))+"'"
+                endif
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character',hb_orm_GetApplicationStack()})
@@ -2495,7 +2504,12 @@ local l_nMaxValue
 local l_UnsignedLength,l_Decimals
 
 if hb_IsNIL(par_xValue)
-    l_Value  := "NULL"
+    if ("N" $ par_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES])
+        l_Value  := "NULL"
+    else
+        AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" NULL is not allowed',hb_orm_GetApplicationStack()})
+        l_result := .f.
+    endif
 else
     switch l_FieldType
     case  "I" // Integer
@@ -2576,12 +2590,16 @@ else
     case  "B" // binary
     case "BV" // variable length binary (with option max length value)
         if l_ValueType == "C"
-            l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-            if len(par_xValue) <= l_FieldLen
-                l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
+            if empty(par_xValue)  // At this point we already know it is not null
+                l_Value := "''"
             else
-                AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_FieldType,l_FieldLen})
-                l_Value := "E'\x"+hb_StrToHex(left(par_xValue,l_FieldLen),"\x")+"'"
+                l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+                if len(par_xValue) <= l_FieldLen
+                    l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
+                else
+                    AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_FieldType,l_FieldLen})
+                    l_Value := "E'\x"+hb_StrToHex(left(par_xValue,l_FieldLen),"\x")+"'"
+                endif
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character',hb_orm_GetApplicationStack()})
