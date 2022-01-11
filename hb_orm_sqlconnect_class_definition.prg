@@ -42,10 +42,14 @@ class hb_orm_SQLConnect
         method GetSQLEngineType()     inline ::p_SQLEngineType           // 1 for"MariaDB" and "MySQL", 2 for "PostgreSQL"
         method SetDriver(par_cName)
         method SetServer(par_cName)
+        method GetServer() inline ::p_Server
         method SetPort(par_number)
+        method GetPort() inline ::p_Port
         method SetUser(par_cName)
+        method GetUser() inline ::p_User
         method SetPassword(par_password)
         method SetDatabase(par_cName)
+        method GetDatabase() inline ::p_Database
         method SetCurrentSchemaName(par_cName)             //only used for PostgreSQL     Return the name of the schema before being set
         method GetPrimaryKeyFieldName() inline ::p_PrimaryKeyFieldName
         method SetPrimaryKeyFieldName(par_cName)
