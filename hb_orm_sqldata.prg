@@ -1,4 +1,4 @@
-//Copyright (c) 2021 Eric Lendvai MIT License
+//Copyright (c) 2021-2022 Eric Lendvai MIT License
 
 #include "hb_orm.ch"
 
@@ -1825,7 +1825,7 @@ else
                         for l_FieldCounter := 1 to l_NumberOfFields
                             l_RecordFieldValues[l_FieldCounter] := FieldGet(l_FieldCounter)
                         endfor
-                        AAdd(l_ParameterHoldingTheReferenceToTheArray,l_RecordFieldValues)
+                        AAdd(l_ParameterHoldingTheReferenceToTheArray,AClone(l_RecordFieldValues))
                         dbSkip()
                     endwhile
                 endif

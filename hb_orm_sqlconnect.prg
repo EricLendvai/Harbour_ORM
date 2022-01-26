@@ -850,6 +850,30 @@ endif
 
 return l_Result
 //-----------------------------------------------------------------------------------------------------------------
+method GetUUIDString() class hb_orm_SQLConnect  //Will return a UUID string
+local l_cUUID := []
+local l_Result := .f.
+
+if ::Connected
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        if ::SQLExec([select cast(UUID() AS char(36)) AS cuuid],"c_DB_Result_UUID")
+            l_Result := .t.
+        endif
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        if ::SQLExec([select gen_random_uuid()::char(36) as cuuid],"c_DB_Result_UUID")
+            l_Result := .t.
+        endif
+    endcase
+    if l_Result == .t.
+        if Valtype(c_DB_Result_UUID->cuuid) == "C"
+            l_cUUID := trim(c_DB_Result_UUID->cuuid)
+        endif
+    endif
+    CloseAlias("c_DB_Result_UUID")
+endif
+return l_cUUID
+//-----------------------------------------------------------------------------------------------------------------
 function hb_orm_GetApplicationStack()
 local l_cInfo := ""
 local nLevel  := 1

@@ -68,7 +68,6 @@ class hb_orm_SQLConnect
         method SQLExec(par_Command,par_cCursorName)   //Used by the Locking system
         method GetSQLExecErrorMessage() inline ::p_SQLExecErrorMessage
         method GetConnectionNumber()    inline ::p_ConnectionNumber
-        method GetDatabase()            inline ::p_Database
         method GetCurrentSchemaName()   inline iif(::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL,::p_SchemaName,"")
         method LoadSchema()             //Called on successful Connect(). Should be called if the Schema changed since the last Connect()
                                         //Will load the definition of all tables in all schema namespaces (PostgreSQL)
@@ -117,6 +116,8 @@ class hb_orm_SQLConnect
 
         method LogAutoTrimEvent(par_cEventId,par_cSchemaAndTableName,par_nKey,par_aAutoTrimmedFields)
         method LogErrorEvent(par_cEventId,par_aErrors)                                                  // The par_aErrors is an array of arrays like {<cSchemaAndTableName>,<nKey>,<cErrorMessage>,<cAppStack>}
+
+        method GetUUIDString()                                                                          //Will return a UUID string
 
     DESTRUCTOR destroy()
         
