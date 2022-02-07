@@ -2641,6 +2641,43 @@ CloseAlias("TableExistsResult")
 
 return l_result
 //-----------------------------------------------------------------------------------------------------------------
+method FieldExists(par_cSchemaAndTableName,par_cFieldName) class hb_orm_SQLConnect
+local l_result
+local l_SQLCommand
+local l_iPos,l_cSchemaName,l_cTableName
+
+l_iPos := at(".",par_cSchemaAndTableName)
+if l_iPos == 0
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        l_cSchemaName := ""
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        l_cSchemaName := ::GetCurrentSchemaName()   // To search in the current Schema
+    endcase
+    l_cTableName  := par_cSchemaAndTableName
+else
+    l_cSchemaName := left(par_cSchemaAndTableName,l_iPos-1)
+    l_cTableName  := substr(par_cSchemaAndTableName,l_iPos+1)
+endif
+
+do case
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    l_SQLCommand  := [SELECT count(*) as count FROM information_schema.columns WHERE lower(table_schema) = ']+lower(::GetDatabase())+[' AND lower(table_name) = ']+lower(l_cTableName)+[' AND lower(column_name) = ']+lower(par_cFieldName)+[';]
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    l_SQLCommand  := [SELECT count(*) AS count FROM information_schema.columns WHERE lower(table_schema) = ']+lower(l_cSchemaName)  +[' AND lower(table_name) = ']+lower(l_cTableName)+[' AND lower(column_name) = ']+lower(par_cFieldName)+[';]
+endcase
+
+if ::SQLExec(l_SQLCommand,"FieldExistsResult")
+    l_result := (FieldExistsResult->count > 0)
+else
+    l_result := .f.
+    hb_orm_SendToDebugView([Failed TableExists "]+par_cSchemaAndTableName+[".   Error Text=]+::GetSQLExecErrorMessage())
+endif
+
+CloseAlias("FieldExistsResult")
+
+return l_result
+//-----------------------------------------------------------------------------------------------------------------
 method UpdateORMSupportSchema() class hb_orm_SQLConnect
 local l_result := .f.   // return .t. if overall schema changed
 local l_SQLScript,l_ErrorInfo   // can be removed later, only used during code testing

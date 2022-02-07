@@ -106,7 +106,7 @@ class hb_orm_SQLConnect
         method DeleteField(par_cSchemaAndTableName,par_xFieldNames)                                     // par_xFieldNames can be an array of field names or a single field name
 
         method TableExists(par_cSchemaAndTableName)                                                     // Tests if the table exists
-        // method FieldExists(par_cSchemaAndTableName,par_cFieldName)                                   // Tests if the table.field exists   NOT IMPLEMENTED YET
+        method FieldExists(par_cSchemaAndTableName,par_cFieldName)                                      // Tests if the table.field exists.
 
         method UpdateORMSupportSchema()                                                                 //Create / Update Tables used by the ORM
         method UpdateORMSchemaTableNumber()                                                             //Update ORM Table SchemaTableNumber by adding all tables names in the dictionary/catalog
