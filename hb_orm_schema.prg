@@ -651,6 +651,7 @@ local l_FieldType,       l_FieldLen,       l_FieldDec,       l_FieldAttributes, 
 local l_CurrentFieldType,l_CurrentFieldLen,l_CurrentFieldDec,l_CurrentFieldAttributes,l_CurrentFieldAllowNull,l_CurrentFieldAutoIncrement
 local l_MatchingFieldDefinition
 local l_cCurrentSchemaName,l_cSchemaName
+local l_SQLScriptPreUpdate := ""
 local l_SQLScript := ""
 local l_SQLScriptFieldChanges,l_SQLScriptFieldChangesCycle1,l_SQLScriptFieldChangesCycle2
 local l_cSchemaAndTableName
@@ -833,8 +834,9 @@ for each l_hTableDefinition in par_hSchemaDefinition
                                                                     l_cFieldName,;
                                                                     {,l_FieldType,l_FieldLen,l_FieldDec,l_FieldAttributes},;
                                                                     {,l_CurrentFieldType,l_CurrentFieldLen,l_CurrentFieldDec,l_CurrentFieldAttributes})
-                            l_SQLScriptFieldChangesCycle1 += l_SQLScriptFieldChanges[1]
-                            l_SQLScriptFieldChangesCycle2 += l_SQLScriptFieldChanges[2]
+                            l_SQLScriptPreUpdate          += l_SQLScriptFieldChanges[1]
+                            l_SQLScriptFieldChangesCycle1 += l_SQLScriptFieldChanges[2]
+                            l_SQLScriptFieldChangesCycle2 += l_SQLScriptFieldChanges[3]
                         endif
 
                     endif
@@ -909,6 +911,10 @@ for each l_hTableDefinition in par_hSchemaDefinition
 endfor
 
 if !empty(l_SQLScript)
+    if !empty(l_SQLScriptPreUpdate)
+        l_SQLScript := l_SQLScriptPreUpdate+CRLF+l_SQLScript
+    endif
+
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_SQLScript := [USE ]+::FormatIdentifier(::GetDatabase())+[;]+CRLF+l_SQLScript
@@ -1277,11 +1283,13 @@ return l_SQLCommand
 //-----------------------------------------------------------------------------------------------------------------
 method UpdateField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition,par_aCurrentFieldDefinition) class hb_orm_SQLConnect
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
-local l_SQLCommandCycle1 := ""
-local l_SQLCommandCycle2 := ""
+local l_SQLCommandPreUpdate := ""
+local l_SQLCommandCycle1    := ""
+local l_SQLCommandCycle2    := ""
 local l_FieldType,       l_FieldLen,       l_FieldDec,       l_FieldAttributes,       l_FieldAllowNull,       l_FieldAutoIncrement
 local                                                        l_CurrentFieldAttributes,l_CurrentFieldAllowNull,l_CurrentFieldAutoIncrement
 local l_FormattedFieldName := ::FormatIdentifier(par_cFieldName)
+local l_FormattedTableName
 local l_Default
 
 l_FieldType                 := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
@@ -1297,6 +1305,8 @@ l_CurrentFieldAutoIncrement := ("+" $ l_CurrentFieldAttributes)
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    l_FormattedTableName := ::FormatIdentifier(par_cTableName)
+
     // MySQL has issues of DROP DEFAULT before a field is set to allow NULL
     l_SQLCommandCycle2 += [,CHANGE COLUMN ]+l_FormattedFieldName+[ ]+l_FormattedFieldName+[ ]
 
@@ -1329,6 +1339,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             // endif
         otherwise
             //do not allow NULL
+            l_SQLCommandPreUpdate += [UPDATE ]+l_FormattedTableName+[ SET ]+l_FormattedFieldName+[ = 0  WHERE ]+l_FormattedFieldName+[ IS NULL;]
             l_SQLCommandCycle2 += [ NOT NULL]
             l_SQLCommandCycle1 += [,ALTER COLUMN ]+l_FormattedFieldName+[ SET DEFAULT 0]
         endcase
@@ -1427,6 +1438,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    l_FormattedTableName := ::FormatIdentifier(par_cSchemaName+"."+par_cTableName)
+
     l_SQLCommandCycle1 += [,ALTER COLUMN ]+l_FormattedFieldName+[ ]
 
     do case
@@ -1466,6 +1479,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 endif
                 l_SQLCommandCycle1 += [,ALTER COLUMN ] + l_FormattedFieldName + [ DROP NOT NULL]
             otherwise    // Stop NULL
+                l_SQLCommandPreUpdate += [UPDATE ]+l_FormattedTableName+[ SET ]+l_FormattedFieldName+[ = 0  WHERE ]+l_FormattedFieldName+[ IS NULL;]
                 if !l_FieldAutoIncrement
                     l_SQLCommandCycle1 += [,ALTER COLUMN ] + l_FormattedFieldName + [ SET DEFAULT 0]
                 endif
@@ -1581,7 +1595,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
 endcase
 
-return {l_SQLCommandCycle1,l_SQLCommandCycle2}
+return {l_SQLCommandPreUpdate,l_SQLCommandCycle1,l_SQLCommandCycle2}
 //-----------------------------------------------------------------------------------------------------------------
 method AddField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition) class hb_orm_SQLConnect
 local l_SQLCommand := ""

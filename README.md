@@ -4,6 +4,8 @@
 The ORM acronym stands for Object Relational Mapper.
 ORMs are a method to access and manipulate data using objects, instead of direct access to SQL backends or other data stores.
 
+View [ChangeLog.md](ChangeLog.md) for list of enhancements and fixes.
+
 ## Warning
 This project is still under development but already functions to provide query (SQL) and CRUD (Create, Read, Update and Delete) features.
 
