@@ -1,4 +1,4 @@
-//Copyright (c) 2021 Eric Lendvai MIT License
+//Copyright (c) 2022 Eric Lendvai MIT License
 
 #include "hb_orm.ch"
 #include "dbinfo.ch"   // for hb_orm_isnull

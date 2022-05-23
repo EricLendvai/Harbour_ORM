@@ -1,4 +1,4 @@
-//Copyright (c) 2021 Eric Lendvai MIT License
+//Copyright (c) 2022 Eric Lendvai MIT License
 
 //Will connect using the odbc driver, will not use any DNS configuration.
 

@@ -1,4 +1,4 @@
-//Copyright (c) 2021 Eric Lendvai, MIT License
+//Copyright (c) 2022 Eric Lendvai, MIT License
 
 #include "hb_orm.ch"
 #include "hb_vfp.ch"
@@ -247,28 +247,32 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
                     scan all
                         l_TableName := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
-                        if !(l_TableName == l_TableNameLast)
-                            if len(l_Schema_Indexes) > 0
-                                ::p_Schema[l_TableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_Schema_Indexes)
-                                hb_HClear(l_Schema_Indexes)
-                            else
-                                ::p_Schema[l_TableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+
+                        //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_schema
+                        if hb_HHasKey(::p_Schema,l_TableName)
+
+                            if !(l_TableName == l_TableNameLast)
+                                if len(l_Schema_Indexes) > 0
+                                    ::p_Schema[l_TableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_Schema_Indexes)
+                                    hb_HClear(l_Schema_Indexes)
+                                else
+                                    ::p_Schema[l_TableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                                endif
+                                l_TableNameLast := l_TableName
                             endif
-                            l_TableNameLast := l_TableName
-                        endif
 
-                        l_cIndexName := lower(trim(field->index_name))
-                        if left(l_cIndexName,len(l_TableName)+1) == lower(l_TableName)+"_" .and. right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
-                            l_cIndexName      := hb_orm_RootIndexName(l_TableName,l_cIndexName)
+                            l_cIndexName := lower(trim(field->index_name))
+                            if left(l_cIndexName,len(l_TableName)+1) == lower(l_TableName)+"_" .and. right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
+                                l_cIndexName      := hb_orm_RootIndexName(l_TableName,l_cIndexName)
 
-                            l_IndexExpression := trim(field->index_columns)
-                            if !(lower(l_IndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
-                                l_IndexUnique     := (field->is_unique == 1)
-                                l_IndexType       := field->index_type
-                                l_Schema_Indexes[l_cIndexName] := {,l_IndexExpression,l_IndexUnique,l_IndexType}
+                                l_IndexExpression := trim(field->index_columns)
+                                if !(lower(l_IndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
+                                    l_IndexUnique     := (field->is_unique == 1)
+                                    l_IndexType       := field->index_type
+                                    l_Schema_Indexes[l_cIndexName] := {,l_IndexExpression,l_IndexUnique,l_IndexType}
+                                endif
                             endif
                         endif
-
                     endscan
 
                     if len(l_Schema_Indexes) > 0
@@ -413,7 +417,9 @@ SELECT pk
         l_SQLCommandFields  += [       upper(columns.table_schema)      AS tag1,]
         l_SQLCommandFields  += [       upper(columns.table_name)        AS tag2]
         l_SQLCommandFields  += [ FROM information_schema.columns]
+        l_SQLCommandFields  += [ INNER JOIN information_schema.tables ON columns.table_schema = tables.table_schema AND columns.table_name = tables.table_name]
         l_SQLCommandFields  += [ WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))]
+        l_SQLCommandFields  += [ AND   tables.table_type = 'BASE TABLE']
         l_SQLCommandFields  += [ ORDER BY tag1,tag2,field_position]
 
 
@@ -574,37 +580,41 @@ SELECT pk
 
                     scan all
                         l_SchemaAndTableName := Trim(hb_orm_sqlconnect_schema_indexes->schema_name)+"."+Trim(hb_orm_sqlconnect_schema_indexes->table_name)
-                        if !(l_SchemaAndTableName == l_SchemaAndTableNameLast)
-                            if len(l_Schema_Indexes) > 0
-                                ::p_Schema[l_SchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_Schema_Indexes)
-                                hb_HClear(l_Schema_Indexes)
-                            else
-                                ::p_Schema[l_SchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
-                            endif
-                            l_SchemaAndTableNameLast := l_SchemaAndTableName
-                        endif
 
-                        l_cIndexName := lower(trim(field->index_name))
-                        if left(l_cIndexName,len(l_SchemaAndTableName)+1) == lower(strtran(l_SchemaAndTableName,".","_"))+"_" .and. right(l_cIndexName,4) == "_idx"
-                            l_cIndexName      := hb_orm_RootIndexName(l_SchemaAndTableName,l_cIndexName)
-                            
-                            l_IndexDefinition := field->index_definition
-                            l_pos1 := hb_ati(" USING ",l_IndexDefinition)
-                            if l_pos1 > 0
-                                l_pos2 := hb_at(" ",l_IndexDefinition,l_pos1+1)
-                                l_pos3 := hb_at("(",l_IndexDefinition,l_pos1)
-                                l_pos4 := hb_rat(")",l_IndexDefinition,l_pos1)
-                                l_IndexExpression := substr(l_IndexDefinition,l_pos3+1,l_pos4-l_pos3-1)
+                        //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_schema
+                        if hb_HHasKey(::p_Schema,l_SchemaAndTableName)
 
-                                if !(lower(l_IndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
-                                    l_IndexUnique     := ("UNIQUE INDEX" $ l_IndexDefinition)
-                                    l_IndexType       := upper(substr(l_IndexDefinition,l_pos2+1,l_pos3-l_pos2-2))
-                                    l_Schema_Indexes[l_cIndexName] := {,l_IndexExpression,l_IndexUnique,l_IndexType}
+                            if !(l_SchemaAndTableName == l_SchemaAndTableNameLast)
+                                if len(l_Schema_Indexes) > 0
+                                    ::p_Schema[l_SchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_Schema_Indexes)
+                                    hb_HClear(l_Schema_Indexes)
+                                else
+                                    ::p_Schema[l_SchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                                 endif
+                                l_SchemaAndTableNameLast := l_SchemaAndTableName
+                            endif
 
+                            l_cIndexName := lower(trim(field->index_name))
+                            if left(l_cIndexName,len(l_SchemaAndTableName)+1) == lower(strtran(l_SchemaAndTableName,".","_"))+"_" .and. right(l_cIndexName,4) == "_idx"
+                                l_cIndexName      := hb_orm_RootIndexName(l_SchemaAndTableName,l_cIndexName)
+                                
+                                l_IndexDefinition := field->index_definition
+                                l_pos1 := hb_ati(" USING ",l_IndexDefinition)
+                                if l_pos1 > 0
+                                    l_pos2 := hb_at(" ",l_IndexDefinition,l_pos1+1)
+                                    l_pos3 := hb_at("(",l_IndexDefinition,l_pos1)
+                                    l_pos4 := hb_rat(")",l_IndexDefinition,l_pos1)
+                                    l_IndexExpression := substr(l_IndexDefinition,l_pos3+1,l_pos4-l_pos3-1)
+
+                                    if !(lower(l_IndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
+                                        l_IndexUnique     := ("UNIQUE INDEX" $ l_IndexDefinition)
+                                        l_IndexType       := upper(substr(l_IndexDefinition,l_pos2+1,l_pos3-l_pos2-2))
+                                        l_Schema_Indexes[l_cIndexName] := {,l_IndexExpression,l_IndexUnique,l_IndexType}
+                                    endif
+
+                                endif
                             endif
                         endif
-
                     endscan
                     if len(l_Schema_Indexes) > 0
                         ::p_Schema[l_SchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_Schema_Indexes)
@@ -953,7 +963,6 @@ if !empty(l_SQLScript)
             if ::SQLExec(cStatement)
                 // hb_orm_SendToDebugView("Updated Table Structure.")
             else
-// altd()
                 l_LastError := ::GetSQLExecErrorMessage()
                 hb_orm_SendToDebugView("Failed MigrateSchema on instruction "+Trans(nCounter)+".   Error Text="+l_LastError)
                 l_Result := -1
@@ -2204,7 +2213,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     if ::SQLExec(l_SQLCommand,"SchemaCacheLogLast")
         if SchemaCacheLogLast->(reccount()) == 1
             if SchemaCacheLogLast->cachedschema == 0
-hb_orm_SendToDebugView("Will create a new Schema Cache")
+//hb_orm_SendToDebugView("Will create a new Schema Cache")
                 l_CacheFullName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheFields_]+trans(SchemaCacheLogLast->pk)+["]
                 l_SQLCommandFields := [DROP TABLE IF EXISTS ]+l_CacheFullName+[;]+CRLF
                 l_SQLCommandFields += [CREATE TABLE ]+l_CacheFullName+[ AS]
@@ -2243,7 +2252,9 @@ hb_orm_SendToDebugView("Will create a new Schema Cache")
                 l_SQLCommandFields += [        upper(columns.table_schema)      AS tag1,]
                 l_SQLCommandFields += [        upper(columns.table_name)        AS tag2]
                 l_SQLCommandFields += [ FROM information_schema.columns]
+                l_SQLCommandFields  += [ INNER JOIN information_schema.tables ON columns.table_schema = tables.table_schema AND columns.table_name = tables.table_name]
                 l_SQLCommandFields += [ WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))]
+                l_SQLCommandFields  += [ AND   tables.table_type = 'BASE TABLE']
                 l_SQLCommandFields += [ ORDER BY tag1,tag2,field_position;]
 
                 l_CacheFullName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheIndexes_]+trans(SchemaCacheLogLast->pk)+["]
@@ -2265,7 +2276,7 @@ hb_orm_SendToDebugView("Will create a new Schema Cache")
                     l_SQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
 
                     if ::SQLExec(l_SQLCommand)
-hb_orm_SendToDebugView("Done creating a new Schema Cache")
+//hb_orm_SendToDebugView("Done creating a new Schema Cache")
                         //Remove any previous cache
                         l_SQLCommand := [SELECT pk]
                         l_SQLCommand += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheLog"]
@@ -2764,11 +2775,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 INSERT INTO schematablenumber (tablename)
 WITH
 ListOfTables AS (
-	SELECT DISTINCT
+    SELECT DISTINCT
            tables.table_name   as tablename
-	 FROM information_schema.tables
-	 WHERE tables.table_schema = '-DataBase-'
-	 AND   NOT (lower(left(tables.table_name,11)) = 'schemacache')
+    FROM information_schema.tables
+    WHERE tables.table_schema = '-DataBase-'
+    AND   NOT (lower(left(tables.table_name,11)) = 'schemacache')
 )
 SELECT AllTables.tablename
  FROM ListOfTables AS AllTables
@@ -2782,18 +2793,20 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     TEXT TO VAR l_SQLCommand
 WITH
 ListOfTables AS (
-	SELECT DISTINCT
+    SELECT DISTINCT
            columns.table_schema::text as schemaname,
            columns.table_name::text   as tablename
-	 FROM information_schema.columns
-	 WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))
+    FROM information_schema.columns
+    INNER JOIN information_schema.tables ON columns.table_schema = tables.table_schema AND columns.table_name = tables.table_name
+    WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))
+ AND   tables.table_type = 'BASE TABLE'
 ),
 ListOfMissingTablesInSchemaTableNumber AS (
     SELECT AllTables.schemaname,
            AllTables.tablename
-	 FROM ListOfTables AS AllTables
-	 LEFT OUTER JOIN hborm."SchemaTableNumber" AS TablesOnFile ON AllTables.schemaname = TablesOnFile.schemaname and AllTables.tablename = TablesOnFile.tablename
-	 WHERE TablesOnFile.tablename IS NULL
+    FROM ListOfTables AS AllTables
+    LEFT OUTER JOIN hborm."SchemaTableNumber" AS TablesOnFile ON AllTables.schemaname = TablesOnFile.schemaname and AllTables.tablename = TablesOnFile.tablename
+    WHERE TablesOnFile.tablename IS NULL
 )
 INSERT INTO hborm."SchemaTableNumber" ("schemaname","tablename") SELECT schemaname,tablename FROM ListOfMissingTablesInSchemaTableNumber;
     ENDTEXT
