@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 06/07/2022
+* Fix on orm schema in PostgreSQL is set not to be case sensitive.
+
 ## 03/22/2022
 * Fixed issue for PostgreSQL loadschema to ignore non actual tables, meaning exclude views.
 

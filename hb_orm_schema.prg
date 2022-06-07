@@ -2252,9 +2252,9 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_SQLCommandFields += [        upper(columns.table_schema)      AS tag1,]
                 l_SQLCommandFields += [        upper(columns.table_name)        AS tag2]
                 l_SQLCommandFields += [ FROM information_schema.columns]
-                l_SQLCommandFields  += [ INNER JOIN information_schema.tables ON columns.table_schema = tables.table_schema AND columns.table_name = tables.table_name]
+                l_SQLCommandFields += [ INNER JOIN information_schema.tables ON columns.table_schema = tables.table_schema AND columns.table_name = tables.table_name]
                 l_SQLCommandFields += [ WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))]
-                l_SQLCommandFields  += [ AND   tables.table_type = 'BASE TABLE']
+                l_SQLCommandFields += [ AND   tables.table_type = 'BASE TABLE']
                 l_SQLCommandFields += [ ORDER BY tag1,tag2,field_position;]
 
                 l_CacheFullName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheIndexes_]+trans(SchemaCacheLogLast->pk)+["]
@@ -2792,7 +2792,7 @@ SELECT AllTables.tablename
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     TEXT TO VAR l_SQLCommand
 WITH
-ListOfTables AS (
+ ListOfTables AS (
     SELECT DISTINCT
            columns.table_schema::text as schemaname,
            columns.table_name::text   as tablename
@@ -2801,15 +2801,19 @@ ListOfTables AS (
     WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))
  AND   tables.table_type = 'BASE TABLE'
 ),
-ListOfMissingTablesInSchemaTableNumber AS (
+ ListOfMissingTablesInSchemaTableNumber AS (
     SELECT AllTables.schemaname,
            AllTables.tablename
     FROM ListOfTables AS AllTables
     LEFT OUTER JOIN hborm."SchemaTableNumber" AS TablesOnFile ON AllTables.schemaname = TablesOnFile.schemaname and AllTables.tablename = TablesOnFile.tablename
     WHERE TablesOnFile.tablename IS NULL
 )
-INSERT INTO hborm."SchemaTableNumber" ("schemaname","tablename") SELECT schemaname,tablename FROM ListOfMissingTablesInSchemaTableNumber;
+ INSERT INTO hborm."SchemaTableNumber" ("schemaname","tablename") SELECT schemaname,tablename FROM ListOfMissingTablesInSchemaTableNumber;
     ENDTEXT
+
+    if ::PostgreSQLIdentifierCasing != 1  //HB_ORM_POSTGRESQL_CASE_SENSITIVE
+        l_SQLCommand := Strtran(l_SQLCommand,["SchemaTableNumber"],[schematablenumber])
+    endif
 
     if !(::PostgreSQLHBORMSchemaName == "hborm")
         l_SQLCommand := strtran(l_SQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
