@@ -86,7 +86,7 @@ if pcount() > 0
     ::p_AddLeadingBlankRecord := .f.
     ::p_AddLeadingRecordsCursorName := ""
     
-    ::p_Distinct        := .f.
+    ::p_DistinctMode    := 0
     ::p_Force           := .f.
     ::p_NoTrack         := .f.
     ::p_Limit           := 0
@@ -145,7 +145,7 @@ method UsedInUnion(par_o_dl) class hb_orm_SQLData
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method Distinct(par_Mode) class hb_orm_SQLData
-::p_Distinct := par_Mode
+::p_DistinctMode := iif(par_Mode,1,0)
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method Limit(par_Limit) class hb_orm_SQLData
@@ -1078,9 +1078,22 @@ method OrderBy(par_Expression,par_Direction) class hb_orm_SQLData       // Add a
 
 if !empty(par_Expression)
     if pcount() == 2
-        AAdd(::p_OrderBy,{allt(par_Expression),(upper(left(par_Direction,1)) == "A")})
+        AAdd(::p_OrderBy,{allt(par_Expression),(upper(left(par_Direction,1)) == "A"),.f.})
     else
-        AAdd(::p_OrderBy,{allt(par_Expression),.t.})
+        AAdd(::p_OrderBy,{allt(par_Expression),.t.,.f.})
+    endif
+endif
+
+return NIL
+//-----------------------------------------------------------------------------------------------------------------
+method DistinctOn(par_Expression,par_Direction) class hb_orm_SQLData       // PostgreSQL ONLY. Will use the "distinct on ()" feature and Add an Order By definition    par_Direction = "A"scending or "D"escending
+
+if !empty(par_Expression)
+    ::p_DistinctMode := 2
+    if pcount() == 2
+        AAdd(::p_OrderBy,{allt(par_Expression),(upper(left(par_Direction,1)) == "A"),.t.})
+    else
+        AAdd(::p_OrderBy,{allt(par_Expression),.t.,.t.})
     endif
 endif
 
@@ -1285,7 +1298,7 @@ do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_SQLCommand := [SELECT ]
     
-    if ::p_Distinct
+    if ::p_DistinctMode == 1
         l_SQLCommand += [DISTINCT ]
     endif
     
@@ -1386,7 +1399,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_FirstOrderBy := .t.
         for l_Counter = 1 to l_NumberOfOrderBys
 
-            //Find the column we are referring to, so to ensure we use the same casing. That is the reason to compare using the upper() functions.
+            //Find the column we are referring to, so to ensure we use the same casing and expression and expression. That is the reason to compare using the upper() functions.
             l_OrderByColumn := ""
             l_OrderByColumnUpper := upper(::p_OrderBy[l_Counter,1])
             for l_CounterColumns := 1 to l_NumberOfFieldsToReturn
@@ -1430,9 +1443,55 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_SQLCommand := [SELECT ]
     
-    if ::p_Distinct
+    do case
+    case ::p_DistinctMode == 1
         l_SQLCommand += [DISTINCT ]
-    endif
+    case ::p_DistinctMode == 2
+        l_SQLCommand += [DISTINCT ON (]
+
+//1234567890
+// altd()
+        if l_NumberOfOrderBys > 0
+            l_FirstOrderBy := .t.
+            for l_Counter = 1 to l_NumberOfOrderBys
+                if ::p_OrderBy[l_Counter,3]   // Only care about the OrderBy set from calling the DistinctOn() method
+
+                    //Find the column we are referring to, so to ensure we use the same casing and expression. That is the reason to compare using the upper() functions.
+                    l_OrderByColumn := ""
+                    l_OrderByColumnUpper := upper(::p_OrderBy[l_Counter,1])
+                    for l_CounterColumns := 1 to l_NumberOfFieldsToReturn
+                        //Use the column alias for the distinct on to deal with casing issues
+                        do case
+                        case upper(::p_FieldToReturn[l_CounterColumns,1]) == l_OrderByColumnUpper   // Test if the Distinct On is the column expression. If yes use it to ensure the casing will work
+                            if empty(::p_FieldToReturn[l_CounterColumns,2])
+                                l_OrderByColumn := strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])
+                            else
+                                l_OrderByColumn := ::p_FieldToReturn[l_CounterColumns,2]
+                            endif
+                            exit
+                        case !empty(::p_FieldToReturn[l_CounterColumns,2]) .and. upper(::p_FieldToReturn[l_CounterColumns,2]) == l_OrderByColumnUpper   // Test if the Distinct On is the column alias. If yes use it to ensure the casing will work
+                            l_OrderByColumn := ::p_FieldToReturn[l_CounterColumns,2]
+                            exit
+                        endcase
+                    endfor
+
+                    if empty(l_OrderByColumn)
+                        ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match Distinct On Column - "+::p_OrderBy[l_Counter,1],hb_orm_GetApplicationStack()}})
+                    else
+                        if l_FirstOrderBy
+                            l_FirstOrderBy := .f.
+                        else
+                            l_SQLCommand += [,]
+                        endif
+                        l_SQLCommand += ["]+l_OrderByColumn+["]  // Since we are using the column alias we can use the " .
+                    endif
+
+                endif
+            endfor
+        endif
+
+        l_SQLCommand += [)]
+    endcase
     
     do case
     case par_cAction == "Count"
@@ -1531,7 +1590,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_FirstOrderBy := .t.
         for l_Counter = 1 to l_NumberOfOrderBys
 
-            //Find the column we are referring to, so to ensure we use the same casing. That is the reason to compare using the upper() functions.
+            //Find the column we are referring to, so to ensure we use the same casing and expression. That is the reason to compare using the upper() functions.
+            //Then use the column alias for the order by.
             l_OrderByColumn := ""
             l_OrderByColumnUpper := upper(::p_OrderBy[l_Counter,1])
             for l_CounterColumns := 1 to l_NumberOfFieldsToReturn
@@ -2000,7 +2060,7 @@ otherwise
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_SQLCommand := [SELECT ]
         
-        if ::p_Distinct
+        if ::p_DistinctMode == 1
             l_SQLCommand += [DISTINCT ]
         endif
 
@@ -2093,9 +2153,12 @@ otherwise
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL	
         l_SQLCommand := [SELECT ]
         
-        if ::p_Distinct
+        do case
+        case ::p_DistinctMode == 1
             l_SQLCommand += [DISTINCT ]
-        endif
+        case ::p_DistinctMode == 2
+            // l_SQLCommand += [DISTINCT ON ()]   Not Implemented for the :Get()
+        endcase
 
         if empty(l_NumberOfFieldsToReturn)
             //Only allowed when no joins are done

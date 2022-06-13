@@ -213,6 +213,29 @@
             }
         },
         {
+            "label": "DelBuildCache",
+            "windows":{
+                "type": "shell",
+                "command": "rd ${workspaceFolder}\\build\\win64\\ /Q /S",
+                "isBackground": true,
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "statusbar": {"label" : "<Del Build Caches>","hide" : false}
+                },
+                "presentation": {"reveal": "never"}
+            },
+            "linux":{
+                "type": "shell",
+                "command": "rm -rf ${workspaceFolder}/build/lin64/",
+                "isBackground": true,
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "statusbar": {"label" : "<Del Build Caches>","hide" : false}
+                },
+                "presentation": {"reveal": "never"}
+            }
+        },
+        {
             "label": "DelAllPPO",
             "windows":{
                 "type": "shell",

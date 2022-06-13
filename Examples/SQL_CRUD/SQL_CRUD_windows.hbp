@@ -5,11 +5,12 @@
 
 #used for VSCODE debugger. 
 #Will make the EXE Asynch if called from CMD prompt
-#-gtcgi
+-gtcgi
 
 # Only use gtwin instead of gtcgi if using the browse()  function to visualize table content.
 # Will make the EXE Synchronous if called from CMD prompt
--gtwin
+#-gtwin
+#gtwvg.hbc   //For debugging in gtwin mode
 
 -trace
 
@@ -36,7 +37,6 @@ ${HB_ORM_ROOT}\build\win64\${HB_COMPILER}\${BuildMode}\hb_orm_windows.hbx
 
 
 sddodbc.hbc
-gtwvg.hbc
 
 #for the export to html file
 hbct.hbc
@@ -48,8 +48,6 @@ hbct.hbc
 
 #To also create a list of all the object files linked uncomment the following line
 #-map
-
-
 
 SQL_CRUD.prg
 

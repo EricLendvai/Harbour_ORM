@@ -190,84 +190,96 @@ hb_hDel(::p_Indexes,par_cName)
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method CreateIndexes() class hb_orm_Cursor
+local l_select := iif(used(),select(),0)
 local l_TagName
 local l_IndexStructure
-//altd()
-for each l_IndexStructure in ::p_Indexes
-    l_TagName := l_IndexStructure:__enumKey()
-    //Currently {par_Expression 1,par_Unique 2}
-    //OrdCreate( cBagName, cTagName, cIndexExpression, /* bIndexExpression */, lUnique )
-    OrdCreate( ::p_CursorName, l_TagName, l_IndexStructure[1], /* bIndexExpression */, l_IndexStructure[2] )
-    //Idea: To support Descending and other filters, could create an extra physical column that would hold and integer like 999999-<x> where <x> is created while traversing the records the ascending way, then indexing on that column.
-    //      The problem is that system could not work for added/updated records.
-endfor
+if !empty(::p_CursorName)
+    select (::p_CursorName)
+    for each l_IndexStructure in ::p_Indexes
+        l_TagName := l_IndexStructure:__enumKey()
+        //Currently {par_Expression 1,par_Unique 2}
+        //OrdCreate( cBagName, cTagName, cIndexExpression, /* bIndexExpression */, lUnique )
+        OrdCreate( ::p_CursorName, l_TagName, l_IndexStructure[1], /* bIndexExpression */, l_IndexStructure[2] )
+        //Idea: To support Descending and other filters, could create an extra physical column that would hold and integer like 999999-<x> where <x> is created while traversing the records the ascending way, then indexing on that column.
+        //      The problem is that system could not work for added/updated records.
+    endfor
+    select (l_select)
+endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method AppendBlank() class hb_orm_Cursor
 local l_select := iif(used(),select(),0)
 local l_FieldStructure
-select (::p_CursorName)
-dbAppend()
-::p_RecordCount++
+if !empty(::p_CursorName)
+    select (::p_CursorName)
+    dbAppend()
+    ::p_RecordCount++
 
-for each l_FieldStructure in ::p_FieldsForAppend
-    do case
-    case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]
-        FieldPut(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],++::p_AutoIncrementLastValue)
-    case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]
-        FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],NIL)
-    case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY]
-        FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],'')
-    case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
-        FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],'')
-    endcase
-endfor
-
-select (l_select)
+    for each l_FieldStructure in ::p_FieldsForAppend
+        do case
+        case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]
+            FieldPut(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],++::p_AutoIncrementLastValue)
+        case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]
+            FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],NIL)
+        case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY]
+            FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],'')
+        case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
+            FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],'')
+        endcase
+    endfor
+    select (l_select)
+endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method SetFieldValue(par_cFieldName,par_Value) class hb_orm_Cursor
-local l_FieldPos := FieldPos(par_cFieldName)
+local l_select := iif(used(),select(),0)
+local l_FieldPos
 local l_FieldStructure
 local l_ValueLen
-if l_FieldPos > 0
-    l_FieldStructure := ::p_Fields[par_cFieldName]
-    if !l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]        //Prevent Overwritting AutoIncrement Field
-        if par_Value == NIL
-            if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]   //Ensure the field is nullable
-                FieldPutAllowNull(l_FieldPos,NIL)
-            endif
-        else
-            switch l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TYPE]
-            case "C"
-                //_M_ Test if par_Value is of matching Type
 
-                l_ValueLen := len(par_Value)
-                if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
-                    //Field does not store trailing blanks
-                    if l_ValueLen <= l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
-                        FieldPut(l_FieldPos,par_Value)   //Fits in the field
-                    else
-                        FieldPut(l_FieldPos,Trim(left(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN])))   //Value has to be cut, than trimmed.
-                    endif
-                else
-                    //Field must have trailing blanks (classic DBF Character field)
-                    do case
-                    case l_ValueLen == l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
-                        FieldPut(l_FieldPos,par_Value)   //Exact match
-                    case l_ValueLen < l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
-                        FieldPut(l_FieldPos,padr(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]))   //Add missing blanks possibly
-                    otherwise
-                        FieldPut(l_FieldPos,left(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]))   //Value has to be cut
-                    endcase
+if !empty(::p_CursorName)
+    select (::p_CursorName)
+    l_FieldPos := FieldPos(par_cFieldName)
+    if l_FieldPos > 0
+        l_FieldStructure := ::p_Fields[par_cFieldName]
+        if !l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]        //Prevent Overwritting AutoIncrement Field
+            if par_Value == NIL
+                if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]   //Ensure the field is nullable
+                    FieldPutAllowNull(l_FieldPos,NIL)
                 endif
+            else
+                switch l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TYPE]
+                case "C"
+                    //_M_ Test if par_Value is of matching Type
 
-                exit
-            otherwise
-                FieldPut(l_FieldPos,par_Value) 
-            endswitch
+                    l_ValueLen := len(par_Value)
+                    if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
+                        //Field does not store trailing blanks
+                        if l_ValueLen <= l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
+                            FieldPut(l_FieldPos,par_Value)   //Fits in the field
+                        else
+                            FieldPut(l_FieldPos,Trim(left(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN])))   //Value has to be cut, than trimmed.
+                        endif
+                    else
+                        //Field must have trailing blanks (classic DBF Character field)
+                        do case
+                        case l_ValueLen == l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
+                            FieldPut(l_FieldPos,par_Value)   //Exact match
+                        case l_ValueLen < l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
+                            FieldPut(l_FieldPos,padr(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]))   //Add missing blanks possibly
+                        otherwise
+                            FieldPut(l_FieldPos,left(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]))   //Value has to be cut
+                        endcase
+                    endif
+
+                    exit
+                otherwise
+                    FieldPut(l_FieldPos,par_Value) 
+                endswitch
+            endif
         endif
     endif
+    select (l_select)
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
@@ -279,7 +291,7 @@ endfor
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method GetFieldValue(par_cFieldName) class hb_orm_Cursor
-return FieldGet(FieldPos(par_cFieldName))
+return iif(!empty(::p_CursorName),(::p_CursorName)->(FieldGet(FieldPos(par_cFieldName))),nil)
 //-----------------------------------------------------------------------------------------------------------------
 method InsertRecord(par_HashFieldValues) class hb_orm_Cursor
 local l_CurrentAutoIncrementValue := ::p_AutoIncrementLastValue

@@ -1,19 +1,13 @@
-//Copyright (c) 2021 Eric Lendvai MIT License
+//Copyright (c) 2022 Eric Lendvai MIT License
 
 #include "hbmemory.ch"
-#include "inkey.ch"
+
+//#include "inkey.ch"     // not needed since not using function inkey()
 
 #include "hb_orm.ch"
 #include "hb_vfp.ch"
 
-#include "dbinfo.ch"   // for the export to html file
-
-//Needed for table004 and table005 example
-// REQUEST VFPCDX
-// REQUEST DBFCDX
-// REQUEST HB_MEMIO
-
-REQUEST HB_CODEPAGE_UTF8
+//REQUEST HB_CODEPAGE_UTF8  // not needed. The hb_orm already loads it.
 
 //=================================================================================================================
 Function Main()
@@ -50,9 +44,11 @@ with object l_oCursor1
     :CreateCursor("table007")
     ?":p_RecordCount = "+allt(Str(:p_RecordCount))
 
-    select table007
+
+    select 0  // To prove the ORM handles not being on the created alias
+
     :AppendBlank()
-    Field->DOB := ctod("01/01/2020")
+    table007->DOB := ctod("01/01/2020")
     :SetFieldValue("dob",ctod("01/03/2020"))
     :SetFieldValue("fname","Roger")
     :SetFieldValue("lname","Moore")
@@ -67,7 +63,6 @@ with object l_oCursor1
     endif
 
     :InsertRecord({"fname"=>"John","lname"=>"Bonjovi"})
-// AltD()
     ?":p_RecordCount = "+allt(Str(:p_RecordCount))
     
     :Index("upperfname","upper(fname)")
@@ -91,12 +86,12 @@ with object l_oCursor1
     :CreateCursor("table008")
     :AppendBlank()
     :InsertRecord({"fname"=>"Toni","lname"=>"Curtis","dob"=>date(),"info"=>"Hero"})
+    :InsertRecord({"fname"=>"Albert","lname"=>"Einstein","dob"=>{^ 1879-03-14},"info"=>"Genius"})
     ExportTableToHtmlFile("table008","Cursor_table008Records","SQLMix",10,20,.t.)
 
     l_TimeStamp1  := hb_DateTime()
     for l_loop :=1 to 1000    //000
-        :AppendBlank()
-        //dbAppend()
+        :AppendBlank()  // instead of using direct record function dbAppend()
     endfor
     l_TimeStamp2  := hb_DateTime()
 
@@ -115,7 +110,7 @@ init procedure hello()
 hb_orm_SendToDebugView("[Harbour] Init Procedure")
 return
 //=================================================================================================================
-static function AppendData(par_ApplyNull)
+static function AppendData(par_ApplyNull)  // This function is no used but left as an example of non ORM data updates
 
 local l_loop
 local l_memory_from

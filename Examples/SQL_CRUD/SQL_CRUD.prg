@@ -1,4 +1,4 @@
-//Copyright (c) 2021 Eric Lendvai MIT License
+//Copyright (c) 2022 Eric Lendvai MIT License
 
 REQUEST HB_CODEPAGE_UTF8
 
@@ -38,7 +38,20 @@ local l_LastSQL
 
 local l_oCursorTable003Records
 
+local l_iCategoryFruit
+local l_iCategoryVegetable
+local l_iCategoryLiquid
 
+local l_iFruitApples
+local l_iFruitBananas
+
+local l_iVegetableBeans
+local l_iVegetableCarrots
+local l_iVegetableArtichokes
+
+local l_iLiquidWater
+local l_iLiquidOil
+local l_iLiquidMilk
 
 hb_cdpSelect("UTF8") 
 
@@ -94,6 +107,7 @@ endif
 if l_AccessMariaDB
     if l_oSQLConnection1:Connected
         hb_orm_SendToDebugView("MariaDB table001 exists ",l_oSQLConnection1:TableExists("table001"))
+        hb_orm_SendToDebugView("MariaDB UUID",l_oSQLConnection1:GetUUIDString())
     endif
 endif
 
@@ -101,6 +115,7 @@ if l_AccessPostgresql
     if l_oSQLConnection2:Connected
         hb_orm_SendToDebugView("PostgreSQL table001 exists ",l_oSQLConnection2:TableExists("table001"))
         hb_orm_SendToDebugView("PostgreSQL bogus.table001 exists ",l_oSQLConnection2:TableExists("bogus.table001"))
+        hb_orm_SendToDebugView("PostgreSQL UUID",l_oSQLConnection2:GetUUIDString())
     endif
 endif
 
@@ -124,6 +139,8 @@ NIL};
 NIL};
 ,"table001"=>{;   //Field Definition
 {"key"     =>{   ,  "I",   0,  0,"+"};
+,"sysc"    =>{   ,"DTZ",   0,  0,};
+,"sysm"    =>{   ,"DTZ",   0,  0,};
 ,"LnAme"   =>{   ,  "C",  50,  0,};
 ,"fname"   =>{   ,  "C",  53,  0,};
 ,"minitial"=>{   ,  "C",   1,  0,};
@@ -188,6 +205,33 @@ NIL};
 ,"datetime_no_zone"   =>{, "DT",   0,  0,"N"}};
 ,;   //Index Definition
 NIL};
+,"item_category"=>{;   //Field Definition
+{"key"            =>{   ,  "I",   0,  0,"+"};
+,"sysc"           =>{   ,"DTZ",   0,  0,};
+,"sysm"           =>{   ,"DTZ",   0,  0,};
+,"name"           =>{   , "CV",  50,  0,}};
+,;   //Index Definition
+NIL};
+,"item"=>{;   //Field Definition
+{"key"              =>{   ,  "I",   0,  0,"+"};
+,"sysc"             =>{   ,"DTZ",   0,  0,};
+,"sysm"             =>{   ,"DTZ",   0,  0,};
+,"fk_item_category" =>{   ,  "I",   0,  0,};
+,"name"             =>{   , "CV",  50,  0,};
+,"note"             =>{   , "CV", 100,  0,}};
+,;   //Index Definition
+{"name"            =>{,"name"     ,.f.,"BTREE"};
+,"fk_item_category"=>{,"fk_item_category",.f.,"BTREE"}}};
+,"price_history"=>{;   //Field Definition
+{"key"            =>{   ,  "I",   0,  0,"+"};
+,"sysc"           =>{   ,"DTZ",   0,  0,};
+,"sysm"           =>{   ,"DTZ",   0,  0,};
+,"fk_item"        =>{   ,  "I",   0,  0,};
+,"effective_date" =>{   ,  "D",   0,  0,};
+,"price"          =>{   ,  "N",   8,  2,}};
+,;   //Index Definition
+{"fk_item"       =>{,"fk_item"       ,.f.,"BTREE"};
+,"effective_date"=>{,"effective_date",.f.,"BTREE"}}};
 ,"zipcodes"=>{;   //Field Definition
 {"key"    =>{, "IB",   0,  0,"+"};
 ,"zipcode"=>{,  "C",   5,  0,"N"};
@@ -337,8 +381,7 @@ if l_AccessMariaDB
         o_DB1 := hb_SQLData(l_oSQLConnection1)
         with object o_DB1
 
-            :Table("alltypes")
-            :SetEventId("MySQLAddAllTypes")
+            :Table("MySQLAddAllTypes","alltypes")
             :Field("integer"           ,123)
             :Field("big_integer"       ,10**15)
             :Field("money"             ,123456.1245)
@@ -356,21 +399,16 @@ if l_AccessMariaDB
             :Field("datetime_no_zone"  ,hb_ctot("02/24/2021 11:12:13"))
             :Add()
 
-
-
-            :Table("table003")
-            :SetEventId("MySQLDecimalTest")
+            :Table("MySQLDecimalTest","table003")
             :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog
             :Field("Decimal25_7","-1111567890123456.1234567")
             // :Field("DateTime",hb_ctot("02/25/2021 07:24:03:234 pm","mm/dd/yyyy", "hh:mm:ss:fff pp"))
             :Field("DateTime",hb_ctot("02/25/2021 07:24:04:1234","mm/dd/yyyy", "hh:mm:ss:ffff"))
             :Add()
 
-
             // :UseConnection(l_oSQLConnection1)
 
-            :Table("table003")
-            :SetEventId("mysql 1")
+            :Table("mysql 1","table003")
             :Column("table003.key"        ,"table003_key")
             :Column("table003.char50"     ,"table003_char50")
             :Column("table003.Bigint"     ,"table003_Bigint")
@@ -384,7 +422,21 @@ if l_AccessMariaDB
             :Column("table003.Time"       ,"table003_Time")
             :Column("table003.Boolean"    ,"table003_Boolean")
 
-            :SQL(10000,"Table003Records")
+            :SQL("Table003Records")
+
+// altd()
+            if hb_orm_isnull("Table003Records","table003_Bigint")
+                ?"table003.bigint is null"
+            else
+                ?"table003.bigint is not null"
+            endif
+
+            if hb_orm_isnull("Table003Records","table003_Decimal5_2")
+                ?"table003.Decimal5_2 is null"
+            else
+                ?"table003.Decimal5_2 is not null"
+            endif
+
 
             //Example of adding a record and adding a local index in activating it
             l_o_Cursor := o_DB1:p_oCursor
@@ -407,8 +459,7 @@ if l_AccessMariaDB
             ExportTableToHtmlFile("Table003Records","MySQL_Table003Records","From MySQL",,,.t.)
 
 
-            :Table("table001")
-            :SetEventId(2)
+            :Table(2,"table001")
             :Field("age","5")   //To trigger new SchemaAndDataErrorLog
             :Field("dob",date())
             :Field("dati",hb_datetime())
@@ -418,31 +469,28 @@ if l_AccessMariaDB
             if :Add()
                 l_nKey := :Key()
 
-                :Table("table001")
-                :SetEventId(3)
+                :Table(3,"table001")
                 :Field("fname"   ,"Ingrid2")
                 :Field("lname","1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890")
                 :Field("minitial","aBBA2")
                 :Update(l_nKey)
             
-                :Table("table001")
-                :SetEventId(4)
-                :Column("table001.fname","table001_fname")
-                l_o_data := :Get(l_nKey)
+                :Table(4,"table001")
+                // :Column("table001.fname","table001_fname")
+                :Join("inner","table003","","table001.key = table003.key")
+                l_o_data := :Get(l_nKey) 
 
                 l_o_data:GetFieldInfo(0,"hello")
 
-                :Table("table001")
+                :Table(5,"table001")
                 :Column("table001.fname","table001_fname")
-                :SetEventId(5)
                 l_o_data := :Get(l_nKey)
 
                 ?"Add record with key = "+Trans(l_nKey)+" First Name = "+l_o_data:table001_fname
 
             endif
 
-            :Table("table001")
-            :SetEventId(6)
+            :Table(6,"table001")
             // :Join("inner","table002","","table002.p_table001 = table001 and key = ^",5)
             l_w1 := :Join("inner","table002","","table002.p_table001 = table001")
             :ReplaceJoin(l_w1,"inner","table002","","table002.p_table001 = table001.key")
@@ -458,15 +506,14 @@ if l_AccessMariaDB
             //:KeywordCondition("Jodie","fname+lname","or",.t.)
             
             ?"----------------------------------------------"
-            :Table("table001")
-            :SetEventId(7)
+            :Table(7,"table001")
             :Column("table001.key"  ,"key")
             :Column("table001.fname","table001_fname")
             :Column("table001.lname","table001_lname")
             :Column("table002.children","table002_children")
             :Where("table001.key < 4")
             :Join("inner","table002","","table002.p_table001 = table001.key")
-            :SQL(10001,"AllRecords")
+            :SQL("AllRecords")
             
             ?"Will use scan/endscan"
             select AllRecords
@@ -482,7 +529,7 @@ if l_AccessMariaDB
 
 
             :SetExplainMode(2)
-            :SQL(10004)
+            :SQL()
             l_o_Cursor:Close()
 
 
@@ -496,41 +543,53 @@ if l_AccessPostgresql
         with object o_DB2
             :UseConnection(l_oSQLConnection2)
 
-            :Table("table003")
-            :SetEventId("PostgreSQLDecimalTest")
+            :Table("PostgreSQLDecimalTest","table003")
             :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog
             :Field("Decimal25_7","-1111567890123456.1234567")
             // :Field("DateTime",hb_ctot("02/25/2021 07:24:03:234 pm","mm/dd/yyyy", "hh:mm:ss:fff pp"))
             :Field("DateTime",hb_ctot("02/25/2021 07:24:04:1234","mm/dd/yyyy", "hh:mm:ss:ffff"))
             :Field("time","07:24:05.1234")
+            // :Field("Boolean",.t.)
             :Add()
 
 
-            :Table("table003")
-            :SetEventId(8)
+            :Table("PostgreSQLDecimalTest","table003")
+            :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog
+            :Field("Decimal25_7","-1111567890123456.1234567")
+            // :Field("DateTime",hb_ctot("02/25/2021 07:24:03:234 pm","mm/dd/yyyy", "hh:mm:ss:fff pp"))
+            :Field("DateTime",hb_datetime())
+            :Field("text",Replicate("0123456789",1000))   //Replicate(<cString>,<nCount>)
+            :Field("time","07:24:05.1234")
+            // :Field("Boolean",.t.)
+            :Add()
+
+
+            :Table(8,"table003")
             :Column("table003.key"        ,"table003_key")
             :Column("table003.char50"     ,"table003_char50")
             :Column("table003.bigint"     ,"table003_Bigint")
             :Column("table003.Bit"        ,"table003_Bit")
             :Column("table003.Decimal5_2" ,"table003_Decimal5_2")
             :Column("table003.Varchar51"  ,"table003_Varchar51")
-            :Column("table003.Text"       ,"table003_Text")
+            :Column("table003.Text::varchar(1000)"       ,"table003_Text")
             :Column("table003.BInary"     ,"table003_Binary")
             // :Column("table003.Varbinary55","table003_Varbinary55")
             :Column("table003.Date"       ,"table003_Date")
             :Column("table003.DateTime"   ,"table003_DateTime")
             :Column("table003.time"       ,"table003_Time")
             :Column("table003.Boolean"    ,"table003_Boolean")
-            :SQL(10010,"Table003Records")
+            :OrderBy("table003_key","desc")
+            :Limit(10)
+            :SQL("Table003Records")
             l_oCursorTable003Records := :p_oCursor  //Will Allow to keep a reference to the cursor and keep it open, even when o_DB2:SQL() would be called
 
             // l_Tally        := :tally
             // l_LastSQLError := :ErrorMessage()
-            // l_LastSQL      := :LastSQL()
+// l_LastSQL      := :LastSQL()
+// altd()
             ExportTableToHtmlFile("Table003Records","PostgreSQL_Table003Records.html","From PostgreSQL",,25,.t.)
 
-            :Table("table001")
-            :SetEventId("Postgres 9")
+            :Table("Postgres 9","table001")
             :Field("age","a6")
             :Field("dob",date())
             :Field("dati",hb_datetime())
@@ -541,8 +600,7 @@ if l_AccessPostgresql
                 l_nKey := :Key()
 
 
-                :Table("table001")
-                :SetEventId(10)
+                :Table(10,"table001")
                 :Field("fname","Ingrid")
                 :Field("lname","1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890")
                 :Field("minitial","aBBA2")
@@ -551,8 +609,7 @@ if l_AccessPostgresql
             endif
 
             ?"----------------------------------------------"
-            :Table("table001")
-            :SetEventId(13)
+            :Table(13,"table001")
             :Column("table001.key"  ,"key")
             :Column("table001.fname","table001_fname")
             :Column("table001.lname","table001_lname")
@@ -562,9 +619,7 @@ if l_AccessPostgresql
             // :Where("table002.children = ^","bbbb")
             :Where("table002.children = ^","127.0.0.1")
             :Join("inner","table002","","table002.p_table001 = table001.key")
-            :SQL(10002,"AllRecords")
-
-    // altd()  //l_oCursorTable003Records
+            :SQL("AllRecords")
 
             // l_LastSQL := :LastSQL()
             // altd()
@@ -581,9 +636,165 @@ if l_AccessPostgresql
             ?"----------------------------------------------"
 
             :SetExplainMode(2)
-            :SQL(10007)
+            :SQL()
+
+            //Setup data in item_category, item and price_history tables
+            :Table(14,"item_category")
+            if :Count() == 0
+                :Table(15,"item_category")
+                :Field("item_category.name" , "Fruit")
+                :Add()
+                l_iCategoryFruit := :Key()
+
+                :Field("item_category.name" , "Vegetable")
+                :Add()
+                l_iCategoryVegetable := :Key()
+
+                :Field("item_category.name" , "Liquid")
+                :Add()
+                l_iCategoryLiquid := :Key()
+
+                :Table(16,"item")
+
+                :Field("item.fk_item_category" , l_iCategoryFruit)
+                :Field("item.name"             , "Apples")
+                :Add()
+                l_iFruitApples := :Key()
+
+                :Field("item.fk_item_category" , l_iCategoryFruit)
+                :Field("item.name"             , "Bananas")
+                :Add()
+                l_iFruitBananas := :Key()
+
+                :Field("item.fk_item_category" , l_iCategoryVegetable)
+                :Field("item.name"             , "Beans")
+                :Add()
+                l_iVegetableBeans := :Key()
+
+                :Field("item.fk_item_category" , l_iCategoryVegetable)
+                :Field("item.name"             , "Carrots")
+                :Add()
+                l_iVegetableCarrots := :Key()
+
+                :Field("item.fk_item_category" , l_iCategoryVegetable)
+                :Field("item.name"             , "Artichokes")
+                :Add()
+                l_iVegetableArtichokes := :Key()
+
+                :Field("item.fk_item_category" , l_iCategoryLiquid)
+                :Field("item.name"             , "Water")
+                :Add()
+                l_iLiquidWater := :Key()
+
+                :Field("item.fk_item_category" , l_iCategoryLiquid)
+                :Field("item.name"             , "Oil")
+                :Add()
+                l_iLiquidOil := :Key()
+
+                :Field("item.fk_item_category" , l_iCategoryLiquid)
+                :Field("item.name"             , "Milk")
+                :Add()
+                l_iLiquidMilk := :Key()
+
+                :Table(17,"price_history")
+                :Field("price_history.fk_item"        , l_iFruitApples)
+                :Field("price_history.effective_date" , {^ 2022-05-01})
+                :Field("price_history.price"          , 1.92)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iFruitApples)
+                :Field("price_history.effective_date" , {^ 2022-05-15})
+                :Field("price_history.price"          , 2.13)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iFruitApples)
+                :Field("price_history.effective_date" , {^ 2022-06-02})
+                :Field("price_history.price"          , 0.98)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iFruitBananas)
+                :Field("price_history.effective_date" , {^ 2022-04-01})
+                :Field("price_history.price"          , 1.13)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iFruitBananas)
+                :Field("price_history.effective_date" , {^ 2022-05-01})
+                :Field("price_history.price"          , 1.21)
+                :Add()
+
+
+                :Field("price_history.fk_item"        , l_iVegetableBeans)
+                :Field("price_history.effective_date" , {^ 2022-02-01})
+                :Field("price_history.price"          , 2.01)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iVegetableBeans)
+                :Field("price_history.effective_date" , {^ 2022-02-02})
+                :Field("price_history.price"          , 2.02)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iVegetableBeans)
+                :Field("price_history.effective_date" , {^ 2022-02-03})
+                :Field("price_history.price"          , 2.03)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iVegetableCarrots)
+                :Field("price_history.effective_date" , {^ 2021-12-03})
+                :Field("price_history.price"          , 13.96)
+                :Add()
+
+                // local l_iVegetableArtichokes
+
+                :Field("price_history.fk_item"        , l_iLiquidWater)
+                :Field("price_history.effective_date" , {^ 2021-12-31})
+                :Field("price_history.price"          , 31.01)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iLiquidWater)
+                :Field("price_history.effective_date" , {^ 2021-12-01})
+                :Field("price_history.price"          , 12.01)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iLiquidWater)
+                :Field("price_history.effective_date" , {^ 2021-11-01})
+                :Field("price_history.price"          , 11.01)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iLiquidOil)
+                :Field("price_history.effective_date" , {^ 2021-11-01})
+                :Field("price_history.price"          , 11.01)
+                :Add()
+
+                :Field("price_history.fk_item"        , l_iLiquidMilk)
+                :Field("price_history.effective_date" , {^ 2021-11-01})
+                :Field("price_history.price"          , 11.01)
+                :Add()
+
+            endif
+
+            :Table(18,"set001.item_category")
+            :Column("item_category.name"           ,"item_category_name")
+            :Column("item.name"                    ,"item_name")
+            :Column("price_history.effective_date" ,"price_history_effective_date")
+            :Column("price_history.price"          ,"price_history_price")
+            :Join("inner","set001.item"         ,"","item.fk_item_category = item_category.key")
+            :Join("inner","set001.price_history","","price_history.fk_item = item.key")
+
+            :DistinctOn("item_category_name")
+            :DistinctOn("item_name")
+            :OrderBy("  ","desc")
+
+            :SQL("AllItems")
+
+
+            // l_LastSQL := :LastSQL()
+            // altd()
+
+            ExportTableToHtmlFile("AllItems","PostgreSQL_AllItems.html","From PostgreSQL",,25,.t.)
+
 
         end
+
     endif
 endif
 
@@ -597,8 +808,8 @@ if l_AccessPostgresql
     ?"PostgreSQL Get last Handle",l_oSQLConnection2:GetHandle()
 endif
 
+?"Done"
 return nil
-//=================================================================================================================
 //=================================================================================================================
 //=================================================================================================================
 //=================================================================================================================

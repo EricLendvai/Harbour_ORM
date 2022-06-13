@@ -54,10 +54,10 @@ if exist build\win64\%HB_COMPILER%\%BuildMode%\%EXEName%.exe (
 if %BuildMode% == debug (
     copy ..\debugger_on.hbm ..\debugger.hbm
     rem Had to use -static since with -shared this would create linking issues when using this library in actual programs (hb_ntoc)
-    hbmk2 %EXEName%_windows.hbp -b -p -w3 -dDONOTINCLUDE -static
+    hbmk2 %EXEName%_windows.hbp -b -p -w3 -dDONOTINCLUDE -static -dDEBUGVIEW
 ) else (
     copy ..\debugger_off.hbm ..\debugger.hbm
-    hbmk2 %EXEName%_windows.hbp -w3 -dDONOTINCLUDE -fullstatic
+    hbmk2 %EXEName%_windows.hbp -w3 -dDONOTINCLUDE -fullstatic -dDEBUGVIEW
 )
 
 rem the following will output the current datetime

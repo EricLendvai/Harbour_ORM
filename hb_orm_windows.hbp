@@ -15,7 +15,6 @@
 #following will force linking of all hb_vfp modules
 ${HB_VFP_ROOT}\build\win64\${HB_COMPILER}\${BuildMode}\hb_vfp_windows.hbx
 
-
 -workdir=build\win64\${HB_COMPILER}\${BuildMode}\hbmk2\
 
 -obuild\win64\${HB_COMPILER}\${BuildMode}\hb_orm

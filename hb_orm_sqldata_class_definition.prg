@@ -48,6 +48,7 @@ class hb_orm_SQLData
         data p_OrderBy                    init {}
                // 1 - ""    Column Name
                // 2 - .t.   .t. = Ascending  .f. = Descending
+               // 3 - .f.   Use for PostgreSQL "distinct on ()"
 
         data p_TableFullPath   init ""
         data p_CursorName      init ""
@@ -63,10 +64,10 @@ class hb_orm_SQLData
         data p_AddLeadingBlankRecord         init .f.
         data p_AddLeadingRecordsCursorName   init ""
 
-        data p_Distinct init .f.
-        data p_Force    init .f.
-        data p_NoTrack  init .f.
-        data p_Limit    init 0
+        data p_DistinctMode init 0            // 0 = Distinct of, 1 = Distinct on (classic), 2 = DistinctOn (postgresql)
+        data p_Force        init .f.
+        data p_NoTrack      init .f.
+        data p_Limit        init 0
 
         data p_Mode init 0   // 0 = No MYSQL, 1 = Try to Use MySQL
 
@@ -129,6 +130,7 @@ class hb_orm_SQLData
         
         method GroupBy(par_Expression)                                                                // Add a Group By definition
         method OrderBy(par_Expression,par_Direction)                                                  // Add an Order By definition    par_Direction = "A"scending or "D"escending
+        method DistinctOn(par_Expression,par_Direction)                                               // PostgreSQL ONLY. Will use the "distinct on ()" feature and Add an Order By definition    par_Direction = "A"scending or "D"escending
 
         method ResetOrderBy()                                                                         // Delete all OrderBy definitions
         method ReadWrite(par_value)                                                                   // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable

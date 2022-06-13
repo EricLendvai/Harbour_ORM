@@ -28,7 +28,7 @@ else
         now=$(date +'%m/%d/%Y %H:%M:%S')
         echo local l_cBuildInfo := \"${HB_COMPILER} ${BuildMode} ${now}\">BuildInfo.txt
 
-        rm "build/lin64/${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" 2>/dev/null
+        rm build/lin64/${HB_COMPILER}/${BuildMode}/lib${LIBName}.a 2>/dev/null
         if [ -f "build/lin64/${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" ] ; then
             echo "Could not delete previous version of lib${LIBName}.a"
         else
