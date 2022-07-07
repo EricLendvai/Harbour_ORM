@@ -34,7 +34,7 @@ class hb_orm_SQLConnect
         method AddField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition)
         method AddIndex(par_cSchemaName,par_cTableName,par_hFields,par_cIndexName,par_aIndexDefinition)
         method UpdateField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition,par_aCurrentFieldDefinition)
-
+        method FixCasingOfSchemaCacheTables(par_cTableName)
     exported:
         data p_Schema  init {=>}                                         //List of Tables Names. Each element is a 2 cell array ["Hash of Field Definition","Hash of Index Definitions"]. Named it with a leading "p_" to be threaded as internal.
         data Connected init .f.                                          //true if connected to a server

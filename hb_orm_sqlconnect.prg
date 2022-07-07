@@ -655,10 +655,12 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         if !empty(el_inlist(l_FieldType,"B","BV","R"))
             //Binary
             l_SQLCommand += [NULL,]
-            l_SQLCommand += [E'\x]+hb_StrToHex(l_Value,"\x")+[']
+            // l_SQLCommand += [E'\x]+hb_StrToHex(l_Value,"\x")+[']
+            l_SQLCommand += hb_orm_PostgresqlEncodeBinary(l_Value)
         else
-            //Text
-            l_SQLCommand += [E'\x]+hb_StrToHex(l_Value,"\x")+[',]
+            //Text UTF
+            // l_SQLCommand += [E'\x]+hb_StrToHex(l_Value,"\x")+[',]
+            l_SQLCommand += hb_orm_PostgresqlEncodeUTFString(l_Value)+[,]
             l_SQLCommand += [NULL]
         endif
 
@@ -802,14 +804,16 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         if hb_IsNIL(l_cAppStack)
             l_SQLCommand += [NULL,]
         else
-            l_SQLCommand += [E'\x]+hb_StrToHex(l_cAppStack,"\x")+[',]
+            // l_SQLCommand += [E'\x]+hb_StrToHex(l_cAppStack,"\x")+[',]
+            l_SQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cAppStack)+[,]
         endif
         l_SQLCommand += [current_timestamp,]
         l_SQLCommand += [inet_client_addr(),]
         l_SQLCommand += iif(hb_IsNIL(l_cSchemaName) , [NULL,] , [']+l_cSchemaName+[',])
         l_SQLCommand += iif(hb_IsNIL(l_cTableName)  , [NULL,] , [']+l_cTableName+[',])
         l_SQLCommand += iif(hb_IsNIL(l_nKey)        , [NULL,] , trans(l_nKey)+[,])
-        l_SQLCommand += [E'\x]+hb_StrToHex(l_cErrorMessage,"\x")+[']
+        // l_SQLCommand += [E'\x]+hb_StrToHex(l_cErrorMessage,"\x")+[']
+        l_SQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cErrorMessage)
 
         l_SQLCommand +=  [)]
     endfor

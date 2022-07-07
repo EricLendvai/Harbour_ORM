@@ -307,6 +307,10 @@ SELECT pk
  LIMIT 1
     ENDTEXT
 
+    if ::PostgreSQLIdentifierCasing != HB_ORM_POSTGRESQL_CASE_SENSITIVE
+        l_SQLCommand := Strtran(l_SQLCommand,"SchemaCacheLog","schemacachelog")
+    endif
+
     if !(::PostgreSQLHBORMSchemaName == "hborm")
         l_SQLCommand := strtran(l_SQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
     endif
@@ -328,7 +332,8 @@ SELECT pk
             l_SQLCommandFields  += [       field_identity_is,]
             l_SQLCommandFields  += [       tag1,]
             l_SQLCommandFields  += [       tag2]
-            l_SQLCommandFields  += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheFields_]+trans(SchemaCacheLogLast->pk)+["]
+            l_SQLCommandFields  += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
+            
             l_SQLCommandFields  += [ ORDER BY tag1,tag2,field_position]
 
             l_SQLCommandIndexes := [SELECT schema_name,]
@@ -337,7 +342,7 @@ SELECT pk
             l_SQLCommandIndexes += [       index_definition,]
             l_SQLCommandIndexes += [       tag1,]
             l_SQLCommandIndexes += [       tag2]
-            l_SQLCommandIndexes += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheIndexes_]+trans(SchemaCacheLogLast->pk)+["]
+            l_SQLCommandIndexes += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
             l_SQLCommandIndexes += [ ORDER BY tag1,tag2,index_name]
 
             if ::SQLExec(l_SQLCommandFields,"hb_orm_sqlconnect_schema_fields") .and. ::SQLExec(l_SQLCommandIndexes,"hb_orm_sqlconnect_schema_indexes")
@@ -1203,13 +1208,19 @@ for each l_aField in par_hStructure
                     case l_FieldType == "CV"
                         l_SQLFields += [character varying]+iif(empty(l_FieldLen),[],[(]+trans(l_FieldLen)+[)])
                     case l_FieldType == "B"
-                        l_SQLFields += [bit(]+trans(l_FieldLen)+[)]
+                        // l_SQLFields += [bit(]+trans(l_FieldLen)+[)]
+                        l_SQLFields += [bytea]
+
                     case l_FieldType == "BV"
-                        l_SQLFields += [bit varying]+iif(empty(l_FieldLen),[],[(]+trans(l_FieldLen)+[)])
+                        // l_SQLFields += [bit varying]+iif(empty(l_FieldLen),[],[(]+trans(l_FieldLen)+[)])
+                        l_SQLFields += [bytea]
+
                     case l_FieldType == "M"
                         l_SQLFields += [text]
+
                     case l_FieldType == "R"
                         l_SQLFields += [bytea]
+                        
                     endcase
 
                     if !l_FieldAllowNull
@@ -2121,6 +2132,11 @@ CREATE EVENT TRIGGER schema_log_ddl_info      ON ddl_command_end EXECUTE PROCEDU
 CREATE EVENT TRIGGER schema_log_ddl_drop_info ON sql_drop        EXECUTE PROCEDURE hborm.schema_log_ddl_drop();
     ENDTEXT
 
+    if ::PostgreSQLIdentifierCasing != HB_ORM_POSTGRESQL_CASE_SENSITIVE
+        l_SQLCommand := Strtran(l_SQLCommand,"SchemaCacheLog","schemacachelog")
+        l_SQLCommand := Strtran(l_SQLCommand,"SchemaCache"   ,"schemacache")
+    endif
+
     if !(::PostgreSQLHBORMSchemaName == "hborm")
         l_SQLCommand := strtran(l_SQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
     endif
@@ -2169,7 +2185,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_Success := .t.
     
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_SQLCommand := [DROP TABLE IF EXISTS hborm."SchemaCacheLog";]
+    l_SQLCommand := [DROP TABLE IF EXISTS hborm.]+::FixCasingOfSchemaCacheTables(["SchemaCacheLog"])+[;]
     
     if !(::PostgreSQLHBORMSchemaName == "hborm")
         l_SQLCommand := strtran(l_SQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
@@ -2200,13 +2216,13 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     if par_Force
         //Add an Entry in SchemaCacheLog to notify to make a cache
-        l_SQLCommand := [INSERT INTO ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheLog" (action) VALUES ('No Change');]
+        l_SQLCommand := [INSERT INTO ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])+[ (action) VALUES ('No Change');]
         ::SQLExec(l_SQLCommand)
     endif
 
     l_SQLCommand := [SELECT pk,]
     l_SQLCommand += [       cachedschema::integer]
-    l_SQLCommand += [ FROM  ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheLog"]
+    l_SQLCommand += [ FROM  ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
     l_SQLCommand += [ ORDER BY pk DESC]
     l_SQLCommand += [ LIMIT 1]
 
@@ -2214,7 +2230,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         if SchemaCacheLogLast->(reccount()) == 1
             if SchemaCacheLogLast->cachedschema == 0
 //hb_orm_SendToDebugView("Will create a new Schema Cache")
-                l_CacheFullName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheFields_]+trans(SchemaCacheLogLast->pk)+["]
+                l_CacheFullName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
                 l_SQLCommandFields := [DROP TABLE IF EXISTS ]+l_CacheFullName+[;]+CRLF
                 l_SQLCommandFields += [CREATE TABLE ]+l_CacheFullName+[ AS]
                 //The following is WAY TO SLOW on Large catalogs. The joining on the "tables" is the main performance problem.
@@ -2257,7 +2273,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_SQLCommandFields += [ AND   tables.table_type = 'BASE TABLE']
                 l_SQLCommandFields += [ ORDER BY tag1,tag2,field_position;]
 
-                l_CacheFullName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheIndexes_]+trans(SchemaCacheLogLast->pk)+["]
+                l_CacheFullName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
+                
                 l_SQLCommandIndexes := [DROP TABLE IF EXISTS ]+l_CacheFullName+[;]+CRLF
                 l_SQLCommandIndexes += [CREATE TABLE ]+l_CacheFullName+[ AS]
                 l_SQLCommandIndexes += [ SELECT pg_indexes.schemaname      AS schema_name,]
@@ -2271,7 +2288,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_SQLCommandIndexes += [ ORDER BY tag1,index_name;]
 
                 if ::SQLExec(l_SQLCommandFields) .and. ::SQLExec(l_SQLCommandIndexes)
-                    l_SQLCommand := [UPDATE ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheLog"]
+                    l_SQLCommand := [UPDATE ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
                     l_SQLCommand += [ SET cachedschema = TRUE]
                     l_SQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
 
@@ -2279,7 +2296,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 //hb_orm_SendToDebugView("Done creating a new Schema Cache")
                         //Remove any previous cache
                         l_SQLCommand := [SELECT pk]
-                        l_SQLCommand += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheLog"]
+                        l_SQLCommand += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
                         l_SQLCommand += [ WHERE cachedschema]
                         l_SQLCommand += [ AND pk < ]+trans(SchemaCacheLogLast->pk)
                         l_SQLCommand += [ ORDER BY pk]  // Oldest to newest
@@ -2290,14 +2307,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                                 if recno() == reccount()  // Since last record is the latest beside the one just added, will exit the scan
                                     exit
                                 endif
-                                l_SQLCommand := [UPDATE ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheLog"]
+                                l_SQLCommand := [UPDATE ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
                                 l_SQLCommand += [ SET cachedschema = FALSE]
                                 l_SQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
                                 
                                 if ::SQLExec(l_SQLCommand)
-                                    l_SQLCommand := [DROP TABLE ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheFields_]+trans(SchemaCacheLogLast->pk)+["]
+                                    l_SQLCommand := [DROP TABLE ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
                                     ::SQLExec(l_SQLCommand)
-                                    l_SQLCommand := [DROP TABLE ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+[."SchemaCacheIndexes_]+trans(SchemaCacheLogLast->pk)+["]
+                                    l_SQLCommand := [DROP TABLE ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
                                     ::SQLExec(l_SQLCommand)
                                 endif
                             endscan
@@ -2629,7 +2646,7 @@ endif
 
 return l_result
 //-----------------------------------------------------------------------------------------------------------------
-method TableExists(par_cSchemaAndTableName) class hb_orm_SQLConnect
+method TableExists(par_cSchemaAndTableName) class hb_orm_SQLConnect  // Is schema and table name case insensitive
 local l_result
 local l_SQLCommand
 local l_iPos,l_cSchemaName,l_cTableName
@@ -2951,6 +2968,16 @@ CloseAlias("SchemaVersion")
 
 return l_result
 //-----------------------------------------------------------------------------------------------------------------
+method FixCasingOfSchemaCacheTables(par_cTableName) class hb_orm_SQLConnect
+local l_cTableName
+if ::PostgreSQLIdentifierCasing != HB_ORM_POSTGRESQL_CASE_SENSITIVE
+    l_cTableName := lower(par_cTableName)
+else
+    l_cTableName := par_cTableName
+endif
+
+return l_cTableName
+//-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
 static function hb_orm_RootIndexName(par_cSchemaAndTableName,par_cIndexNameOnFile)
 local l_cIndexName          := lower(par_cIndexNameOnFile)
@@ -2959,4 +2986,5 @@ if (left(l_cIndexName,len(l_cSchemaAndTableName)+1) == lower(l_cSchemaAndTableNa
     l_cIndexName := substr(l_cIndexName,len(l_cSchemaAndTableName)+2,len(par_cIndexNameOnFile)-len(l_cSchemaAndTableName)-1-4)
 endif
 return l_cIndexName
+//-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------

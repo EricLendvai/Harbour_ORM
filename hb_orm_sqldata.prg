@@ -2658,10 +2658,20 @@ else
             else
                 l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
                 if len(par_xValue) <= l_FieldLen
-                    l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
+                    // l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
+                    if "B" $ l_FieldType
+                        l_Value := hb_orm_PostgresqlEncodeBinary(par_xValue)
+                    else
+                        l_Value := hb_orm_PostgresqlEncodeUTFString(par_xValue)
+                    endif
                 else
                     AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_FieldType,l_FieldLen})
-                    l_Value := "E'\x"+hb_StrToHex(left(par_xValue,l_FieldLen),"\x")+"'"
+                    // l_Value := "E'\x"+hb_StrToHex(left(par_xValue,l_FieldLen),"\x")+"'"
+                    if "B" $ l_FieldType
+                        l_Value := hb_orm_PostgresqlEncodeBinary(left(par_xValue,l_FieldLen))
+                    else
+                        l_Value := hb_orm_PostgresqlEncodeUTFString(left(par_xValue,l_FieldLen))
+                    endif
                 endif
             endif
         else
@@ -2675,7 +2685,12 @@ else
             if len(par_xValue) == 0
                 l_Value := "''"
             else
-                l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
+                // l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
+                if l_FieldType == "M"
+                    l_Value := hb_orm_PostgresqlEncodeUTFString(par_xValue)
+                else
+                    l_Value := hb_orm_PostgresqlEncodeBinary(par_xValue)
+                endif
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character/Binary',hb_orm_GetApplicationStack()})

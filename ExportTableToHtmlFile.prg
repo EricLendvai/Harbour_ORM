@@ -13,6 +13,7 @@ local l_DeleteFileError
 local l_Result          := ""
 local l_select          := iif(used(),select(),0)
 local l_recno
+local l_reccount
 local l_RecordSize
 local l_NumberOfFields
 local l_FieldCounter
@@ -88,22 +89,29 @@ if !empty(par_alias) .and. (par_alias)->(used())
 
                     l_html += '</style>'
 
-                    // l_html += '<div class="TableDescription"><b>Alias: </b>'+par_alias+'</div>'
-                    l_html += '<div class="TableDescription">'
-                        l_html += '<span><b>Alias: </b>'+par_alias+'</span>'+Replicate('&nbsp;',10)
-                        if !empty(l_Description)
-                            l_html += '<span><b>Description: </b>'+l_Description+'</span>'+Replicate('&nbsp;',10)
-                        endif
-                        l_html += '<span><b>Content Time: </b>'+hb_TtoC(hb_DateTime(),"YYYY-MM-DD","HH:MM:SS")+'</span>'
-                    l_html += '</div>'
-
                     select (par_alias)
                     l_NumberOfFields := FCount()
                     for l_FieldCounter := 1 to l_NumberOfFields
                         AAdd(l_Structure,{FieldName(l_FieldCounter),hb_FieldType(l_FieldCounter),hb_FieldLen(l_FieldCounter),hb_FieldDec(l_FieldCounter)})
                     endfor
 
-                    if RecCount() == 0
+                    l_reccount := RecCount()
+
+                    // l_html += '<div class="TableDescription"><b>Alias: </b>'+par_alias+'</div>'
+                    l_html += '<div class="TableDescription">'
+                        l_html += '<span><b>Alias: </b>'+par_alias+'</span>'
+                        if l_reccount > 0
+                            l_html += Replicate('&nbsp;',5)+'<span><b>Rows: </b>'+Trans(l_reccount)+'</span>'
+                            l_html += Replicate('&nbsp;',5)+'<span><b>Columns: </b>'+Trans(l_NumberOfFields)+'</span>'
+                        endif
+                        
+                        if !empty(l_Description)
+                            l_html += Replicate('&nbsp;',10)+'<span><b>Description: </b>'+l_Description+'</span>'
+                        endif
+                        l_html += Replicate('&nbsp;',10)+'<span><b>Content Time: </b>'+hb_TtoC(hb_DateTime(),"YYYY-MM-DD","HH:MM:SS")+'</span>'
+                    l_html += '</div>'
+
+                    if l_reccount == 0
                         l_html += '<div>No records on file</div>'
                     else
                         l_recno := RecNo()
@@ -160,6 +168,14 @@ if !empty(par_alias) .and. (par_alias)->(used())
                                         l_html_record += '<td class="tooltip"><span class="tooltiptext">'+trans(l_FieldValue_len)+'</span>'+l_FieldValue+'</td>'
                                     // case ValType(l_FieldValue) == 'B'
                                     //     l_html_record += '<td>Binary</td>'
+                                    case ValType(l_FieldValue) == 'D'
+                                        l_html_record += '<td>'+hb_DtoC(l_FieldValue,"yyyy-mm-dd") +'</td>'
+                                    case ValType(l_FieldValue) == 'T'
+                                        if hb_Sec(l_FieldValue) == int(hb_Sec(l_FieldValue))
+                                            l_html_record += '<td>'+hb_TtoC(l_FieldValue,"yyyy-mm-dd","hh:mm:ss p") +'</td>'
+                                        else
+                                            l_html_record += '<td>'+hb_TtoC(l_FieldValue,"yyyy-mm-dd","hh:mm:ss.fff p") +'</td>'
+                                        endif
                                     otherwise
                                         l_html_record += '<td>'+hb_CStr(l_FieldValue)+'</td>'
                                     endcase

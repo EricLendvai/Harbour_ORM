@@ -39,12 +39,60 @@ method AddField(par_cName,par_Value) class hb_orm_Data
 return NIL
 
 //=================================================================================================================
+function hb_orm_PostgresqlEncodeUTFString(par_cString)
+//https://www.postgresql.org/docs/current/sql-syntax-lexical.html    4.1.2.2. String Constants with C-Style Escapes
+local l_cResult := ""
+local l_nPos
+local l_nChar
+local l_cUTFEncoding
+if !empty(par_cString)
+    l_cResult += [E']
+    for l_nPos := 1 to hb_utf8Len(par_cString)
+        l_nChar := hb_utf8Peek(par_cString,l_nPos)
+        if l_nChar < 31 .or. l_nChar > 126 .or. l_nChar == 92 .or. l_nChar == 39 .or. l_nChar == 34 .or. l_nChar == 63
+            l_cUTFEncoding := hb_NumToHex(l_nChar,8)
+            do case
+            case l_cUTFEncoding == [00000000]
+                //To clean up bad data
+                exit
+            case left(l_cUTFEncoding,4) == [0000]
+                l_cResult += [\u]+right(l_cUTFEncoding,4)
+            otherwise
+                l_cResult += [\U]+l_cUTFEncoding
+            endcase
+        else
+            l_cResult += chr(l_nChar)
+        endif
+    endfor
+    l_cResult += [']
+endif
+
+//hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTFString "+par_cString+" = ",l_cResult)
+
+return l_cResult
+//=================================================================================================================
+function hb_orm_PostgresqlEncodeBinary(par_cString)
+local l_cResult
+local l_nPos
+if empty(par_cString)
+    l_cResult := ""
+else
+    l_cResult := [E'\x]+hb_StrToHex(par_cString,"\x")+[']
+    //         l_cResult := [E']
+    //         for l_nPos := 1 to hb_utf8Len(par_cString)
+    //             l_cResult += [\U]+hb_NumToHex(hb_utf8Peek(par_cString,l_nPos),8) //,[<nHexDigits>])
+    // //_M_ see if can remove first 4 leading zeros
+    // //https://www.postgresql.org/docs/current/sql-syntax-lexical.html    4.1.2.2. String Constants with C-Style Escapes
+    //         endfor
+    //         l_cResult += [']
+endif
+return l_cResult
+//=================================================================================================================
 function hb_orm_TestDebugger()
 // local icrash
 // icrash++
 // altd()
 return NIL
-
 //=================================================================================================================
 function hb_orm_SendToDebugView(par_cStep,par_xValue)
 

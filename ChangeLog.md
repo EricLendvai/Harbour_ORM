@@ -1,5 +1,11 @@
 # Harbour ORM - Change Log
 
+## 07/04/2022
+* Enhancements for UTF8 support
+
+## 06/13/2022
+* Enhanced ExportTableToHtmlFile function to format dates in yyyy-mm-dd format
+
 ## 06/12/2022
 * Fixed methods GetFieldValue,SetFieldValue and CreateIndexes to not rely on current area, but the one created by the orm. This also fixes the method InsertRecord.
 * New method DistinctOn() for PostgreSQL support of "distinct on ()" SQL syntax.
