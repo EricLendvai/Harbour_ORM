@@ -43,10 +43,10 @@ else
             rm build/lin64/${HB_COMPILER}/${BuildMode}/*.ppo
             #since this is a library will also fail on warnings.
             if [ "${BuildMode}" == "debug" ] ; then
-                cp debugger_on.hbm debugger.hbm
-                hbmk2 "${LIBName}_linux.hbp" -b -p -w3 -dDONOTINCLUDE -shared
+#                cp debugger_on.hbm debugger.hbm
+                hbmk2 "${LIBName}_linux.hbp" "vscode_debugger.prg" -b -p -w3 -dDONOTINCLUDE -shared
             else
-                cp debugger_off.hbm debugger.hbm
+#                cp debugger_off.hbm debugger.hbm
                 hbmk2 "${LIBName}_linux.hbp" -w3 -dDONOTINCLUDE -fullstatic
             fi
 

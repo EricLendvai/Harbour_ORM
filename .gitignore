@@ -16,3 +16,6 @@ Thumbs.db
 sdol
 hb_out.log
 bcrypt.c
+.VSCodeCounter
+.lh
+build

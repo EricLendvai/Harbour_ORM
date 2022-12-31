@@ -1,4 +1,4 @@
-//Copyright (c) 2022 Eric Lendvai MIT License
+//Copyright (c) 2023 Eric Lendvai MIT License
 
 //Will connect using the odbc driver, will not use any DNS configuration.
 
@@ -19,51 +19,57 @@ method destroy() class hb_orm_SQLConnect
 ::Disconnect()
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
-method SQLExec(par_Command,par_cCursorName) class hb_orm_SQLConnect   //Returns .t. if succeeded
+method SQLExec(par_cCommand,par_cCursorName) class hb_orm_SQLConnect   //Returns .t. if succeeded
 local l_cPreviousDefaultRDD := RDDSETDEFAULT("SQLMIX")
 local l_lSQLExecResult := .f.
 local l_oError
-local l_select := iif(used(),select(),0)
+local l_nSelect := iif(used(),select(),0)
 local cErrorInfo
 
-// if "SchemaVersion" $ par_Command .and. "TABLE" $ par_Command
+// if "SchemaVersion" $ par_cCommand .and. "TABLE" $ par_cCommand
 // altd()
-// //     // par_Command := "CREATE TABLE `SchemaVersion` (`pk` INT NOT NULL AUTO_INCREMENT,`name` VARCHAR NOT NULL DEFAULT '',`version` INT NOT NULL DEFAULT 0,PRIMARY KEY (`pk`) USING BTREE) ENGINE=InnoDB COLLATE='utf8_general_ci';"
-//     par_Command := strtran(par_Command,"CREATE TABLE","CREASDASDATE TABASDASDLE ")
+// //     // par_cCommand := "CREATE TABLE `SchemaVersion` (`pk` INT NOT NULL AUTO_INCREMENT,`name` VARCHAR NOT NULL DEFAULT '',`version` INT NOT NULL DEFAULT 0,PRIMARY KEY (`pk`) USING BTREE) ENGINE=InnoDB COLLATE='utf8_general_ci';"
+//     par_cCommand := strtran(par_cCommand,"CREATE TABLE","CREASDASDATE TABASDASDLE ")
 // endif
 
-::p_SQLExecErrorMessage := ""
+if !::p_DoNotReportErrors
+    ::p_SQLExecErrorMessage := ""
+endif
 if ::p_SQLConnection > 0
     try
         if pcount() == 2
             CloseAlias(par_cCursorName)
             select 0  //Ensure we don't overwrite any other work area
-            l_lSQLExecResult := DBUseArea(.t.,"SQLMIX",par_Command,par_cCursorName,.t.,.t.,"UTF8",::p_SQLConnection)
+            l_lSQLExecResult := DBUseArea(.t.,"SQLMIX",par_cCommand,par_cCursorName,.t.,.t.,"UTF8EX",::p_SQLConnection)
             if l_lSQLExecResult
                 //There is a bug with reccount() when using SQLMIX. So to force loading all the data, using goto bottom+goto top
                 dbGoBottom()
                 dbGoTop()
             endif
         else
-            l_lSQLExecResult := hb_RDDInfo(RDDI_EXECUTE,par_Command,"SQLMIX",::p_SQLConnection)
+            l_lSQLExecResult := hb_RDDInfo(RDDI_EXECUTE,par_cCommand,"SQLMIX",::p_SQLConnection)
         endif
 // altd()
 // cErrorInfo := hb_RDDInfo(RDDI_ERROR)
 
-        if !l_lSQLExecResult
-            ::p_SQLExecErrorMessage := "SQLExec Error Code: "+Trans(hb_RDDInfo(RDDI_ERRORNO))+" - Error description: "+alltrim(hb_RDDInfo(RDDI_ERROR))
+        if !::p_DoNotReportErrors
+            if !l_lSQLExecResult
+                ::p_SQLExecErrorMessage := "SQLExec Error Code: "+Trans(hb_RDDInfo(RDDI_ERRORNO))+" - Error description: "+alltrim(hb_RDDInfo(RDDI_ERROR))
+            endif
         endif
     catch l_oError
         l_lSQLExecResult := .f.  //Just in case the catch occurs after DBUserArea / hb_RDDInfo
-        ::p_SQLExecErrorMessage := "SQLExec Error Code: "+Trans(l_oError:oscode)+" - Error description: "+alltrim(l_oError:description)+" - Operation: "+l_oError:operation
-        // Idea for later  ::SQLSendToLogFileAndMonitoringSystem(0,1,l_SQLCommand+[ -> ]+::p_SQLExecErrorMessage)  _M_
+        if !::p_DoNotReportErrors
+            ::p_SQLExecErrorMessage := "SQLExec Error Code: "+Trans(l_oError:oscode)+" - Error description: "+alltrim(l_oError:description)+" - Operation: "+l_oError:operation
+        endif
+        // Idea for later  ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_SQLExecErrorMessage)  _M_
     endtry
 
-    if !empty(::p_SQLExecErrorMessage)
-        cErrorInfo := hb_StrReplace(::p_SQLExecErrorMessage+" - Command: "+par_Command+iif(pcount() < 2,""," - Cursor Name: "+par_cCursorName),{chr(13)=>" ",chr(10)=>""})
-        hb_orm_SendToDebugView(cErrorInfo)
 
-        if !::p_DoNotReportErrors
+    if !::p_DoNotReportErrors
+        if !empty(::p_SQLExecErrorMessage)
+            cErrorInfo := hb_StrReplace(::p_SQLExecErrorMessage+" - Command: "+par_cCommand+iif(pcount() < 2,""," - Cursor Name: "+par_cCursorName),{chr(13)=>" ",chr(10)=>""})
+            hb_orm_SendToDebugView(cErrorInfo)
             ::LogErrorEvent(,{{,,cErrorInfo,hb_orm_GetApplicationStack()}})   // par_cEventId,par_aErrors
         endif
     endif
@@ -71,7 +77,7 @@ if ::p_SQLConnection > 0
 endif
 
 RDDSETDEFAULT(l_cPreviousDefaultRDD)
-select (l_select)
+select (l_nSelect)
     
 return l_lSQLExecResult
 //-----------------------------------------------------------------------------------------------------------------
@@ -111,16 +117,16 @@ method SetServer(par_cName) class hb_orm_SQLConnect
 ::p_Server := par_cName
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method SetPort(par_number) class hb_orm_SQLConnect
-::p_Port := par_number
+method SetPort(par_nNumber) class hb_orm_SQLConnect
+::p_Port := par_nNumber
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method SetUser(par_cName) class hb_orm_SQLConnect
 ::p_User := par_cName
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method SetPassword(par_password) class hb_orm_SQLConnect
-::p_Password := par_password
+method SetPassword(par_cPassword) class hb_orm_SQLConnect
+::p_Password := par_cPassword
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method SetDatabase(par_cName) class hb_orm_SQLConnect
@@ -144,33 +150,33 @@ method SetModificationTimeFieldName(par_cName) class hb_orm_SQLConnect
 ::p_ModificationTimeFieldName := par_cName
 return ::p_ModificationTimeFieldName
 //-----------------------------------------------------------------------------------------------------------------
-method SetAllSettings(par_BackendType,par_Driver,par_Server,par_Port,par_User,par_Password,par_Database,par_Schema,par_PKFN) class hb_orm_SQLConnect
-if !hb_IsNil(par_BackendType)
-    ::SetBackendType(par_BackendType)
+method SetAllSettings(par_cBackendType,par_cDriver,par_Server,par_nPort,par_cUser,par_cPassword,par_cDatabase,par_cSchema,par_cPKFN) class hb_orm_SQLConnect
+if !hb_IsNil(par_cBackendType)
+    ::SetBackendType(par_cBackendType)
 endif
-if !hb_IsNil(par_Driver)
-    ::SetDriver(par_Driver)
+if !hb_IsNil(par_cDriver)
+    ::SetDriver(par_cDriver)
 endif
 if !hb_IsNil(par_Server)
     ::SetServer(par_Server)
 endif
-if !hb_IsNil(par_Port)
-    ::SetPort(par_Port)
+if !hb_IsNil(par_nPort)
+    ::SetPort(par_nPort)
 endif
-if !hb_IsNil(par_User)
-    ::SetUser(par_User)
+if !hb_IsNil(par_cUser)
+    ::SetUser(par_cUser)
 endif
-if !hb_IsNil(par_Password)
-    ::SetPassword(par_Password)
+if !hb_IsNil(par_cPassword)
+    ::SetPassword(par_cPassword)
 endif
-if !hb_IsNil(par_Database)
-    ::SetDatabase(par_Database)
+if !hb_IsNil(par_cDatabase)
+    ::SetDatabase(par_cDatabase)
 endif
-if !hb_IsNil(par_Schema)
-    ::SetCurrentSchemaName(par_Schema)
+if !hb_IsNil(par_cSchema)
+    ::SetCurrentSchemaName(par_cSchema)
 endif
-if !hb_IsNil(par_PKFN)
-    ::SetPrimaryKeyFieldName(par_PKFN)
+if !hb_IsNil(par_cPKFN)
+    ::SetPrimaryKeyFieldName(par_cPKFN)
 endif
 return Self
 //-----------------------------------------------------------------------------------------------------------------
@@ -236,6 +242,12 @@ if l_SQLHandle > 0
             ::EnableSchemaChangeTracking()
             ::UpdateSchemaCache(.t.)
         else
+            if ::TableExists(::PostgreSQLHBORMSchemaName+".SchemaVersion")
+                if ::GetSchemaDefinitionVersion("orm trigger version") != HB_ORM_TRIGGERVERSION
+                ::EnableSchemaChangeTracking()
+                ::SetSchemaDefinitionVersion("orm trigger version" ,HB_ORM_TRIGGERVERSION)
+                endif
+            endif
             ::UpdateSchemaCache()
         endif
     endif
@@ -245,14 +257,9 @@ if l_SQLHandle > 0
 
     //AutoFix ORM supporting tables
     if ::UpdateORMSupportSchema()
-        ::LoadSchema()
+        ::LoadSchema()  // Only called again the the ORM schema changed
     endif
 
-    // altd()
-    // if hb_hPos(::p_Schema,"SchemaVersion")         <= 0 .or. ;
-    //    hb_hPos(::p_Schema,"SchemaAutoTrimLog")     <= 0 .or. ;
-    //    hb_hPos(::p_Schema,"SchemaAndDataErrorLog") <= 0
-    // endif
 else
     ::Connected := .f.
 endif
@@ -283,15 +290,15 @@ return ::p_SQLConnection  // Returns 0 if not connected
 method GetErrorMessage() class hb_orm_SQLConnect
 return ::p_ErrorMessage
 //-----------------------------------------------------------------------------------------------------------------
-method Lock(par_cSchemaAndTableName,par_Key) class hb_orm_SQLConnect
+method Lock(par_cSchemaAndTableName,par_iKey) class hb_orm_SQLConnect
 
-local l_ArrayRow
-local l_CursorTempName
+local l_nArrayRow
+local l_cCursorTempName
 local l_LockName
-local l_result  := .f.
-local l_select
-local l_SQLCommand
-local l_iPos,l_cSchemaName,l_cTableName
+local l_lResult  := .f.
+local l_nSelect
+local l_cSQLCommand
+local l_nPos,l_cSchemaName,l_cTableName
 local l_iTableNumber
 
 ::p_ErrorMessage := ""
@@ -301,29 +308,29 @@ case empty(par_cSchemaAndTableName)
     ::p_ErrorMessage := [Missing Table]
     
 otherwise
-    l_select = iif(used(),select(),0)
+    l_nSelect = iif(used(),select(),0)
 
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_LockName  = "lock_"+lower(::p_Database)+"_"+lower(par_cSchemaAndTableName)+"_"+Trans(par_Key)
+        l_LockName  = "lock_"+lower(::p_Database)+"_"+lower(par_cSchemaAndTableName)+"_"+Trans(par_iKey)
         
         //Check if the lock is already created by the current connection
-        l_ArrayRow = AScan( ::p_Locks, l_LockName )
+        l_nArrayRow = AScan( ::p_Locks, l_LockName )
 
-        if !empty(l_ArrayRow)
+        if !empty(l_nArrayRow)
             //Already Locked
-            l_result = .t.
+            l_lResult = .t.
         else
             //No Locks entry to reuse
 
             //Do the actual locking
-            l_CursorTempName = "c_DB_Temp"
-            l_SQLCommand    = [SELECT GET_LOCK(']+l_LockName+[',]+Trans(::p_LockTimeout)+[) as result]
-            if ::SQLExec(l_SQLCommand,l_CursorTempName)
-                // if (l_CursorTempName)->(FieldGet(1)) == 1  //Since there is one 1 field, retrieving its value.
+            l_cCursorTempName = "c_DB_Temp"
+            l_cSQLCommand    = [SELECT GET_LOCK(']+l_LockName+[',]+Trans(::p_LockTimeout)+[) as result]
+            if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+                // if (l_cCursorTempName)->(FieldGet(1)) == 1  //Since there is one 1 field, retrieving its value.
                 if c_DB_Temp->result == 1  //Since there is one 1 field, retrieving its value.
                     AAdd(::p_Locks,l_LockName)
-                    l_result = .t.
+                    l_lResult = .t.
                 else
                     ::p_ErrorMessage := "Failed lock resource "+l_LockName
                     hb_orm_SendToDebugView(::p_ErrorMessage)
@@ -332,7 +339,7 @@ otherwise
                 ::p_ErrorMessage := "Failed to Run SQL to lock() "+::p_SQLExecErrorMessage
                 hb_orm_SendToDebugView(::p_ErrorMessage)
             endif
-            CloseAlias(l_CursorTempName)
+            CloseAlias(l_cCursorTempName)
             
         endif
 
@@ -340,45 +347,45 @@ otherwise
         //There is a bug in PostgreSQL 12.3 with the 'SELECT * FROM pg_locks;' But the locks get release with pg_advisory_unlock()
         //No know timeout, unlike MySQL
         
-        l_iPos := at(".",par_cSchemaAndTableName)
-        if l_iPos == 0
+        l_nPos := at(".",par_cSchemaAndTableName)
+        if l_nPos == 0
             l_cSchemaName := ""
             l_cTableName  := par_cSchemaAndTableName
         else
-            l_cSchemaName := left(par_cSchemaAndTableName,l_iPos-1)
-            l_cTableName  := substr(par_cSchemaAndTableName,l_iPos+1)
+            l_cSchemaName := left(par_cSchemaAndTableName,l_nPos-1)
+            l_cTableName  := substr(par_cSchemaAndTableName,l_nPos+1)
         endif
 
-        l_SQLCommand := [SELECT pk]
-        l_SQLCommand += [ FROM  "]+::PostgreSQLHBORMSchemaName+["."SchemaTableNumber"]
-        l_SQLCommand += [ WHERE schemaname = ']+l_cSchemaName+[']
-        l_SQLCommand += [ AND   tablename = ']+l_cTableName+[']
+        l_cSQLCommand := [SELECT pk]
+        l_cSQLCommand += [ FROM  "]+::PostgreSQLHBORMSchemaName+["."SchemaTableNumber"]
+        l_cSQLCommand += [ WHERE schemaname = ']+l_cSchemaName+[']
+        l_cSQLCommand += [ AND   tablename = ']+l_cTableName+[']
 
-        l_CursorTempName = "c_DB_Temp"
-        if ::SQLExec(l_SQLCommand,l_CursorTempName)
-            // l_iTableNumber := (l_CursorTempName)->(pk)
-            l_iTableNumber := (l_CursorTempName)->(FieldGet(FieldPos("pk")))
-            CloseAlias(l_CursorTempName)
+        l_cCursorTempName = "c_DB_Temp"
+        if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+            // l_iTableNumber := (l_cCursorTempName)->(pk)
+            l_iTableNumber := (l_cCursorTempName)->(FieldGet(FieldPos("pk")))
+            CloseAlias(l_cCursorTempName)
 
             if l_iTableNumber > 0
-                l_LockName := alltrim(str(par_Key))+StrZero(l_iTableNumber,::MaxDigitsInTableNumber)
+                l_LockName := alltrim(str(par_iKey))+StrZero(l_iTableNumber,::MaxDigitsInTableNumber)
 
                 //Check if the lock is already created by the current connection
-                l_ArrayRow = AScan( ::p_Locks, l_LockName )
+                l_nArrayRow = AScan( ::p_Locks, l_LockName )
 
-                if !empty(l_ArrayRow)
+                if !empty(l_nArrayRow)
                     //Already Locked
-                    l_result = .t.
+                    l_lResult = .t.
                 else
                     //No Locks entry to reuse
 
                     //Do the actual locking
-                    l_SQLCommand    = [SELECT pg_advisory_lock(']+l_LockName+[') as result]
-                    if ::SQLExec(l_SQLCommand,l_CursorTempName)
+                    l_cSQLCommand    = [SELECT pg_advisory_lock(']+l_LockName+[') as result]
+                    if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
                         //No know method to find out if lock failed.
-                        // if (l_CursorTempName)->(result) == 1
+                        // if (l_cCursorTempName)->(result) == 1
                             AAdd(::p_Locks,l_LockName)
-                            l_result = .t.
+                            l_lResult = .t.
                         // else
                         //     hb_orm_SendToDebugView("Failed lock resource "+l_LockName)
                         // endif
@@ -396,26 +403,26 @@ otherwise
             ::p_ErrorMessage := "Failed to Run Pre SQL to lock() "+::p_SQLExecErrorMessage
             hb_orm_SendToDebugView(::p_ErrorMessage)
         endif
-        CloseAlias(l_CursorTempName)
+        CloseAlias(l_cCursorTempName)
 
     endcase
-    CloseAlias(l_CursorTempName)
-    select (l_select)
+    CloseAlias(l_cCursorTempName)
+    select (l_nSelect)
     
 endcase
 
-return l_result
+return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-method Unlock(par_cSchemaAndTableName,par_Key) class hb_orm_SQLConnect
+method Unlock(par_cSchemaAndTableName,par_iKey) class hb_orm_SQLConnect
 
-local l_ArrayRow
-local l_CursorTempName
+local l_nArrayRow
+local l_cCursorTempName
 local l_LockName
-local l_result  := .f.
-local l_select
-local l_SQLCommand
-local l_iPos,l_cSchemaName,l_cTableName
+local l_lResult  := .f.
+local l_nSelect
+local l_cSQLCommand
+local l_nPos,l_cSchemaName,l_cTableName
 local l_iTableNumber
 
 ::p_ErrorMessage := ""
@@ -424,81 +431,81 @@ case empty(par_cSchemaAndTableName)
     ::p_ErrorMessage := [Missing Table]
     
 otherwise
-    l_select = iif(used(),select(),0)
+    l_nSelect = iif(used(),select(),0)
 
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_LockName  = "lock_"+lower(::p_Database)+"_"+lower(par_cSchemaAndTableName)+"_"+trans(par_Key)
+        l_LockName  = "lock_"+lower(::p_Database)+"_"+lower(par_cSchemaAndTableName)+"_"+trans(par_iKey)
         
         //Check if the lock is already created by the current connection
-        l_ArrayRow = AScan( ::p_Locks, l_LockName )
+        l_nArrayRow = AScan( ::p_Locks, l_LockName )
 
-        if empty(l_ArrayRow)
+        if empty(l_nArrayRow)
             //Already Unlocked
-            l_result = .t.
+            l_lResult = .t.
         else
             //No Locks entry to reuse
 
             //Do the actual locking
-            l_CursorTempName = "c_DB_Temp"
-            l_SQLCommand    = [SELECT RELEASE_LOCK(']+l_LockName+[') as result]
-            if ::SQLExec(l_SQLCommand,l_CursorTempName)
-                hb_ADel(::p_Locks,l_ArrayRow,.t.)
-                l_result := .t.
+            l_cCursorTempName = "c_DB_Temp"
+            l_cSQLCommand    = [SELECT RELEASE_LOCK(']+l_LockName+[') as result]
+            if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+                hb_ADel(::p_Locks,l_nArrayRow,.t.)
+                l_lResult := .t.
             else
                 ::p_ErrorMessage := "Failed to Run SQL to unlock() "+::p_SQLExecErrorMessage
                 hb_orm_SendToDebugView(::p_ErrorMessage)
             endif
-            CloseAlias(l_CursorTempName)
+            CloseAlias(l_cCursorTempName)
             
         endif
             
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         //There is a bug in PostgreSQL 12.3 with the 'SELECT * FROM pg_locks;' But the locks get release with pg_advisory_unlock()
 
-        l_iPos := at(".",par_cSchemaAndTableName)
-        if l_iPos == 0
+        l_nPos := at(".",par_cSchemaAndTableName)
+        if l_nPos == 0
             l_cSchemaName := ""
             l_cTableName  := par_cSchemaAndTableName
         else
-            l_cSchemaName := left(par_cSchemaAndTableName,l_iPos-1)
-            l_cTableName  := substr(par_cSchemaAndTableName,l_iPos+1)
+            l_cSchemaName := left(par_cSchemaAndTableName,l_nPos-1)
+            l_cTableName  := substr(par_cSchemaAndTableName,l_nPos+1)
         endif
 
-        l_SQLCommand := [SELECT pk]
-        l_SQLCommand += [ FROM  "]+::PostgreSQLHBORMSchemaName+["."SchemaTableNumber"]
-        l_SQLCommand += [ WHERE schemaname = ']+l_cSchemaName+[']
-        l_SQLCommand += [ AND   tablename = ']+l_cTableName+[']
+        l_cSQLCommand := [SELECT pk]
+        l_cSQLCommand += [ FROM  "]+::PostgreSQLHBORMSchemaName+["."SchemaTableNumber"]
+        l_cSQLCommand += [ WHERE schemaname = ']+l_cSchemaName+[']
+        l_cSQLCommand += [ AND   tablename = ']+l_cTableName+[']
 
-        l_CursorTempName = "c_DB_Temp"
-        if ::SQLExec(l_SQLCommand,l_CursorTempName)
-            // l_iTableNumber := (l_CursorTempName)->(pk)
-            l_iTableNumber := (l_CursorTempName)->(FieldGet(FieldPos("pk")))
-            CloseAlias(l_CursorTempName)
+        l_cCursorTempName = "c_DB_Temp"
+        if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+            // l_iTableNumber := (l_cCursorTempName)->(pk)
+            l_iTableNumber := (l_cCursorTempName)->(FieldGet(FieldPos("pk")))
+            CloseAlias(l_cCursorTempName)
 
             if l_iTableNumber > 0
-                l_LockName := alltrim(str(par_Key))+StrZero(l_iTableNumber,::MaxDigitsInTableNumber)
+                l_LockName := alltrim(str(par_iKey))+StrZero(l_iTableNumber,::MaxDigitsInTableNumber)
                 
                 //Check if the lock is already created by the current connection
-                l_ArrayRow = AScan( ::p_Locks, l_LockName )
+                l_nArrayRow = AScan( ::p_Locks, l_LockName )
 
-                if empty(l_ArrayRow)
+                if empty(l_nArrayRow)
                     //Already Unlocked
-                    l_result = .t.
+                    l_lResult = .t.
                 else
                     //No Locks entry to reuse
 
                     //Do the actual locking
-                    l_CursorTempName = "c_DB_Temp"
-                    l_SQLCommand    = [SELECT pg_advisory_unlock(']+l_LockName+[') as result]
-                    if ::SQLExec(l_SQLCommand,l_CursorTempName)
-                        hb_ADel(::p_Locks,l_ArrayRow,.t.)
-                        l_result := .t.
+                    l_cCursorTempName = "c_DB_Temp"
+                    l_cSQLCommand    = [SELECT pg_advisory_unlock(']+l_LockName+[') as result]
+                    if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+                        hb_ADel(::p_Locks,l_nArrayRow,.t.)
+                        l_lResult := .t.
                     else
                         ::p_ErrorMessage := "Failed to Run SQL to unlock() "+::p_SQLExecErrorMessage
                         hb_orm_SendToDebugView(::p_ErrorMessage)
                     endif
-                    CloseAlias(l_CursorTempName)
+                    CloseAlias(l_cCursorTempName)
                     
                 endif
 
@@ -510,168 +517,168 @@ otherwise
             ::p_ErrorMessage := "Failed to Run Pre SQL to unlock() "+::p_SQLExecErrorMessage
             hb_orm_SendToDebugView(::p_ErrorMessage)
         endif
-        CloseAlias(l_CursorTempName)
+        CloseAlias(l_cCursorTempName)
             
     endcase
     
-    select (l_select)
+    select (l_nSelect)
     
 endcase
 
-return l_result
+return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
 method LogAutoTrimEvent(par_cEventId,par_cSchemaAndTableName,par_nKey,par_aAutoTrimmedFields) class hb_orm_SQLConnect
-local l_SQLCommand
-local l_LastErrorMessage
+local l_cSQLCommand
+local l_cLastErrorMessage
 local l_iAutoTrimmedInfo
-local l_Value
-local l_FieldName,l_FieldType,l_FieldLen
-local l_iPos,l_cSchemaName,l_cTableName
+local l_cValue
+local l_cFieldName,l_cFieldType,l_nFieldLen
+local l_nPos,l_cSchemaName,l_cTableName
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_SQLCommand := [INSERT INTO ]+::FormatIdentifier("SchemaAutoTrimLog")+[ (]
+    l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier("SchemaAutoTrimLog")+[ (]
     
     if !hb_IsNIL(par_cEventId)
-        l_SQLCommand += ::FormatIdentifier("eventid")+[,]
+        l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
-    l_SQLCommand += ::FormatIdentifier("datetime")+[,]
-    l_SQLCommand += ::FormatIdentifier("ip")+[,]
-    l_SQLCommand += ::FormatIdentifier("tablename")+[,]
-    l_SQLCommand += ::FormatIdentifier("recordpk")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldname")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldtype")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldlen")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldvaluem")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldvaluer")
+    l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
+    l_cSQLCommand += ::FormatIdentifier("ip")+[,]
+    l_cSQLCommand += ::FormatIdentifier("tablename")+[,]
+    l_cSQLCommand += ::FormatIdentifier("recordpk")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldname")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldtype")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldlen")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldvaluem")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldvaluer")
 
-    l_SQLCommand += [) VALUES ]
+    l_cSQLCommand += [) VALUES ]
 
     for l_iAutoTrimmedInfo := 1 to len(par_aAutoTrimmedFields)
-        l_FieldName := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][1]
-        l_Value     := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][2]
-        l_FieldType := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][3]
-        l_FieldLen  := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][4]
+        l_cFieldName := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][1]
+        l_cValue     := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][2]
+        l_cFieldType := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][3]
+        l_nFieldLen  := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][4]
         
         hb_orm_SendToDebugView("Auto Trim Event:"+;
                               iif(hb_IsNIL(par_cSchemaAndTableName) , "" , [  Table = "]+par_cSchemaAndTableName+["])+;
                               iif(hb_IsNIL(par_nKey)                , "" , [  Key = ]+trans(par_nKey))+;
-                              iif(hb_IsNIL(l_FieldName)             , "" , [  Field = "]+l_FieldName+["]))
+                              iif(hb_IsNIL(l_cFieldName)             , "" , [  Field = "]+l_cFieldName+["]))
         
         if l_iAutoTrimmedInfo > 1
-            l_SQLCommand +=  [,]
+            l_cSQLCommand +=  [,]
         endif
-        l_SQLCommand +=  [(]
+        l_cSQLCommand +=  [(]
 
         if !hb_IsNIL(par_cEventId)
-            l_SQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
+            l_cSQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
         endif
-        l_SQLCommand += [now(),]
-        l_SQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
-        l_SQLCommand += [']+par_cSchemaAndTableName+[',]
-        l_SQLCommand += trans(par_nKey)+[,]
-        l_SQLCommand += [']+l_FieldName+[',]           // Field Name
-        l_SQLCommand += [']+allt(l_FieldType)+[',]     // Field type
-        l_SQLCommand += trans(l_FieldLen)+[,]
+        l_cSQLCommand += [now(),]
+        l_cSQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
+        l_cSQLCommand += [']+par_cSchemaAndTableName+[',]
+        l_cSQLCommand += trans(par_nKey)+[,]
+        l_cSQLCommand += [']+l_cFieldName+[',]           // Field Name
+        l_cSQLCommand += [']+allt(l_cFieldType)+[',]     // Field type
+        l_cSQLCommand += trans(l_nFieldLen)+[,]
         
-        if !empty(el_inlist(l_FieldType,"B","BV","R"))
+        if !empty(el_inlist(l_cFieldType,"B","BV","R"))
             //Binary
-            l_SQLCommand += [NULL,]
-            l_SQLCommand += [x']+hb_StrToHex(l_Value)+[']
+            l_cSQLCommand += [NULL,]
+            l_cSQLCommand += [x']+hb_StrToHex(l_cValue)+[']
         else
             //Text
-            l_SQLCommand += [x']+hb_StrToHex(l_Value)+[',]
-            l_SQLCommand += [NULL]
+            l_cSQLCommand += [x']+hb_StrToHex(l_cValue)+[',]
+            l_cSQLCommand += [NULL]
         endif
 
-        l_SQLCommand +=  [)]
+        l_cSQLCommand +=  [)]
     endfor
 
-    l_SQLCommand += [;]
+    l_cSQLCommand += [;]
 
-    if !::SQLExec(l_SQLCommand)
-        l_LastErrorMessage := ::GetSQLExecErrorMessage()
-        hb_orm_SendToDebugView("Error on Auto Trim: "+l_LastErrorMessage)
+    if !::SQLExec(l_cSQLCommand)
+        l_cLastErrorMessage := ::GetSQLExecErrorMessage()
+        hb_orm_SendToDebugView("Error on Auto Trim: "+l_cLastErrorMessage)
     endif
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_iPos := at(".",par_cSchemaAndTableName)
-    if l_iPos == 0
+    l_nPos := at(".",par_cSchemaAndTableName)
+    if l_nPos == 0
         l_cSchemaName := ""
         l_cTableName  := par_cSchemaAndTableName
     else
-        l_cSchemaName := left(par_cSchemaAndTableName,l_iPos-1)
-        l_cTableName  := substr(par_cSchemaAndTableName,l_iPos+1)
+        l_cSchemaName := left(par_cSchemaAndTableName,l_nPos-1)
+        l_cTableName  := substr(par_cSchemaAndTableName,l_nPos+1)
     endif
 
-    l_SQLCommand := [INSERT INTO ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName+".SchemaAutoTrimLog")+[ (]
+    l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName+".SchemaAutoTrimLog")+[ (]
     
     if !hb_IsNIL(par_cEventId)
-        l_SQLCommand += ::FormatIdentifier("eventid")+[,]
+        l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
-    l_SQLCommand += ::FormatIdentifier("datetime")+[,]
-    l_SQLCommand += ::FormatIdentifier("ip")+[,]
-    l_SQLCommand += ::FormatIdentifier("schemaname")+[,]
-    l_SQLCommand += ::FormatIdentifier("tablename")+[,]
-    l_SQLCommand += ::FormatIdentifier("recordpk")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldname")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldtype")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldlen")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldvaluem")+[,]
-    l_SQLCommand += ::FormatIdentifier("fieldvaluer")
+    l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
+    l_cSQLCommand += ::FormatIdentifier("ip")+[,]
+    l_cSQLCommand += ::FormatIdentifier("schemaname")+[,]
+    l_cSQLCommand += ::FormatIdentifier("tablename")+[,]
+    l_cSQLCommand += ::FormatIdentifier("recordpk")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldname")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldtype")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldlen")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldvaluem")+[,]
+    l_cSQLCommand += ::FormatIdentifier("fieldvaluer")
 
-    l_SQLCommand += [) VALUES ]
+    l_cSQLCommand += [) VALUES ]
 
     for l_iAutoTrimmedInfo := 1 to len(par_aAutoTrimmedFields)
-        l_FieldName := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][1]
-        l_Value     := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][2]
-        l_FieldType := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][3]
-        l_FieldLen  := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][4]
+        l_cFieldName := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][1]
+        l_cValue     := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][2]
+        l_cFieldType := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][3]
+        l_nFieldLen  := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][4]
 
         hb_orm_SendToDebugView("Auto Trim Event:"+;
                               iif(hb_IsNIL(par_cSchemaAndTableName) , "" , [  Table = "]+par_cSchemaAndTableName+["])+;
                               iif(hb_IsNIL(par_nKey)                , "" , [  Key = ]+trans(par_nKey))+;
-                              iif(hb_IsNIL(l_FieldName)             , "" , [  Field = "]+l_FieldName+["]))
+                              iif(hb_IsNIL(l_cFieldName)             , "" , [  Field = "]+l_cFieldName+["]))
         
         if l_iAutoTrimmedInfo > 1
-            l_SQLCommand +=  [,]
+            l_cSQLCommand +=  [,]
         endif
-        l_SQLCommand +=  [(]
+        l_cSQLCommand +=  [(]
 
         if !hb_IsNIL(par_cEventId)
-            l_SQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
+            l_cSQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
         endif
-        l_SQLCommand += [current_timestamp,]
-        l_SQLCommand += [inet_client_addr(),]
-        l_SQLCommand += [']+l_cSchemaName+[',]
-        l_SQLCommand += [']+l_cTableName+[',]
-        l_SQLCommand += trans(par_nKey)+[,]
+        l_cSQLCommand += [current_timestamp,]
+        l_cSQLCommand += [inet_client_addr(),]
+        l_cSQLCommand += [']+l_cSchemaName+[',]
+        l_cSQLCommand += [']+l_cTableName+[',]
+        l_cSQLCommand += trans(par_nKey)+[,]
 
-        l_SQLCommand += [']+l_FieldName+[',]           // Field Name
-        l_SQLCommand += [']+allt(l_FieldType)+[',]     // Field type
-        l_SQLCommand += trans(l_FieldLen)+[,]
+        l_cSQLCommand += [']+l_cFieldName+[',]           // Field Name
+        l_cSQLCommand += [']+allt(l_cFieldType)+[',]     // Field type
+        l_cSQLCommand += trans(l_nFieldLen)+[,]
 
-        if !empty(el_inlist(l_FieldType,"B","BV","R"))
+        if !empty(el_inlist(l_cFieldType,"B","BV","R"))
             //Binary
-            l_SQLCommand += [NULL,]
-            // l_SQLCommand += [E'\x]+hb_StrToHex(l_Value,"\x")+[']
-            l_SQLCommand += hb_orm_PostgresqlEncodeBinary(l_Value)
+            l_cSQLCommand += [NULL,]
+            // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cValue,"\x")+[']
+            l_cSQLCommand += hb_orm_PostgresqlEncodeBinary(l_cValue)
         else
             //Text UTF
-            // l_SQLCommand += [E'\x]+hb_StrToHex(l_Value,"\x")+[',]
-            l_SQLCommand += hb_orm_PostgresqlEncodeUTFString(l_Value)+[,]
-            l_SQLCommand += [NULL]
+            // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cValue,"\x")+[',]
+            l_cSQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cValue)+[,]
+            l_cSQLCommand += [NULL]
         endif
 
-        l_SQLCommand +=  [)]
+        l_cSQLCommand +=  [)]
     endfor
 
-    l_SQLCommand += [;]
+    l_cSQLCommand += [;]
 
-    if !::SQLExec(l_SQLCommand)
-        l_LastErrorMessage := ::GetSQLExecErrorMessage()
-        hb_orm_SendToDebugView("Error on Auto Trim: "+l_LastErrorMessage)
+    if !::SQLExec(l_cSQLCommand)
+        l_cLastErrorMessage := ::GetSQLExecErrorMessage()
+        hb_orm_SendToDebugView("Error on Auto Trim: "+l_cLastErrorMessage)
     endif
 
 endcase
@@ -681,12 +688,12 @@ return NIL
 
 //-----------------------------------------------------------------------------------------------------------------
 method LogErrorEvent(par_cEventId,par_aErrors) class hb_orm_SQLConnect
-local l_SQLCommand
-local l_LastErrorMessage
+local l_cSQLCommand
+local l_cLastErrorMessage
 local l_iErrors
 local l_cSchemaAndTableName,l_nKey,l_cErrorMessage
 local l_lDoNotReportErrors := ::p_DoNotReportErrors
-local l_iPos,l_cSchemaName,l_cTableName
+local l_nPos,l_cSchemaName,l_cTableName
 local l_cAppStack
 
 ::p_DoNotReportErrors := .t.  // To avoid cycling reporting of errors
@@ -695,20 +702,20 @@ local l_cAppStack
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_SQLCommand := [INSERT INTO ]+::FormatIdentifier("SchemaAndDataErrorLog")+[ (]
+    l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier("SchemaAndDataErrorLog")+[ (]
     
     if !hb_IsNIL(par_cEventId)
-        l_SQLCommand += ::FormatIdentifier("eventid")+[,]
+        l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
 
-    l_SQLCommand += ::FormatIdentifier("appstack")+[,]
-    l_SQLCommand += ::FormatIdentifier("datetime")+[,]
-    l_SQLCommand += ::FormatIdentifier("ip")+[,]
-    l_SQLCommand += ::FormatIdentifier("tablename")+[,]
-    l_SQLCommand += ::FormatIdentifier("recordpk")+[,]
-    l_SQLCommand += ::FormatIdentifier("errormessage")
+    l_cSQLCommand += ::FormatIdentifier("appstack")+[,]
+    l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
+    l_cSQLCommand += ::FormatIdentifier("ip")+[,]
+    l_cSQLCommand += ::FormatIdentifier("tablename")+[,]
+    l_cSQLCommand += ::FormatIdentifier("recordpk")+[,]
+    l_cSQLCommand += ::FormatIdentifier("errormessage")
 
-    l_SQLCommand += [) VALUES ]
+    l_cSQLCommand += [) VALUES ]
 
     for l_iErrors := 1 to len(par_aErrors)
         l_cSchemaAndTableName := par_aErrors[l_iErrors][1]
@@ -722,50 +729,50 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                               [  ]+l_cErrorMessage)
 
         if l_iErrors > 1
-            l_SQLCommand +=  [,]
+            l_cSQLCommand +=  [,]
         endif
-        l_SQLCommand +=  [(]
+        l_cSQLCommand +=  [(]
 
         if !hb_IsNIL(par_cEventId)
-            l_SQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
+            l_cSQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
         endif
         if hb_IsNIL(l_cAppStack)
-            l_SQLCommand += [NULL,]
+            l_cSQLCommand += [NULL,]
         else
-            l_SQLCommand += [x']+hb_StrToHex(l_cAppStack)+[',]
+            l_cSQLCommand += [x']+hb_StrToHex(l_cAppStack)+[',]
         endif
-        l_SQLCommand += [now(),]
-        l_SQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
-        l_SQLCommand += iif(hb_IsNIL(l_cTableName) , [NULL,] , [']+l_cTableName+[',])
-        l_SQLCommand += iif(hb_IsNIL(l_nKey)       , [NULL,] , trans(l_nKey)+[,])
-        l_SQLCommand += [x']+hb_StrToHex(l_cErrorMessage)+[']
+        l_cSQLCommand += [now(),]
+        l_cSQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
+        l_cSQLCommand += iif(hb_IsNIL(l_cTableName) , [NULL,] , [']+l_cTableName+[',])
+        l_cSQLCommand += iif(hb_IsNIL(l_nKey)       , [NULL,] , trans(l_nKey)+[,])
+        l_cSQLCommand += [x']+hb_StrToHex(l_cErrorMessage)+[']
 
-        l_SQLCommand +=  [)]
+        l_cSQLCommand +=  [)]
     endfor
 
-    l_SQLCommand += [;]
+    l_cSQLCommand += [;]
 
-    if !::SQLExec(l_SQLCommand)
-        l_LastErrorMessage := ::GetSQLExecErrorMessage()
-        hb_orm_SendToDebugView("Error on Auto Trim: "+l_LastErrorMessage)
+    if !::SQLExec(l_cSQLCommand)
+        l_cLastErrorMessage := ::GetSQLExecErrorMessage()
+        hb_orm_SendToDebugView("Error on Auto Trim: "+l_cLastErrorMessage)
     endif
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_SQLCommand := [INSERT INTO ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName+".SchemaAndDataErrorLog")+[ (]
+    l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName+".SchemaAndDataErrorLog")+[ (]
     
     if !hb_IsNIL(par_cEventId)
-        l_SQLCommand += ::FormatIdentifier("eventid")+[,]
+        l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
 
-    l_SQLCommand += ::FormatIdentifier("appstack")+[,]
-    l_SQLCommand += ::FormatIdentifier("datetime")+[,]
-    l_SQLCommand += ::FormatIdentifier("ip")+[,]
-    l_SQLCommand += ::FormatIdentifier("schemaname")+[,]
-    l_SQLCommand += ::FormatIdentifier("tablename")+[,]
-    l_SQLCommand += ::FormatIdentifier("recordpk")+[,]
-    l_SQLCommand += ::FormatIdentifier("errormessage")
+    l_cSQLCommand += ::FormatIdentifier("appstack")+[,]
+    l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
+    l_cSQLCommand += ::FormatIdentifier("ip")+[,]
+    l_cSQLCommand += ::FormatIdentifier("schemaname")+[,]
+    l_cSQLCommand += ::FormatIdentifier("tablename")+[,]
+    l_cSQLCommand += ::FormatIdentifier("recordpk")+[,]
+    l_cSQLCommand += ::FormatIdentifier("errormessage")
 
-    l_SQLCommand += [) VALUES ]
+    l_cSQLCommand += [) VALUES ]
 
     for l_iErrors := 1 to len(par_aErrors)
         l_cSchemaAndTableName := par_aErrors[l_iErrors][1]
@@ -777,13 +784,13 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cSchemaName := NIL
             l_cTableName  := NIL
         else
-            l_iPos := at(".",l_cSchemaAndTableName)
-            if l_iPos == 0
+            l_nPos := at(".",l_cSchemaAndTableName)
+            if l_nPos == 0
                 l_cSchemaName := ""
                 l_cTableName  := l_cSchemaAndTableName
             else
-                l_cSchemaName := left(l_cSchemaAndTableName,l_iPos-1)
-                l_cTableName  := substr(l_cSchemaAndTableName,l_iPos+1)
+                l_cSchemaName := left(l_cSchemaAndTableName,l_nPos-1)
+                l_cTableName  := substr(l_cSchemaAndTableName,l_nPos+1)
             endif
         endif
 
@@ -794,35 +801,35 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                               [  ]+l_cErrorMessage)
 
         if l_iErrors > 1
-            l_SQLCommand +=  [,]
+            l_cSQLCommand +=  [,]
         endif
-        l_SQLCommand +=  [(]
+        l_cSQLCommand +=  [(]
 
         if !hb_IsNIL(par_cEventId)
-            l_SQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
+            l_cSQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
         endif
         if hb_IsNIL(l_cAppStack)
-            l_SQLCommand += [NULL,]
+            l_cSQLCommand += [NULL,]
         else
-            // l_SQLCommand += [E'\x]+hb_StrToHex(l_cAppStack,"\x")+[',]
-            l_SQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cAppStack)+[,]
+            // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cAppStack,"\x")+[',]
+            l_cSQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cAppStack)+[,]
         endif
-        l_SQLCommand += [current_timestamp,]
-        l_SQLCommand += [inet_client_addr(),]
-        l_SQLCommand += iif(hb_IsNIL(l_cSchemaName) , [NULL,] , [']+l_cSchemaName+[',])
-        l_SQLCommand += iif(hb_IsNIL(l_cTableName)  , [NULL,] , [']+l_cTableName+[',])
-        l_SQLCommand += iif(hb_IsNIL(l_nKey)        , [NULL,] , trans(l_nKey)+[,])
-        // l_SQLCommand += [E'\x]+hb_StrToHex(l_cErrorMessage,"\x")+[']
-        l_SQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cErrorMessage)
+        l_cSQLCommand += [current_timestamp,]
+        l_cSQLCommand += [inet_client_addr(),]
+        l_cSQLCommand += iif(hb_IsNIL(l_cSchemaName) , [NULL,] , [']+l_cSchemaName+[',])
+        l_cSQLCommand += iif(hb_IsNIL(l_cTableName)  , [NULL,] , [']+l_cTableName+[',])
+        l_cSQLCommand += iif(hb_IsNIL(l_nKey)        , [NULL,] , trans(l_nKey)+[,])
+        // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cErrorMessage,"\x")+[']
+        l_cSQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cErrorMessage)
 
-        l_SQLCommand +=  [)]
+        l_cSQLCommand +=  [)]
     endfor
 
-    l_SQLCommand += [;]
+    l_cSQLCommand += [;]
 
-    if !::SQLExec(l_SQLCommand)
-        l_LastErrorMessage := ::GetSQLExecErrorMessage()
-        hb_orm_SendToDebugView("Error on Error Log: "+l_LastErrorMessage)
+    if !::SQLExec(l_cSQLCommand)
+        l_cLastErrorMessage := ::GetSQLExecErrorMessage()
+        hb_orm_SendToDebugView("Error on Error Log: "+l_cLastErrorMessage)
     endif
 
 endcase
@@ -833,43 +840,80 @@ return NIL
 
 //-----------------------------------------------------------------------------------------------------------------
 method CheckIfStillConnected() class hb_orm_SQLConnect // Returns .t. if connected. Will test if the connection is still present
-local l_Result := .f.  // By default assume not connected
+local l_lResult := .f.  // By default assume not connected
 
 if ::Connected
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         if ::SQLExec([select current_time;])
-            l_Result := .t.
+            l_lResult := .t.
         endif
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         if ::SQLExec([select current_time;])
-            l_Result := .t.
+            l_lResult := .t.
         endif
     endcase
-    if l_Result == .f.
+    if l_lResult == .f.
         hb_orm_SendToDebugView("SQL Connection was lost")
         ::Disconnect()
     endif
 endif
 
-return l_Result
+return l_lResult
+//-----------------------------------------------------------------------------------------------------------------
+method CheckIfSchemaCacheShouldBeUpdated() class hb_orm_SQLConnect // Return .t. if schema had changed since connected. Currently only PostgreSQL aware
+local l_lResult := .f.
+local l_cSQLCommand
+local l_nSelect := iif(used(),select(),0)
+
+if ::Connected
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        //_M_
+        l_lResult := .t.
+        if ::TableExists(::PostgreSQLHBORMSchemaName+".SchemaCacheLog")
+            l_cSQLCommand := [SELECT pk,]
+            l_cSQLCommand += [       cachedschema::integer]
+            l_cSQLCommand += [ FROM  ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+            l_cSQLCommand += [ ORDER BY pk DESC]
+            l_cSQLCommand += [ LIMIT 1]
+
+            if ::SQLExec(l_cSQLCommand,"SchemaCacheLogLast")
+                if SchemaCacheLogLast->(reccount()) == 1
+                    if SchemaCacheLogLast->pk == ::p_SchemaCacheLogLastPk
+                        l_lResult := .f.
+                    endif
+                endif
+            endif
+
+            CloseAlias("SchemaCacheLogLast")
+            select (l_nSelect)
+        endif
+
+    endcase
+    if l_lResult == .t.
+        hb_orm_SendToDebugView("Schema Cache is out of date")
+    endif
+endif
+
+return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
 method GetUUIDString() class hb_orm_SQLConnect  //Will return a UUID string
 local l_cUUID := []
-local l_Result := .f.
+local l_lResult := .f.
 
 if ::Connected
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         if ::SQLExec([select cast(UUID() AS char(36)) AS cuuid],"c_DB_Result_UUID")
-            l_Result := .t.
+            l_lResult := .t.
         endif
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         if ::SQLExec([select gen_random_uuid()::char(36) as cuuid],"c_DB_Result_UUID")
-            l_Result := .t.
+            l_lResult := .t.
         endif
     endcase
-    if l_Result == .t.
+    if l_lResult == .t.
         if Valtype(c_DB_Result_UUID->cuuid) == "C"
             l_cUUID := trim(c_DB_Result_UUID->cuuid)
         endif
@@ -880,14 +924,14 @@ return l_cUUID
 //-----------------------------------------------------------------------------------------------------------------
 function hb_orm_GetApplicationStack()
 local l_cInfo := ""
-local nLevel  := 1
+local l_nLevel := 1
 
-do while !empty(ProcName(nLevel))
+do while !empty(ProcName(l_nLevel))
     if !empty(l_cInfo)
         l_cInfo += CRLF
     endif
-    l_cInfo += trans(nLevel)+" "+ProcFile(nLevel)+"->"+ProcName(nLevel)+"("+trans(ProcLine(nLevel))+")"
-    nLevel++
+    l_cInfo += trans(l_nLevel)+" "+ProcFile(l_nLevel)+"->"+ProcName(l_nLevel)+"("+trans(ProcLine(l_nLevel))+")"
+    l_nLevel++
 enddo
 
 return l_cInfo

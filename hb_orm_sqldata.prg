@@ -1,4 +1,4 @@
-//Copyright (c) 2021-2022 Eric Lendvai MIT License
+//Copyright (c) 2023 Eric Lendvai MIT License
 
 #include "hb_orm.ch"
 
@@ -27,22 +27,22 @@ method UseConnection(par_oSQLConnection) class hb_orm_SQLData
 return Self
 //-----------------------------------------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------------------------------------
-method Echo(par_text) class hb_orm_SQLData
-// return par_text+trans(::p_SQLEngineType)
+method Echo(par_cText) class hb_orm_SQLData
+// return par_cText+trans(::p_SQLEngineType)
 
-// local l_Array := {{1,2},{3,4},{5,6},{7,8},{9,10}}
-// local l_SubArray
+// local l_aArray := {{1,2},{3,4},{5,6},{7,8},{9,10}}
+// local l_aSubArray
 // local l_i
 
-// for each l_SubArray in l_Array
+// for each l_aSubArray in l_aArray
 //     altd()
-//     l_i := l_SubArray
+//     l_i := l_aSubArray
 // endfor
 
 //Bogus call to force the linker
 //VFP_GETCOMPATIBILITYPACKVERSION()
 
-return par_text
+return par_cText
 //-----------------------------------------------------------------------------------------------------------------
 method destroy() class hb_orm_SQLData
 // hb_orm_SendToDebugView("hb_orm destroy")
@@ -51,7 +51,7 @@ method destroy() class hb_orm_SQLData
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
 method Table(par_xEventId,par_cSchemaAndTableName,par_cAlias) class hb_orm_SQLData
-local l_iPos
+local l_nPos
 local l_aErrors := {}
 
 if pcount() > 0
@@ -106,17 +106,17 @@ if pcount() > 0
             ::p_TableAlias := lower(::p_SchemaAndTableName)
         endif
     else
-        l_iPos = at(".",par_cSchemaAndTableName)
-        if empty(l_iPos)
+        l_nPos = at(".",par_cSchemaAndTableName)
+        if empty(l_nPos)
             ::p_SchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
-            l_iPos = at(".",::p_SchemaAndTableName)
+            l_nPos = at(".",::p_SchemaAndTableName)
         else
             ::p_SchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
         endif
         if pcount() >= 3 .and. !empty(par_cAlias)
             ::p_TableAlias := lower(par_cAlias)
         else
-            ::p_TableAlias := lower(substr(::p_SchemaAndTableName,l_iPos+1))
+            ::p_TableAlias := lower(substr(::p_SchemaAndTableName,l_nPos+1))
         endif
     endif
     if empty(::p_SchemaAndTableName)
@@ -144,80 +144,177 @@ method UsedInUnion(par_o_dl) class hb_orm_SQLData
 ::p_ReferenceForSQLDataStrings := par_o_dl
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Distinct(par_Mode) class hb_orm_SQLData
-::p_DistinctMode := iif(par_Mode,1,0)
+method Distinct(par_lMode) class hb_orm_SQLData
+::p_DistinctMode := iif(par_lMode,1,0)
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method Limit(par_Limit) class hb_orm_SQLData
 ::p_Limit := par_Limit
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Force(par_Mode) class hb_orm_SQLData       //Used for VFP ORM, to disabled rishmore optimizer
+method Force(par_lMode) class hb_orm_SQLData       //Used for VFP ORM, to disabled rishmore optimizer
 // Only used when accessing VFP backend -- Under Design
-::p_Force := par_Mode
+::p_Force := par_lMode
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method NoTrack() class hb_orm_SQLData
 ::p_NoTrack := .t.
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Key(par_Key) class hb_orm_SQLData                                     //Set the key or retrieve the last used key
+method Key(par_iKey) class hb_orm_SQLData                                     //Set the key or retrieve the last used key
 if pcount() == 1
-    ::p_Key := par_Key
+    ::p_Key := par_iKey
 else
     return ::p_Key
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Field(par_cName,par_Value) class hb_orm_SQLData                        //To set a field (par_cName) in the Table() to the value (par_value). If par_Value is not provided, will return the value from previous set field value
+method FieldSet(par_cName,par_nType,par_xValue) class hb_orm_SQLData                         // Called by all other Field* methods. par_nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array
 local l_xResult := NIL
-local l_FieldName
+
+local l_cFieldName
 local l_aErrors := {}
 local l_nPos
-// local l_HashPos
+local l_aFieldInfo
 
 if !empty(par_cName)
     // Due to handling SchemaName+TableName or only TableName, the simplest is to ignore table names info in par_cName.
-    l_FieldName := Strtran(allt(par_cName),"->",".")  // in case Harbour field notification was used instead of SQL notification.
-    l_nPos := rat(".",l_FieldName)
+    l_cFieldName := Strtran(allt(par_cName),"->",".")  // in case Harbour field notification was used instead of SQL notification.
+    l_nPos := rat(".",l_cFieldName)
     if l_nPos > 0
-        l_FieldName := substr(l_FieldName,l_nPos+1)
+        l_cFieldName := substr(l_cFieldName,l_nPos+1)
     endif
 
-    l_FieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_FieldName)
-    if empty(l_FieldName)
+    l_cFieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_cFieldName)
+    if empty(l_cFieldName)
         AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
         ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
     else
-        if pcount() == 2
-            ::p_FieldsAndValues[l_FieldName] := par_Value
-            l_xResult := par_Value
+        if pcount() == 3
+            ::p_FieldsAndValues[l_cFieldName] := {par_nType,par_xValue}
         else
-            l_xResult = hb_HGetDef(::p_FieldsAndValues, l_FieldName, NIL)
+            l_xResult := hb_HGetDef(::p_FieldsAndValues, l_cFieldName, NIL)
+            l_xResult := l_xResult[2]
         endif
     endif
+
 endif
 
 return l_xResult
 //-----------------------------------------------------------------------------------------------------------------
+//The following method existed before the new FieldValue(), FieldExpression and FieldArray() methods. 
+method Field(par_cName,par_xValue) class hb_orm_SQLData                        //To set a field (par_cName) in the Table() to the value (par_xValue). If par_xValue is not provided, will return the value from previous set field value
+local l_xResult
+if pcount() == 1
+    l_xResult := ::FieldSet(par_cName)
+else
+    if ValType( par_xValue ) == "A" .and. par_xValue[1] == "S"
+        l_xResult := ::FieldSet(par_cName,2,par_xValue[2])
+    else
+        l_xResult := ::FieldSet(par_cName,1,par_xValue)
+    endif
+endif
+return l_xResult
+//-----------------------------------------------------------------------------------------------------------------
+method FieldValue(par_cName,par_xValue) class hb_orm_SQLData                        //To set a field (par_cName) in the Table() to the value (par_xValue). If par_xValue is not provided, will return the value from previous set field value
+local l_xResult
+if pcount() == 1
+    l_xResult := ::FieldSet(par_cName) 
+else
+    l_xResult := ::FieldSet(par_cName,1,par_xValue) 
+endif
+return l_xResult
+//-----------------------------------------------------------------------------------------------------------------
+method FieldExpression(par_cName,par_cValue) class hb_orm_SQLData                        //To set a field (par_cName) in the Table() to the value (par_xValue). If par_xValue is not provided, will return the value from previous set field value
+local l_xResult := NIL
+local l_cValue := par_cValue
+local l_aFieldInfo
+local l_nFieldDec
+local l_aErrors := {}
+
+do case
+case pcount() == 1
+    l_xResult := ::FieldSet(par_cName)
+    l_cValue := ""
+
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    do case
+    case !empty(el_inlist(upper(par_cValue),"NOW()","NOW"))
+        // Auto-determine the precision parameter of current_timestamp()
+
+        l_aFieldInfo := ::p_oSQLConnection:GetFieldInfo(::p_SchemaAndTableName,par_cName)
+        if empty(l_aFieldInfo)
+            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
+            ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+            l_cValue := ""
+        else
+            l_nFieldDec := l_aFieldInfo[HB_ORM_GETFIELDINFO_FIELDDECIMALS]
+            if l_nFieldDec > 0
+                l_cValue := "current_timestamp("+alltrim(str(l_nFieldDec))+")"
+            else
+                l_cValue := "current_timestamp()"
+            endif
+        endif
+
+    otherwise
+    endcase
+
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    do case
+    case !empty(el_inlist(upper(par_cValue),"NOW()","NOW"))
+        l_cValue := "now()"
+    endcase
+endcase
+
+if !empty(l_cValue)
+    l_xResult := ::FieldSet(par_cName,2,l_cValue)
+endif
+
+return l_xResult
+//-----------------------------------------------------------------------------------------------------------------
+method FieldArray(par_cName,par_xValue) class hb_orm_SQLData                        //To set a field (par_cName) in the Table() to the value (par_xValue). If par_xValue is not provided, will return the value from previous set field value
+local l_xResult
+
+//Arrays are only supported in PostgreSQL
+do case
+case pcount() == 1
+    l_xResult := ::FieldSet(par_cName) 
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    l_xResult := NIL
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    l_xResult := ::FieldSet(par_cName,3,par_xValue) 
+endcase
+
+return l_xResult
+//-----------------------------------------------------------------------------------------------------------------
 method ErrorMessage() class hb_orm_SQLData                                   //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add() :Update()  :Delete()
-return ::p_ErrorMessage
+local l_cErrorMessage
+
+if ValType(::p_ErrorMessage) == "A"
+    l_cErrorMessage := hb_jsonEncode(::p_ErrorMessage)
+else
+    l_cErrorMessage := ::p_ErrorMessage
+endif
+return l_cErrorMessage
 //-----------------------------------------------------------------------------------------------------------------
 // method GetFormattedErrorMessage() class hb_orm_SQLData                       //Retrieve the error text of the last call to .SQL() or .Get()  in an HTML formatted Fasion  (ELS)
 // return iif(empty(::p_ErrorMessage),[],g_OneCellTable(0,0,o_cw.p_Form_Label_Font_Start+[<font color="#FF0000">]+::p_ErrorMessage))
 //-----------------------------------------------------------------------------------------------------------------
-method Add(par_Key) class hb_orm_SQLData                                     //Adds a record. par_Key is optional and can only be used with table with non auto-increment key field
-
-local l_Fields
-local l_select
-local l_SQLCommand
-local l_FieldName,l_FieldInfo
-local l_Value
-local l_Values
+method Add(par_iKey) class hb_orm_SQLData                                     //Adds a record. par_iKey is optional and can only be used with table with non auto-increment key field
+local l_cFields
+local l_nSelect
+local l_cSQLCommand
+local l_cFieldName,l_aFieldInfo
+local l_aValue
+local l_xValue
+local l_cValues
+local l_cFieldValue
+local l_cArrayValue
 local l_oField
 local l_aAutoTrimmedFields := {}
 local l_aErrors := {}
-local l_KeyFieldValue
+local l_xKeyFieldValue
+local l_nPos
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
@@ -236,71 +333,76 @@ if empty(::p_ErrorMessage)
         ::p_ErrorMessage = [Missing Table]
         
     otherwise
-        l_select := iif(used(),select(),0)
+        l_nSelect := iif(used(),select(),0)
         
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-            
             if pcount() == 1
                 //Used in case the KEY field is not auto-increment
-                l_Fields := ::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
-                l_Values := Trans(par_key)
+                l_cFields := ::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
+                l_cValues := Trans(par_iKey)
             else
-                l_Fields := ""
-                l_Values := ""
+                l_cFields := ""
+                l_cValues := ""
             endif
             
             //Check if a CreationTimeFieldName exists and if yes, set it to now()
             if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
-                if !empty(l_Fields)
-                    l_Fields += ","
-                    l_Values += ","
+                if !empty(l_cFields)
+                    l_cFields += ","
+                    l_cValues += ","
                 endif
-                l_Fields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
-                l_Values += "now()"
+                l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
+                l_cValues += "current_timestamp()"
             endif
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
             if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
-                if !empty(l_Fields)
-                    l_Fields += ","
-                    l_Values += ","
+                if !empty(l_cFields)
+                    l_cFields += ","
+                    l_cValues += ","
                 endif
-                l_Fields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
-                l_Values += "now()"
+                l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
+                l_cValues += "current_timestamp()"
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
-                l_Value     := l_oField:__enumValue()
+                l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                l_aFieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_aValue     := l_oField:__enumValue()
 
-                if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
-                    l_Value := l_Value[2]
-                else
-                    if !el_AUnpack(::PrepValueForMySQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                switch l_aValue[1]
+                case 1  // Value
+                    l_cFieldValue := ""
+                    if !el_AUnpack(::PrepValueForMySQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
-                endif
+                    exit
+                case 2  // Expression
+                    l_cFieldValue := l_aValue[2]
+                    exit
+                otherwise
+                    loop
+                endswitch
 
-                if !empty(l_Fields)
-                    l_Fields += ","
-                    l_Values += ","
+                if !empty(l_cFields)
+                    l_cFields += ","
+                    l_cValues += ","
                 endif
-                l_Fields += ::p_oSQLConnection:FormatIdentifier(l_FieldName)
-                l_Values += l_Value
+                l_cFields += ::p_oSQLConnection:FormatIdentifier(l_cFieldName)
+                l_cValues += l_cFieldValue
 
             endfor
-            l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[)]
+            l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_cFields+[) VALUES (]+l_cValues+[)]
             
-            l_SQLCommand := strtran(l_SQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
+            // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
-            ::p_LastSQLCommand = l_SQLCommand
+            ::p_LastSQLCommand = l_cSQLCommand
 
-            if ::p_oSQLConnection:SQLExec(l_SQLCommand)
+            if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
                 do case
                 case pcount() == 1
-                    ::p_Key = par_key
+                    ::p_Key = par_iKey
                     
                 otherwise
                     // LastInsertedID := hb_RDDInfo(RDDI_INSERTID,,"SQLMIX",::p_oSQLConnection:GetHandle())
@@ -311,9 +413,9 @@ if empty(::p_ErrorMessage)
                         else
                             ::p_Key := c_DB_Result->result
                         endif
-                        // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_SQLCommand+[ -> Key = ]+trans(::p_Key))
+                        // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand+[ -> Key = ]+trans(::p_Key))
                     else
-                        // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_SQLCommand+[ -> Failed Get Added Key])
+                        // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> Failed Get Added Key])
                         ::p_ErrorMessage = [Failed To Get Added KEY]
                     endif
                     CloseAlias("c_DB_Result")
@@ -322,83 +424,110 @@ if empty(::p_ErrorMessage)
                 
             else
                 //Failed To Add
-                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_SQLCommand+[ -> ]+::p_ErrorMessage)
+                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
                 ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
                 // hb_orm_SendToDebugView(::p_ErrorMessage)
 
             endif
    
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-            
             if pcount() == 1
                 //Used in case the KEY field is not auto-increment
-                l_Fields := ::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
-                l_Values := Trans(par_key)
+                l_cFields := ::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
+                l_cValues := Trans(par_iKey)
             else
-                l_Fields := ""
-                l_Values := ""
+                l_cFields := ""
+                l_cValues := ""
             endif
             
             //Check if a CreationTimeFieldName exists and if yes, set it to now()
             if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
-                if !empty(l_Fields)
-                    l_Fields += ","
-                    l_Values += ","
+                if !empty(l_cFields)
+                    l_cFields += ","
+                    l_cValues += ","
                 endif
-                l_Fields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
-                l_Values += "now()"
+                l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
+                l_cValues += "now()"
             endif
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
             if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
-                if !empty(l_Fields)
-                    l_Fields += ","
-                    l_Values += ","
+                if !empty(l_cFields)
+                    l_cFields += ","
+                    l_cValues += ","
                 endif
-                l_Fields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
-                l_Values += "now()"
+                l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
+                l_cValues += "now()"
             endif
-            
-            for each l_oField in ::p_FieldsAndValues
-                l_FieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
-                l_Value     := l_oField:__enumValue()
 
-                if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
-                    l_Value := l_Value[2]
-                else
-                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_Value,::p_SchemaAndTableName,0,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+            for each l_oField in ::p_FieldsAndValues
+                l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                l_aFieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_aValue     := l_oField:__enumValue()
+
+                switch l_aValue[1]
+                case 1  // Value
+                    l_cFieldValue := ""
+                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
-                endif
+                    exit
+                case 2  // Expression
+                    l_cFieldValue := l_aValue[2]
+                    exit
+                case 3  // Array
+                    //Example: array['614417fb-9aec-4a6a-961a-12c9b3f58985','11111111-2222-3333-4444-000000000001']::uuid[]
+                    l_cFieldValue := "array["
+                    for each l_xValue in l_aValue[2]
+                        l_cArrayValue := ""
+                        if el_AUnpack(::PrepValueForPostgreSQL("adding",l_xValue,::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cArrayValue)
+                            if l_xValue:__enumindex > 1
+                                l_cFieldValue += ","
+                            endif
+                            //Will be casting the entire array afterwards, will remove any casting in l_cFieldValue
+                            l_nPos := at("::",l_cArrayValue)
+                            if l_nPos > 0
+                                l_cArrayValue := left(l_cArrayValue,l_nPos-1)
+                            endif
+                            l_cFieldValue += l_cArrayValue
+                        else
+                            loop
+                        endif
+                    endfor
+                    l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],l_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH],l_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS])+"[]"
+                    exit
+                otherwise
+                    loop
+                endswitch
 
-                if !empty(l_Fields)
-                    l_Fields += ","
-                    l_Values += ","
+                if !empty(l_cFields)
+                    l_cFields += ","
+                    l_cValues += ","
                 endif
-                l_Fields += ::p_oSQLConnection:FormatIdentifier(l_FieldName)
-                l_Values += l_Value
+                l_cFields += ::p_oSQLConnection:FormatIdentifier(l_cFieldName)
+                l_cValues += l_cFieldValue
 
             endfor
-            l_SQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_Fields+[) VALUES (]+l_Values+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
-            
-            l_SQLCommand := strtran(l_SQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
-            ::p_LastSQLCommand = l_SQLCommand
-            if ::p_oSQLConnection:SQLExec(l_SQLCommand,"c_DB_Result")
+            l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_cFields+[) VALUES (]+l_cValues+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
+            
+            // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
+
+            ::p_LastSQLCommand = l_cSQLCommand
+            if ::p_oSQLConnection:SQLExec(l_cSQLCommand,"c_DB_Result")
                 do case
                 case pcount() == 1
-                    ::p_Key = par_key
+                    ::p_Key = par_iKey
                     
                 otherwise
                     ::Tally := 1
-                    l_KeyFieldValue := c_DB_Result->(FieldGet(FieldPos(::p_PrimaryKeyFieldName)))
-                    if Valtype(l_KeyFieldValue) == "C"
-                        ::p_Key := val(l_KeyFieldValue)
+                    l_xKeyFieldValue := c_DB_Result->(FieldGet(FieldPos(::p_PrimaryKeyFieldName)))
+                    if Valtype(l_xKeyFieldValue) == "C"
+                        ::p_Key := val(l_xKeyFieldValue)
                     else
-                        ::p_Key := l_KeyFieldValue
+                        ::p_Key := l_xKeyFieldValue
                     endif
-                    // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_SQLCommand+[ -> Key = ]+trans(::p_Key))
+                    // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand+[ -> Key = ]+trans(::p_Key))
                     
                 endcase
                 
@@ -411,7 +540,7 @@ if empty(::p_ErrorMessage)
 
         endcase
 
-        select (l_select)
+        select (l_nSelect)
         
     endcase
 endif
@@ -426,6 +555,7 @@ else
 endif
 
 if len(l_aErrors) > 0
+    ::p_ErrorMessage := l_aErrors
     ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
 endif
 
@@ -433,8 +563,8 @@ return (::p_Key > 0)
 //-----------------------------------------------------------------------------------------------------------------
 method Delete(par_xEventId,par_cSchemaAndTableName,par_iKey) class hb_orm_SQLData                              //Delete record. Should be called as .Delete(Key) or .Delete(TableName,Key). The first form require a previous call to .Table(TableName)
 
-local l_select
-local l_SQLCommand
+local l_nSelect
+local l_cSQLCommand
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
@@ -461,32 +591,32 @@ if empty(::p_ErrorMessage)
         ::p_ErrorMessage := [Missing ]+upper(::p_PrimaryKeyFieldName)
         
     otherwise
-        l_select := iif(used(),select(),0)
+        l_nSelect := iif(used(),select(),0)
         
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             
-            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(::p_KEY)
-            ::p_LastSQLCommand = l_SQLCommand
+            l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(::p_KEY)
+            ::p_LastSQLCommand = l_cSQLCommand
             
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             
-            l_SQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(::p_KEY)
-            ::p_LastSQLCommand = l_SQLCommand
+            l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(::p_KEY)
+            ::p_LastSQLCommand = l_cSQLCommand
             
         endcase
 
         if empty(::p_ErrorMessage)
-            if ::p_oSQLConnection:SQLExec(l_SQLCommand)
-                // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_SQLCommand)
+            if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
+                // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
                 ::Tally = 1
             else
                 ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
-                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_SQLCommand+[ -> ]+::p_ErrorMessage)
+                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
             endif
         endif
 
-        select (l_select)
+        select (l_nSelect)
         
     endcase
 endif
@@ -497,18 +627,23 @@ endif
 
 return empty(::p_ErrorMessage)
 //-----------------------------------------------------------------------------------------------------------------
-method Update(par_Key) class hb_orm_SQLData                                  //Update a record in .Table(TableName)  where .Field(...) was called first
+method Update(par_iKey) class hb_orm_SQLData                                  //Update a record in .Table(TableName)  where .Field(...) was called first
 
-local l_select
-local l_SQLCommand
-local l_FieldName,l_FieldInfo
-local l_Value
+local l_nSelect
+local l_cSQLCommand
+local l_cFieldName,l_aFieldInfo
+local l_aValue
+local l_xValue
+local l_cValues
+local l_cFieldValue
+local l_cArrayValue
 local l_oField
 local l_aAutoTrimmedFields := {}
 local l_aErrors := {}
+local l_nPos
 
 if pcount() == 1
-    ::p_KEY = par_key
+    ::p_KEY = par_iKey
 endif
 
 ::p_ErrorMessage := ""
@@ -532,55 +667,56 @@ if empty(::p_ErrorMessage)
         ::p_ErrorMessage = [Missing ]+::p_PrimaryKeyFieldName
         
     otherwise
-        l_select = iif(used(),select(),0)
+        l_nSelect = iif(used(),select(),0)
         
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-            // M_ find a way to integrade the same concept as the code below. Should the update be a stored Procedure ?
-            *if !empty(::p_LastDateTimeOfChangeFieldName)
-            *	replace (::p_SchemaAndTableName+"->"+::p_LastDateTimeOfChangeFieldName) with v_LocalTime
-            *endif
-            
-            l_SQLCommand := ""
+            l_cSQLCommand := ""
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
             if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
-                if !empty(l_SQLCommand)
-                    l_SQLCommand += ","
+                if !empty(l_cSQLCommand)
+                    l_cSQLCommand += ","
                 endif
-                l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)+[ = now()]
+                l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)+[ = current_timestamp()]
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
-                l_Value     := l_oField:__enumValue()
+                l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                l_aFieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_aValue     := l_oField:__enumValue()
 
-                if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
-                    l_Value := l_Value[2]
-                else
-                    if !el_AUnpack(::PrepValueForMySQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                switch l_aValue[1]
+                case 1  // Value
+                    l_cFieldValue := ""
+                    if !el_AUnpack(::PrepValueForMySQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
-                endif
+                    exit
+                case 2  // Expression
+                    l_cFieldValue := l_aValue[2]
+                    exit
+                otherwise
+                    loop
+                endswitch
                 
-                if !empty(l_SQLCommand)
-                    l_SQLCommand += ","
+                if !empty(l_cSQLCommand)
+                    l_cSQLCommand += ","
                 endif
-                l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(l_FieldName)+[ = ]+l_Value
+                l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(l_cFieldName)+[ = ]+l_cFieldValue
 
             endfor
+
+            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            ::p_LastSQLCommand = l_cSQLCommand
             
-            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
-            ::p_LastSQLCommand = l_SQLCommand
-            
-            if ::p_oSQLConnection:SQLExec(l_SQLCommand)
+            if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
                 ::Tally = 1
-                // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_SQLCommand)
+                // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
                 ::p_LastUpdateChangedData := .t.   // _M_ For now I am assuming the record changed. Later on create a generic Store Procedure that will do these data changes.
             else
                 ::p_ErrorMessage = [Failed SQL Update.]
-                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_SQLCommand+[ -> ]+::p_ErrorMessage)
+                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
             endif
 
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
@@ -589,52 +725,82 @@ if empty(::p_ErrorMessage)
             *	replace (::p_SchemaAndTableName+"->"+::p_LastDateTimeOfChangeFieldName) with v_LocalTime
             *endif
                         
-            l_SQLCommand := ""
+            l_cSQLCommand := ""
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
             if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
-                if !empty(l_SQLCommand)
-                    l_SQLCommand += ","
+                if !empty(l_cSQLCommand)
+                    l_cSQLCommand += ","
                 endif
-                l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)+[ = now()]
+                l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)+[ = now()]
             endif
             
             for each l_oField in ::p_FieldsAndValues
-                l_FieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_FieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_FieldName]
-                l_Value     := l_oField:__enumValue()
+                l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                l_aFieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_aValue     := l_oField:__enumValue()
 
-                if ValType( l_Value ) == "A" .and. l_Value[1] == "S"
-                    l_Value := l_Value[2]
-                else
-                    if !el_AUnpack(::PrepValueForPostgreSQL("updating",l_Value,::p_SchemaAndTableName,::p_KEY,l_FieldName,l_FieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_Value)
+                switch l_aValue[1]
+                case 1  // Value
+                    l_cFieldValue := ""
+// hb_orm_SendToDebugView("Update Step Value 1 - a")
+                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
-                endif
+// hb_orm_SendToDebugView("Update Step Value 1 - b")
+                    exit
+                case 2  // Expression
+                    l_cFieldValue := l_aValue[2]
+                    exit
+                case 3  // Array
+                //array['614417fb-9aec-4a6a-961a-12c9b3f58985','11111111-2222-3333-4444-000000000001']::uuid[]
+                    l_cFieldValue := "array["
+                    for each l_xValue in l_aValue[2]
+                        l_cArrayValue := ""
+                        if el_AUnpack(::PrepValueForPostgreSQL("adding",l_xValue,::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cArrayValue)
+                            if l_xValue:__enumindex > 1
+                                l_cFieldValue += ","
+                            endif
+                            //Will be casting the entire array afterwards, will remove any casting in l_cFieldValue
+                            l_nPos := at("::",l_cArrayValue)
+                            if l_nPos > 0
+                                l_cArrayValue := left(l_cArrayValue,l_nPos-1)
+                            endif
+                            l_cFieldValue += l_cArrayValue
+                        else
+                            loop
+                        endif
+                    endfor
+                    l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],l_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH],l_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS])+"[]"
+                    exit
+                otherwise
+                    loop
+                endswitch
 
-                if !empty(l_SQLCommand)
-                    l_SQLCommand += ","
+                if !empty(l_cSQLCommand)
+                    l_cSQLCommand += ","
                 endif
-                l_SQLCommand += ::p_oSQLConnection:FormatIdentifier(l_FieldName)+[ = ]+l_Value
+                l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(l_cFieldName)+[ = ]+l_cFieldValue
 
             endfor
-            
-            l_SQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_SQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
 
-            ::p_LastSQLCommand = l_SQLCommand
+            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+
+            ::p_LastSQLCommand = l_cSQLCommand
             
-            if ::p_oSQLConnection:SQLExec(l_SQLCommand)
+hb_orm_SendToDebugView("Before "+l_cSQLCommand)
+            if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
                 ::Tally = 1
-                // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_SQLCommand)
+                // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
                 ::p_LastUpdateChangedData := .t.   // _M_ For now I am assuming the record changed. Later on create a generic Store Procedure that will do these data changes.
             else
                 ::p_ErrorMessage = [Failed SQL Update.]
-                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_SQLCommand+[ -> ]+::p_ErrorMessage)
+                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
             endif
 
         endcase
         
-        select (l_select)
+        select (l_nSelect)
         
     endcase
 endif
@@ -648,62 +814,63 @@ else
 endif
 
 if len(l_aErrors) > 0
+    ::p_ErrorMessage := l_aErrors
     ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
 endif
 
 return empty(::p_ErrorMessage)
 //-----------------------------------------------------------------------------------------------------------------
-method PrepExpression(par_Expression,...) class hb_orm_SQLData   //Used to convert from Source Language syntax to MySQL, and to make parameter static
+method PrepExpression(par_cExpression,...) class hb_orm_SQLData   //Used to convert from Source Language syntax to MySQL, and to make parameter static
 
 local l_aParams := { ... }
-local l_char
-local l_MergeCodeNumber
-local l_pos
-local l_result
-local l_Value
+local l_cChar
+local l_nMergeCodeNumber
+local l_nPos
+local l_cResult
+local l_xValue
 local l_aErrors := {}
 
-if pcount() > 1 .and. "^" $ par_Expression
-    l_result := ""
-    l_MergeCodeNumber := 0
+if pcount() > 1 .and. "^" $ par_cExpression
+    l_cResult := ""
+    l_nMergeCodeNumber := 0
     
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        for l_pos := 1 to len(par_Expression)
-            l_char := substr(par_Expression,l_pos,1)
-            //l_char := par_Expression[l_pos]
-            if l_char == "^"
-                l_MergeCodeNumber += 1
-                l_Value = l_aParams[l_MergeCodeNumber]
+        for l_nPos := 1 to len(par_cExpression)
+            l_cChar := substr(par_cExpression,l_nPos,1)
+            //l_cChar := par_cExpression[l_nPos]
+            if l_cChar == "^"
+                l_nMergeCodeNumber += 1
+                l_xValue = l_aParams[l_nMergeCodeNumber]
 
-                switch valtype(l_Value)
+                switch valtype(l_xValue)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_result += INVALUEWITCH+'"'+hb_StrReplace( l_Value, { "'" => "\'",;
+                    l_cResult += INVALUEWITCH+'"'+hb_StrReplace( l_xValue, { "'" => "\'",;
                                                                             '"' => '\"',;
                                                                             '\' => '\\'} )+'"'+INVALUEWITCH
                     exit
 
                 case "N"  // Numeric
-                    l_result += INVALUEWITCH+hb_ntoc(l_Value)+INVALUEWITCH
+                    l_cResult += INVALUEWITCH+hb_ntoc(l_xValue)+INVALUEWITCH
                     exit
 
                 case "D"  // Date   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
-                    // l_Value := '"'+hb_DtoC(l_Value,"YYYY-MM-DD")+'"'           //_M_  Test on 1753-01-01
-                    l_result += INVALUEWITCH+::FormatDateForSQLUpdate(l_Value)+INVALUEWITCH
+                    // l_xValue := '"'+hb_DtoC(l_xValue,"YYYY-MM-DD")+'"'           //_M_  Test on 1753-01-01
+                    l_cResult += INVALUEWITCH+::FormatDateForSQLUpdate(l_xValue)+INVALUEWITCH
                     exit
 
                 case "T"  // TimeStamp (*)   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
-                    // l_Value := '"'+hb_TtoC(l_Value,"YYYY-MM-DD","hh:mm:ss")+'"'           //_M_  Test on 1753-01-01
-                    l_result += INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_Value)+INVALUEWITCH
+                    // l_xValue := '"'+hb_TtoC(l_xValue,"YYYY-MM-DD","hh:mm:ss")+'"'           //_M_  Test on 1753-01-01
+                    l_cResult += INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_xValue)+INVALUEWITCH
                     exit
 
                 case "L"  // Boolean (logical)   https://dev.mysql.com/doc/refman/8.0/en/boolean-literals.html
-                    l_result += INVALUEWITCH+iif(l_Value,"TRUE","FALSE")+INVALUEWITCH
+                    l_cResult += INVALUEWITCH+iif(l_xValue,"TRUE","FALSE")+INVALUEWITCH
                     exit
 
                 case "U"  // Undefined (NIL)
-                    l_result += INVALUEWITCH+"NULL"+INVALUEWITCH
+                    l_cResult += INVALUEWITCH+"NULL"+INVALUEWITCH
                     exit
 
                 // case "A"  // Array
@@ -717,47 +884,47 @@ if pcount() > 1 .and. "^" $ par_Expression
                     ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
                 endswitch
             else
-                l_result += l_char
+                l_cResult += l_cChar
                 
             endif
         endfor
 
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        for l_pos := 1 to len(par_Expression)
-            l_char := substr(par_Expression,l_pos,1)
-            // l_char := par_Expression[l_pos]
-            if l_char == "^"
-                l_MergeCodeNumber += 1
-                l_Value = l_aParams[l_MergeCodeNumber]
+        for l_nPos := 1 to len(par_cExpression)
+            l_cChar := substr(par_cExpression,l_nPos,1)
+            // l_cChar := par_cExpression[l_nPos]
+            if l_cChar == "^"
+                l_nMergeCodeNumber += 1
+                l_xValue = l_aParams[l_nMergeCodeNumber]
 
-                switch valtype(l_Value)
+                switch valtype(l_xValue)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_result += INVALUEWITCH+"'"+hb_StrReplace( l_Value, { "'" => "\'",;
+                    l_cResult += INVALUEWITCH+"'"+hb_StrReplace( l_xValue, { "'" => "\'",;
                                                                             '"' => '\"',;
                                                                             '\' => '\\'} )+"'"+INVALUEWITCH
                     exit
 
                 case "N"  // Numeric
-                    l_result += INVALUEWITCH+hb_ntoc(l_Value)+INVALUEWITCH
+                    l_cResult += INVALUEWITCH+hb_ntoc(l_xValue)+INVALUEWITCH
                     exit
 
                 case "D"  // Date   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
-                    // l_Value := "'"+hb_DtoC(l_Value,"YYYY-MM-DD")+"'"          //_M_  Test on 1753-01-01
-                    l_result += INVALUEWITCH+::FormatDateForSQLUpdate(l_Value)+INVALUEWITCH
+                    // l_xValue := "'"+hb_DtoC(l_xValue,"YYYY-MM-DD")+"'"          //_M_  Test on 1753-01-01
+                    l_cResult += INVALUEWITCH+::FormatDateForSQLUpdate(l_xValue)+INVALUEWITCH
                     exit
 
                 case "T"  // TimeStamp (*)   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
-                    // l_Value := "'" +hb_TtoC(l_Value,"YYYY-MM-DD","hh:mm:ss")+"'"            //_M_  Test on 1753-01-01
-                    l_result += INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_Value)+INVALUEWITCH
+                    // l_xValue := "'" +hb_TtoC(l_xValue,"YYYY-MM-DD","hh:mm:ss")+"'"            //_M_  Test on 1753-01-01
+                    l_cResult += INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_xValue)+INVALUEWITCH
                     exit
 
                 case "L"  // Boolean (logical)   https://dev.mysql.com/doc/refman/8.0/en/boolean-literals.html
-                    l_result += INVALUEWITCH+iif(l_Value,"TRUE","FALSE")+INVALUEWITCH
+                    l_cResult += INVALUEWITCH+iif(l_xValue,"TRUE","FALSE")+INVALUEWITCH
                     exit
 
                 case "U"  // Undefined (NIL)
-                    l_result += INVALUEWITCH+"NULL"+INVALUEWITCH
+                    l_cResult += INVALUEWITCH+"NULL"+INVALUEWITCH
                     exit
 
                 // case "A"  // Array
@@ -772,7 +939,7 @@ if pcount() > 1 .and. "^" $ par_Expression
                     
                 endswitch
             else
-                l_result += l_char
+                l_cResult += l_cChar
                 
             endif
         endfor
@@ -780,31 +947,31 @@ if pcount() > 1 .and. "^" $ par_Expression
     endcase
         
 else
-    l_result = par_Expression
+    l_cResult = par_cExpression
     
 endif
 
-return l_result
+return l_cResult
 //-----------------------------------------------------------------------------------------------------------------
-method Column(par_Expression,par_Columns_Alias,...) class hb_orm_SQLData     //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
+method Column(par_cExpression,par_cColumnsAlias,...) class hb_orm_SQLData     //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
 
-if !empty(par_Expression)
+if !empty(par_cExpression)
     if pcount() < 2
-        AAdd(::p_FieldToReturn,{::PrepExpression(par_expression,...) , allt(strtran(strtran(allt(par_Expression),[->],[_]),[.],[_]))})
+        AAdd(::p_FieldToReturn,{::PrepExpression(par_cExpression,...) , allt(strtran(strtran(allt(par_cExpression),[->],[_]),[.],[_]))})
     else
-        AAdd(::p_FieldToReturn,{::PrepExpression(par_expression,...) , allt(par_Columns_Alias)})
+        AAdd(::p_FieldToReturn,{::PrepExpression(par_cExpression,...) , allt(par_cColumnsAlias)})
     endif
 endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Join(par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...) class hb_orm_SQLData    // Join Tables. Will return a handle that can be used later by ReplaceJoin()
+method Join(par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...) class hb_orm_SQLData    // Join Tables. Will return a handle that can be used later by ReplaceJoin()
 local l_cSchemaAndTableName
 local l_cAlias
-local l_iPos
+local l_nPos
 local l_aErrors := {}
 
-if empty(par_Type)
+if empty(par_cType)
     //Used to reserve a Join Position
     AAdd(::p_Join,{})
 else
@@ -816,17 +983,17 @@ else
             l_cAlias := lower(l_cSchemaAndTableName)
         endif
     else
-        l_iPos = at(".",par_cSchemaAndTableName)
-        if empty(l_iPos)
+        l_nPos = at(".",par_cSchemaAndTableName)
+        if empty(l_nPos)
             l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
-            l_iPos = at(".",l_cSchemaAndTableName)
+            l_nPos = at(".",l_cSchemaAndTableName)
         else
             l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
         endif
         if pcount() >= 3 .and. !empty(par_cAlias)
             l_cAlias := lower(par_cAlias)
         else
-            l_cAlias := lower(substr(l_cSchemaAndTableName,l_iPos+1))
+            l_cAlias := lower(substr(l_cSchemaAndTableName,l_nPos+1))
         endif
     endif
     if empty(l_cSchemaAndTableName)
@@ -836,24 +1003,24 @@ else
         ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
     endif
 
-    AAdd(::p_Join,{upper(allt(par_Type)),l_cSchemaAndTableName,l_cAlias,allt(::PrepExpression(par_expression,...))})
+    AAdd(::p_Join,{upper(allt(par_cType)),l_cSchemaAndTableName,l_cAlias,allt(::PrepExpression(par_cExpression,...))})
 endif
 
 return len(::p_Join)
 //-----------------------------------------------------------------------------------------------------------------
-method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...) class hb_orm_SQLData      // Replace a Join tables definition
+method ReplaceJoin(par_nJoinNumber,par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...) class hb_orm_SQLData      // Replace a Join tables definition
 local l_cSchemaAndTableName
 local l_cAlias
-local l_iPos
+local l_nPos
 local l_aErrors := {}
 
-if empty(par_Type)
-    ::p_Join[par_JoinNumber] := {}
+if empty(par_cType)
+    ::p_Join[par_nJoinNumber] := {}
 else
     // if ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     //     l_cAlias := allt(hb_DefaultValue(par_cAlias,""))
-    //     l_iPos := at(".",par_cSchemaAndTableName)
-    //     if empty(l_iPos)
+    //     l_nPos := at(".",par_cSchemaAndTableName)
+    //     if empty(l_nPos)
     //         if empty(l_cAlias)
     //             l_cAlias := allt(par_cSchemaAndTableName)
     //         endif
@@ -862,7 +1029,7 @@ else
     //         l_cSchemaAndTableName := allt(par_cSchemaAndTableName)
     //         if empty(l_cAlias)
     //             //Extract the table name from the l_cSchemaAndTableName
-    //             l_cAlias := substr(l_cAlias,l_iPos+1)
+    //             l_cAlias := substr(l_cAlias,l_nPos+1)
     //         endif
     //     endif
     // else
@@ -881,17 +1048,17 @@ else
             l_cAlias := lower(l_cSchemaAndTableName)
         endif
     else
-        l_iPos = at(".",par_cSchemaAndTableName)
-        if empty(l_iPos)
+        l_nPos = at(".",par_cSchemaAndTableName)
+        if empty(l_nPos)
             l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
-            l_iPos = at(".",l_cSchemaAndTableName)
+            l_nPos = at(".",l_cSchemaAndTableName)
         else
             l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
         endif
         if pcount() >= 4 .and. !empty(par_cAlias)
             l_cAlias := lower(par_cAlias)
         else
-            l_cAlias := lower(substr(l_cSchemaAndTableName,l_iPos+1))
+            l_cAlias := lower(substr(l_cSchemaAndTableName,l_nPos+1))
         endif
     endif
     if empty(l_cSchemaAndTableName)
@@ -901,199 +1068,196 @@ else
         ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
     endif
 
-    ::p_Join[par_JoinNumber] := {upper(allt(par_Type)),l_cSchemaAndTableName,l_cAlias,allt(::PrepExpression(par_expression,...))}
+    ::p_Join[par_nJoinNumber] := {upper(allt(par_cType)),l_cSchemaAndTableName,l_cAlias,allt(::PrepExpression(par_cExpression,...))}
 endif
 
-return par_JoinNumber
+return par_nJoinNumber
 //-----------------------------------------------------------------------------------------------------------------
-method Where(par_Expression,...) class hb_orm_SQLData   // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
+method Where(par_cExpression,...) class hb_orm_SQLData   // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
 
-if empty(par_Expression)
+if empty(par_cExpression)
     AAdd(::p_Where,{})
 else
-    AAdd(::p_Where,allt(::PrepExpression(par_expression,...)))
+    AAdd(::p_Where,allt(::PrepExpression(par_cExpression,...)))
 endif
 
 return len(::p_Where)
 //-----------------------------------------------------------------------------------------------------------------
-method ReplaceWhere(par_WhereNumber,par_Expression,...) class hb_orm_SQLData   // Replace a Where definition
+method ReplaceWhere(par_nWhereNumber,par_cExpression,...) class hb_orm_SQLData   // Replace a Where definition
 
-if !empty(par_Expression)
-    ::p_Where[par_WhereNumber] = allt(::PrepExpression(par_expression,...))
+if !empty(par_cExpression)
+    ::p_Where[par_nWhereNumber] = allt(::PrepExpression(par_cExpression,...))
 endif
 
-return par_WhereNumber
+return par_nWhereNumber
 //-----------------------------------------------------------------------------------------------------------------
-method Having(par_Expression,...) class hb_orm_SQLData   // Adds Having condition. Will return a handle that can be used later by ReplaceHaving()
+method Having(par_cExpression,...) class hb_orm_SQLData   // Adds Having condition. Will return a handle that can be used later by ReplaceHaving()
 
-if empty(par_Expression)
+if empty(par_cExpression)
     AAdd(::p_Having,{})
 else
-    AAdd(::p_Having,allt(::PrepExpression(par_expression,...)))
+    AAdd(::p_Having,allt(::PrepExpression(par_cExpression,...)))
 endif
 
 return len(::p_Having)
 //-----------------------------------------------------------------------------------------------------------------
-method ReplaceHaving(par_HavingNumber,par_Expression,...) class hb_orm_SQLData   // Replace a Having definition
+method ReplaceHaving(par_nHavingNumber,par_cExpression,...) class hb_orm_SQLData   // Replace a Having definition
 
-if !empty(par_Expression)
-    ::p_Having[par_HavingNumber] = allt(::PrepExpression(par_expression,...))
+if !empty(par_cExpression)
+    ::p_Having[par_nHavingNumber] = allt(::PrepExpression(par_cExpression,...))
 endif
 
-return par_HavingNumber
+return par_nHavingNumber
 //-----------------------------------------------------------------------------------------------------------------
-method KeywordCondition(par_Keywords,par_FieldToSearchFor,par_Operand,par_AsHaving) class hb_orm_SQLData     // Creates Where or Having conditions as multi text search in fields.
+method KeywordCondition(par_cKeywords,par_cFieldToSearchFor,par_cOperand,par_lAsHaving) class hb_orm_SQLData     // Creates Where or Having conditions as multi text search in fields.
 
-local l_AsHaving
-local l_Char
-local l_CharPos
-local l_condi
-local l_CondiOperand
-local l_ContainsStrings
-local l_Keywords
-local l_line
-local l_NewKeyWords
-local l_pos
-local l_StringMode
-local l_ConditionNumber
-local l_word
+local l_lAsHaving
+local l_cChar
+local l_cCharPos
+local l_cCondi
+local l_cCondiOperand
+local l_lContainsStrings
+local l_cKeywords
+local l_cLine
+local l_cNewKeyWords
+local l_nPos
+local l_lStringMode
+local l_nConditionNumber
+local l_cWord
 
-l_ConditionNumber := 0
-if !empty(par_Keywords)
+l_nConditionNumber := 0
+if !empty(par_cKeywords)
     
-    l_Keywords := upper(allt(par_Keywords))
-    l_Keywords := strtran(l_Keywords,"[","")
-    l_Keywords := strtran(l_Keywords,"]","")
+    l_cKeywords := upper(allt(par_cKeywords))
+    l_cKeywords := strtran(l_cKeywords,"[","")
+    l_cKeywords := strtran(l_cKeywords,"]","")
     
-    l_ContainsStrings := (["] $ par_Keywords)
+    l_lContainsStrings := (["] $ par_cKeywords)
     
-    if pcount() >= 3 .and. !empty(par_Operand)
-        l_CondiOperand := [ ]+padr(allt(par_Operand),3)+[ ]
+    if pcount() >= 3 .and. !empty(par_cOperand)
+        l_cCondiOperand := [ ]+padr(allt(par_cOperand),3)+[ ]
     else
-        l_CondiOperand := [ and ]
+        l_cCondiOperand := [ and ]
     endif
     
-    l_AsHaving := (pcount() >= 4 .and. par_AsHaving)
+    l_lAsHaving := (pcount() >= 4 .and. par_lAsHaving)
     
-    if l_ContainsStrings
-        l_NewKeyWords := ""
-        l_StringMode  := .f.
-        for l_CharPos := 1 to len(l_Keywords)
-            l_Char := substr(l_Keywords,l_CharPos,1)
+    if l_lContainsStrings
+        l_cNewKeyWords := ""
+        l_lStringMode  := .f.
+        for l_cCharPos := 1 to len(l_cKeywords)
+            l_cChar := substr(l_cKeywords,l_cCharPos,1)
             do case
-            case l_Char == ["]
-                l_StringMode := !l_StringMode
-                l_NewKeyWords += [ ]
-            case l_Char == [ ]
-                if l_StringMode
-                    l_NewKeyWords += chr(1)
+            case l_cChar == ["]
+                l_lStringMode := !l_lStringMode
+                l_cNewKeyWords += [ ]
+            case l_cChar == [ ]
+                if l_lStringMode
+                    l_cNewKeyWords += chr(1)
                 else
-                    l_NewKeyWords += [ ]
+                    l_cNewKeyWords += [ ]
                 endif
-            case l_Char == [,]
-                if l_StringMode
-                    l_NewKeyWords += chr(2)
+            case l_cChar == [,]
+                if l_lStringMode
+                    l_cNewKeyWords += chr(2)
                 else
-                    l_NewKeyWords += [ ]
+                    l_cNewKeyWords += [ ]
                 endif
             otherwise
-                l_NewKeyWords += l_Char
+                l_cNewKeyWords += l_cChar
             endcase
         endfor
-        l_Keywords := l_NewKeyWords
+        l_cKeywords := l_cNewKeyWords
     else
-        l_Keywords := strtran(l_Keywords,","," ")
+        l_cKeywords := strtran(l_cKeywords,","," ")
     endif
     
-    do while "  " $ l_Keywords
-        l_Keywords := strtran(l_Keywords,"  "," ")
+    do while "  " $ l_cKeywords
+        l_cKeywords := strtran(l_cKeywords,"  "," ")
     enddo
     
-    l_line  := allt(l_Keywords)+" "
-    l_condi := ""
-    do while .t. // !empty(l_line)   //Work around needed to avoid error 62 in DLL Mode
-        l_pos   := at(" ",l_line)
-        l_word  := upper(left(l_line,l_pos-1))
+    l_cLine  := allt(l_cKeywords)+" "
+    l_cCondi := ""
+    do while .t. // !empty(l_cLine)   //Work around needed to avoid error 62 in DLL Mode
+        l_nPos   := at(" ",l_cLine)
+        l_cWord  := upper(left(l_cLine,l_nPos-1))
         
-        l_word := strtran(l_word,"[","")  // To Prevent Injections
-        l_word := strtran(l_word,"]","")  // To Prevent Injections
-        l_word := left(l_word,250)        // To Ensure it is not too long.
+        l_cWord := strtran(l_cWord,"[","")  // To Prevent Injections
+        l_cWord := strtran(l_cWord,"]","")  // To Prevent Injections
+        l_cWord := left(l_cWord,250)        // To Ensure it is not too long.
         
         //The following is the "VFP" way
-        // l_condi += l_CondiOperand + "["+l_word+"] $ g_upper("+par_FieldToSearchFor+")"
-
+        // l_cCondi += l_cCondiOperand + "["+l_cWord+"] $ g_upper("+par_cFieldToSearchFor+")"
 
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             //_M_  Needs testing
-            l_condi += l_CondiOperand + [(lower(]+ par_FieldToSearchFor +[) LIKE '%]+lower(l_word)+[%')]
+            l_cCondi += l_cCondiOperand + [(lower(]+ par_cFieldToSearchFor +[) LIKE '%]+lower(l_cWord)+[%')]
 
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-            // l_condi += l_CondiOperand + [(lower(]+ par_FieldToSearchFor +[) LIKE '%]+lower(l_word)+[%')]
-            l_condi += l_CondiOperand + [(]+ par_FieldToSearchFor +[ ILIKE '%]+l_word+[%')]
+            // l_cCondi += l_cCondiOperand + [(lower(]+ par_cFieldToSearchFor +[) LIKE '%]+lower(l_cWord)+[%')]
+            l_cCondi += l_cCondiOperand + [(]+ par_cFieldToSearchFor +[ ILIKE '%]+l_cWord+[%')]
 
         endcase
 
-
-
-        if l_pos+1 > len(l_line)   //Work around needed to avoid error 62 in DLL Mode
+        if l_nPos+1 > len(l_cLine)   //Work around needed to avoid error 62 in DLL Mode
             exit
         else
-            l_line := substr(l_line,l_pos+1)
+            l_cLine := substr(l_cLine,l_nPos+1)
         endif
     enddo
     
-    l_condi := substr(l_condi,6)
+    l_cCondi := substr(l_cCondi,6)
     
-    if l_ContainsStrings
-        l_condi := strtran(l_condi,chr(1)," ")
-        l_condi := strtran(l_condi,chr(2),",")
+    if l_lContainsStrings
+        l_cCondi := strtran(l_cCondi,chr(1)," ")
+        l_cCondi := strtran(l_cCondi,chr(2),",")
     endif
     
     *	if l_NumberOfConditions > 1
-    *		l_condi = "("+l_condi+")"
+    *		l_cCondi = "("+l_cCondi+")"
     *	endif
 
-    if l_AsHaving
-        AAdd(::p_Having,l_condi)
-        l_ConditionNumber := len(::p_Having)
+    if l_lAsHaving
+        AAdd(::p_Having,l_cCondi)
+        l_nConditionNumber := len(::p_Having)
     else
-        AAdd(::p_Where,l_condi)         //_M_  later make this code other backend ready
-        l_ConditionNumber := len(::p_Where)
+        AAdd(::p_Where,l_cCondi)         //_M_  later make this code other backend ready
+        l_nConditionNumber := len(::p_Where)
     endif
     
 endif
 
-return l_ConditionNumber
+return l_nConditionNumber
 //-----------------------------------------------------------------------------------------------------------------
-method GroupBy(par_Expression) class hb_orm_SQLData       // Add a Group By definition
+method GroupBy(par_cExpression) class hb_orm_SQLData       // Add a Group By definition
 
-if !empty(par_Expression)
-    AAdd(::p_GroupBy,allt(par_Expression))
+if !empty(par_cExpression)
+    AAdd(::p_GroupBy,allt(par_cExpression))
 endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method OrderBy(par_Expression,par_Direction) class hb_orm_SQLData       // Add an Order By definition    par_Direction = "A"scending or "D"escending
+method OrderBy(par_cExpression,par_cDirection) class hb_orm_SQLData       // Add an Order By definition    par_cDirection = "A"scending or "D"escending
 
-if !empty(par_Expression)
+if !empty(par_cExpression)
     if pcount() == 2
-        AAdd(::p_OrderBy,{allt(par_Expression),(upper(left(par_Direction,1)) == "A"),.f.})
+        AAdd(::p_OrderBy,{allt(par_cExpression),(upper(left(par_cDirection,1)) == "A"),.f.})
     else
-        AAdd(::p_OrderBy,{allt(par_Expression),.t.,.f.})
+        AAdd(::p_OrderBy,{allt(par_cExpression),.t.,.f.})
     endif
 endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method DistinctOn(par_Expression,par_Direction) class hb_orm_SQLData       // PostgreSQL ONLY. Will use the "distinct on ()" feature and Add an Order By definition    par_Direction = "A"scending or "D"escending
+method DistinctOn(par_cExpression,par_cDirection) class hb_orm_SQLData       // PostgreSQL ONLY. Will use the "distinct on ()" feature and Add an Order By definition    par_cDirection = "A"scending or "D"escending
 
-if !empty(par_Expression)
+if !empty(par_cExpression)
     ::p_DistinctMode := 2
     if pcount() == 2
-        AAdd(::p_OrderBy,{allt(par_Expression),(upper(left(par_Direction,1)) == "A"),.t.})
+        AAdd(::p_OrderBy,{allt(par_cExpression),(upper(left(par_cDirection,1)) == "A"),.t.})
     else
-        AAdd(::p_OrderBy,{allt(par_Expression),.t.,.t.})
+        AAdd(::p_OrderBy,{allt(par_cExpression),.t.,.t.})
     endif
 endif
 
@@ -1105,9 +1269,9 @@ asize(::p_OrderBy,0)
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method ReadWrite(par_value) class hb_orm_SQLData            // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable
+method ReadWrite(par_iValue) class hb_orm_SQLData            // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable
 
-if pcount() == 0 .or. par_value
+if pcount() == 0 .or. par_iValue
     ::p_CursorUpdatable := .t.
 else
     ::p_CursorUpdatable := .f.
@@ -1116,580 +1280,622 @@ endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method AddLeadingBlankRecord() class hb_orm_SQLData            // If the result cursor should have a leading blank record, used mainly to create the concept of "not-selected" row
-
 ::p_AddLeadingBlankRecord := .t.
-
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method AddLeadingRecords(par_CursorName) class hb_orm_SQLData    // Specify to add records from par_CursorName as leading record to the future result cursor
+method AddLeadingRecords(par_cCursorName) class hb_orm_SQLData    // Specify to add records from par_cCursorName as leading record to the future result cursor
 
-if !empty(par_CursorName)
-    ::p_AddLeadingRecordsCursorName := par_CursorName
+if !empty(par_cCursorName)
+    ::p_AddLeadingRecordsCursorName := par_cCursorName
     ::p_AddLeadingBlankRecord       := .t.
 endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method ExpressionToMYSQL(par_Expression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
+method ExpressionToMYSQL(par_cExpression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
 //_M_
-return ::FixAliasAndFieldNameCasingInExpression(par_Expression)
+return ::FixAliasAndFieldNameCasingInExpression(par_cExpression)
 //-----------------------------------------------------------------------------------------------------------------
-method ExpressionToPostgreSQL(par_Expression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
+method ExpressionToPostgreSQL(par_cExpression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
 //_M_
-return ::FixAliasAndFieldNameCasingInExpression(par_Expression)
+return ::FixAliasAndFieldNameCasingInExpression(par_cExpression)
 //-----------------------------------------------------------------------------------------------------------------
-method FixAliasAndFieldNameCasingInExpression(par_expression) class hb_orm_SQLData   //_M_
-local l_HashPos
-local l_result := ""
-local l_AliasName,l_FieldName
-local l_SchemaAndTableName
-local l_TokenDelimiterLeft,l_TokenDelimiterRight
-local l_Byte
-local l_ByteIsToken
-local l_TableFieldDetection := 0
-local l_StreamBuffer        := ""
+method FixAliasAndFieldNameCasingInExpression(par_cExpression) class hb_orm_SQLData   //_M_
+local l_nHashPos
+local l_cResult := ""
+local l_cAliasName,l_cFieldName
+local l_cSchemaAndTableName
+local l_cTokenDelimiterLeft,l_cTokenDelimiterRight
+local l_cByte
+local l_lByteIsToken
+local l_nTableFieldDetection := 0
+local l_cStreamBuffer        := ""
 local l_lValueMode := .f.
 
-// if par_expression == "table.pk"
+//12345
+local l_nColumnTypeDetectCount := 0  // to detect the type of returned field.
+local l_aFieldInfo
+local l_cColumnTypeDetectExpression
+local l_cColumnTypeDetectType
+local l_lColumnTypeDetectArray := .f.
+
+
+// if par_cExpression == "table.pk"
 //     altd()
 // endif
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_TokenDelimiterLeft  := [`]
-    l_TokenDelimiterRight := [`]
+    l_cTokenDelimiterLeft  := [`]
+    l_cTokenDelimiterRight := [`]
     //l_SchemaPrefix        := ""
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_TokenDelimiterLeft  := ["]
-    l_TokenDelimiterRight := ["]
+    l_cTokenDelimiterLeft  := ["]
+    l_cTokenDelimiterRight := ["]
     //l_SchemaPrefix        := ::p_SchemaName+"."  // ::p_oSQLConnection:GetCurrentSchemaName()+"."
 endcase
 
-for each l_Byte in @par_expression
+for each l_cByte in @par_cExpression
 
-    if l_Byte == INVALUEWITCH
+    if l_cByte == INVALUEWITCH
         l_lValueMode := !l_lValueMode
         loop
     endif
     if l_lValueMode
-        l_result += l_Byte
+        l_cResult += l_cByte
         loop
     endif
 
-    l_ByteIsToken := (l_Byte $ "0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    l_lByteIsToken := (l_cByte $ "0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
     do case
-    case l_TableFieldDetection == 0  // Not in <AliasName>.<FieldName> pattern
-        if l_ByteIsToken
-            l_TableFieldDetection := 1
-            l_StreamBuffer        := l_Byte
-            l_AliasName           := l_Byte
-            l_FieldName           := ""
+    case l_nTableFieldDetection == 0  // Not in <AliasName>.<FieldName> pattern
+        if l_lByteIsToken
+            l_nTableFieldDetection := 1
+            l_cStreamBuffer        := l_cByte
+            l_cAliasName           := l_cByte
+            l_cFieldName           := ""
         else
-            l_result += l_Byte
+            l_cResult += l_cByte
         endif
-    case l_TableFieldDetection == 1 // in <AliasName>
+    case l_nTableFieldDetection == 1 // in <AliasName>
         do case
-        case l_ByteIsToken
-            l_StreamBuffer        += l_Byte
-            l_AliasName           += l_Byte
-        case l_byte == "."
-            l_TableFieldDetection := 2
-            l_StreamBuffer        += l_Byte
+        case l_lByteIsToken
+            l_cStreamBuffer        += l_cByte
+            l_cAliasName           += l_cByte
+        case l_cByte == "."
+            l_nTableFieldDetection := 2
+            l_cStreamBuffer        += l_cByte
         otherwise
             // Not a <AliasName>.<FieldName> pattern
-            l_TableFieldDetection := 0
-            l_result              += l_StreamBuffer+l_Byte
-            l_StreamBuffer        := ""
+            l_nTableFieldDetection := 0
+            l_cResult              += l_cStreamBuffer+l_cByte
+            l_cStreamBuffer        := ""
         endcase
-    case l_TableFieldDetection == 2   //Beyond "."
-        if l_ByteIsToken  // at least one IsTokenByte is needed
-            l_TableFieldDetection := 3
-            l_StreamBuffer        += l_Byte
-            l_FieldName           += l_Byte
+    case l_nTableFieldDetection == 2   //Beyond "."
+        if l_lByteIsToken  // at least one IsTokenByte is needed
+            l_nTableFieldDetection := 3
+            l_cStreamBuffer        += l_cByte
+            l_cFieldName           += l_cByte
         else  // Invalid pattern
-            l_TableFieldDetection := 0
-            l_result              += l_StreamBuffer+l_Byte
-            l_StreamBuffer        := ""
+            l_nTableFieldDetection := 0
+            l_cResult              += l_cStreamBuffer+l_cByte
+            l_cStreamBuffer        := ""
         endif
-    case l_TableFieldDetection == 3   //Beyond ".?"
+    case l_nTableFieldDetection == 3   //Beyond ".?"
         do case
-        case l_ByteIsToken
-            l_StreamBuffer       += l_Byte
-            l_FieldName          += l_Byte
-        case l_byte == "."  // Invalid pattern
-            l_TableFieldDetection := 0
-            l_result              += l_StreamBuffer+l_Byte
-            l_StreamBuffer        := ""
+        case l_lByteIsToken
+            l_cStreamBuffer       += l_cByte
+            l_cFieldName          += l_cByte
+        case l_cByte == "."  // Invalid pattern
+            l_nTableFieldDetection := 0
+            l_cResult              += l_cStreamBuffer+l_cByte
+            l_cStreamBuffer        := ""
         otherwise // End of pattern
-            l_TableFieldDetection := 0
-            l_AliasName := lower(l_AliasName)   //Alias are always converted to lowercase.
+            l_nTableFieldDetection := 0
+            l_cAliasName := lower(l_cAliasName)   //Alias are always converted to lowercase.
 
-            // Fix The Casing of l_AliasName and l_FieldName based on the actual on file tables.
-            l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema,::p_AliasToSchemaAndTableNames[l_AliasName])
-            if l_HashPos > 0
-                l_SchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_HashPos)
-                l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
-                if l_HashPos > 0
-                    l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
-                    l_result += l_TokenDelimiterLeft+l_AliasName+l_TokenDelimiterRight+"."+l_TokenDelimiterLeft+l_FieldName+l_TokenDelimiterRight+l_Byte
+            // Fix The Casing of l_cAliasName and l_cFieldName based on the actual on file tables.
+            l_nHashPos := hb_hPos(::p_oSQLConnection:p_Schema,::p_AliasToSchemaAndTableNames[l_cAliasName])
+            if l_nHashPos > 0
+                l_cSchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_nHashPos)
+                l_nHashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+                if l_nHashPos > 0
+                    l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                    l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight+l_cByte
+                    
+                    // Detect the field type if only 1 field is used in the expression
+                    if l_nColumnTypeDetectCount == 0
+                        l_nColumnTypeDetectCount      := 1
+                        l_aFieldInfo                 := hb_HValueAt(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                        l_cColumnTypeDetectExpression := l_cAliasName+"."+l_cFieldName
+                        l_cColumnTypeDetectType       := l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
+                        l_lColumnTypeDetectArray      := ("A" $ nvl(l_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES],""))
+                    else
+                        l_nColumnTypeDetectCount += 1
+                    endif
+
                 else
-                    l_result += l_StreamBuffer+l_Byte
-                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_FieldName+[" in alias "]+l_AliasName+[".])
+                    l_cResult += l_cStreamBuffer+l_cByte
+                    hb_orm_SendToDebugView([Auto-Casing Error: Failed To find Field "]+l_cFieldName+[" in alias "]+l_cAliasName+[".])
                 endif
             else
-                l_result += l_StreamBuffer+l_Byte
-                hb_orm_SendToDebugView([Auto-Casing Error: Failed To find alias "]+l_AliasName+[".])
+                l_cResult += l_cStreamBuffer+l_cByte
+                hb_orm_SendToDebugView([Auto-Casing Error: Failed To find alias "]+l_cAliasName+[".])
             endif
-            l_StreamBuffer := ""
+            l_cStreamBuffer := ""
 
         endcase
     endcase
     
 endfor
 
-if l_TableFieldDetection == 3
-    // Fix The Casing of l_AliasName and l_FieldName based on he actual on file tables.
-    l_AliasName := lower(l_AliasName)   //Alias are always converted to lowercase.
+if l_nTableFieldDetection == 3
+    // Fix The Casing of l_cAliasName and l_cFieldName based on the actual on-file tables.
+    l_cAliasName := lower(l_cAliasName)   //Alias are always converted to lowercase.
 
-    l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema,::p_AliasToSchemaAndTableNames[l_AliasName])
-    if l_HashPos > 0
-        l_SchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_HashPos) 
-        // l_iPos := at(".",l_SchemaAndTableName)
-        // if !empty(l_iPos)
-        //     l_AliasName := substr(l_SchemaAndTableName,l_iPos+1)
+    l_nHashPos := hb_hPos(::p_oSQLConnection:p_Schema,::p_AliasToSchemaAndTableNames[l_cAliasName])
+    if l_nHashPos > 0
+        l_cSchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_nHashPos) 
+        // l_nPos := at(".",l_cSchemaAndTableName)
+        // if !empty(l_nPos)
+        //     l_cAliasName := substr(l_cSchemaAndTableName,l_nPos+1)
         // endif
-        l_HashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_FieldName)
-        if l_HashPos > 0
-            l_FieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_HashPos)
-            l_result += l_TokenDelimiterLeft+l_AliasName+l_TokenDelimiterRight+"."+l_TokenDelimiterLeft+l_FieldName+l_TokenDelimiterRight
+        l_nHashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+        if l_nHashPos > 0
+            l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+            l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
+            
+            // Detect the field type if only 1 field is used in the expression
+            if l_nColumnTypeDetectCount == 0
+                l_nColumnTypeDetectCount      := 1
+                l_aFieldInfo                 := hb_HValueAt(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                l_cColumnTypeDetectExpression := l_cAliasName+"."+l_cFieldName
+                l_cColumnTypeDetectType       := l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
+                l_lColumnTypeDetectArray      := ("A" $ nvl(l_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES],""))
+            else
+                l_nColumnTypeDetectCount += 1
+            endif
+            
         else
             //_M_ Report Failed to Find Field
-            l_result += l_StreamBuffer
+            l_cResult += l_cStreamBuffer
         endif
     else
         //_M_ Report Failed to find Table
-        l_result += l_StreamBuffer
+        l_cResult += l_cStreamBuffer
     endif
 else
-    l_result += l_StreamBuffer
+    l_cResult += l_cStreamBuffer
 endif
 
-return l_result
+if l_nColumnTypeDetectCount == 1
+    if lower(hb_StrReplace(par_cExpression,{' ' => '','"' => '',"'" => ""})) == lower(hb_StrReplace(l_cColumnTypeDetectExpression,{' ' => '','"' => '',"'" => ""}))
+        do case
+        case l_lColumnTypeDetectArray
+            l_cResult := "array_to_json("+l_cResult+")::text"
+        case l_cColumnTypeDetectType == "UUI"
+            // l_cResult := "("+l_cResult+")::character varying(36)"
+            l_cResult := "("+l_cResult+")::character(36)"
+        case l_cColumnTypeDetectType == "JS"
+            l_cResult := "("+l_cResult+")::text"
+        endcase
+    endif
+endif
 
-//l_TableName
-
+return l_cResult
 //-----------------------------------------------------------------------------------------------------------------
 method BuildSQL(par_cAction) class hb_orm_SQLData   // Used internally. par_cAction can be "Count" "Fetch"
 
-local l_Counter
-local l_CounterColumns
-local l_SQLCommand
-local l_NumberOfOrderBys       := len(::p_OrderBy)
-local l_NumberOfHavings        := len(::p_Having)
-local l_NumberOfGroupBys       := len(::p_GroupBy)
-local l_NumberOfWheres         := len(::p_Where)
-local l_NumberOfJoins          := len(::p_Join)
-local l_NumberOfFieldsToReturn := len(::p_FieldToReturn)
-local l_OrderByColumn
-local l_OrderByColumnUpper
-local l_FirstOrderBy
+local l_nCounter
+local l_nCounterColumns
+local l_cSQLCommand
+local l_nNumberOfOrderBys       := len(::p_OrderBy)
+local l_nNumberOfHavings        := len(::p_Having)
+local l_nNumberOfGroupBys       := len(::p_GroupBy)
+local l_nNumberOfWheres         := len(::p_Where)
+local l_nNumberOfJoins          := len(::p_Join)
+local l_nNumberOfFieldsToReturn := len(::p_FieldToReturn)
+local l_cOrderByColumn
+local l_cOrderByColumnUpper
+local l_lFirstOrderBy
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_SQLCommand := [SELECT ]
+    l_cSQLCommand := [SELECT ]
     
     if ::p_DistinctMode == 1
-        l_SQLCommand += [DISTINCT ]
+        l_cSQLCommand += [DISTINCT ]
     endif
     
     do case
     case par_cAction == "Count"
-        l_SQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")
+        l_cSQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")
 
-    case empty(l_NumberOfFieldsToReturn)
-        l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
+    case empty(l_nNumberOfFieldsToReturn)
+        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
 
     otherwise
         // _M_ add support to "*"
-        for l_Counter := 1 to l_NumberOfFieldsToReturn
-            if l_Counter > 1
-                l_SQLCommand += [,]
+        for l_nCounter := 1 to l_nNumberOfFieldsToReturn
+            if l_nCounter > 1
+                l_cSQLCommand += [,]
             endif
-            l_SQLCommand += ::ExpressionToMYSQL(::p_FieldToReturn[l_Counter,1])
+            l_cSQLCommand += ::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1])
             
-            if !empty(::p_FieldToReturn[l_Counter,2])
-                l_SQLCommand += [ AS `]+::p_FieldToReturn[l_Counter,2]+[`]
+            if !empty(::p_FieldToReturn[l_nCounter,2])
+                l_cSQLCommand += [ AS `]+::p_FieldToReturn[l_nCounter,2]+[`]
             else
-                l_SQLCommand += [ AS `]+strtran(::p_FieldToReturn[l_Counter,1],[.],[_])+[`]
+                l_cSQLCommand += [ AS `]+strtran(::p_FieldToReturn[l_nCounter,1],[.],[_])+[`]
             endif
         endfor
 
     endcase
     
     if ::p_SchemaAndTableName == ::p_TableAlias
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
     else
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
     endif
     
-    for l_Counter = 1 to l_NumberOfJoins
+    for l_nCounter = 1 to l_nNumberOfJoins
         
         do case
-        case left(::p_Join[l_Counter,1],1) == "I"  //Inner Join
-            l_SQLCommand += [ INNER JOIN]
-        case left(::p_Join[l_Counter,1],1) == "L"  //Left Outer
-            l_SQLCommand += [ LEFT OUTER JOIN]
-        case left(::p_Join[l_Counter,1],1) == "R"  //Right Outer
-            l_SQLCommand += [ RIGHT OUTER JOIN]
-        case left(::p_Join[l_Counter,1],1) == "F"  //Full Outer
-            l_SQLCommand += [ FULL OUTER JOIN]
+        case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
+            l_cSQLCommand += [ INNER JOIN]
+        case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
+            l_cSQLCommand += [ LEFT OUTER JOIN]
+        case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
+            l_cSQLCommand += [ RIGHT OUTER JOIN]
+        case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
+            l_cSQLCommand += [ FULL OUTER JOIN]
         otherwise
             loop
         endcase
         
-        l_SQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,2])
+        l_cSQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2])
         
-        // if !empty(::p_Join[l_Counter,3])   the ::Join() method ensured it is never empty
-            l_SQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_Counter,3]))
+        // if !empty(::p_Join[l_nCounter,3])   the ::Join() method ensured it is never empty
+            l_cSQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3]))
         // endif
 
-        l_SQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_Counter,4])
+        l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_nCounter,4])
         
     endfor
     
     do case
-    case l_NumberOfWheres = 1
-        l_SQLCommand += [ WHERE (]+::ExpressionToMYSQL(::p_Where[1])+[)]
-    case l_NumberOfWheres > 1
-        l_SQLCommand += [ WHERE (]
-        for l_Counter = 1 to l_NumberOfWheres
-            if l_Counter > 1
-                l_SQLCommand += [ AND ]
+    case l_nNumberOfWheres = 1
+        l_cSQLCommand += [ WHERE (]+::ExpressionToMYSQL(::p_Where[1])+[)]
+    case l_nNumberOfWheres > 1
+        l_cSQLCommand += [ WHERE (]
+        for l_nCounter = 1 to l_nNumberOfWheres
+            if l_nCounter > 1
+                l_cSQLCommand += [ AND ]
             endif
-            l_SQLCommand += [(]+::ExpressionToMYSQL(::p_Where[l_Counter])+[)]
+            l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Where[l_nCounter])+[)]
         endfor
-        l_SQLCommand += [)]
+        l_cSQLCommand += [)]
     endcase
         
-    if l_NumberOfGroupBys > 0
-        l_SQLCommand += [ GROUP BY ]
-        for l_Counter = 1 to l_NumberOfGroupBys
-            if l_Counter > 1
-                l_SQLCommand += [,]
+    if l_nNumberOfGroupBys > 0
+        l_cSQLCommand += [ GROUP BY ]
+        for l_nCounter = 1 to l_nNumberOfGroupBys
+            if l_nCounter > 1
+                l_cSQLCommand += [,]
             endif
-            l_SQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_Counter])
+            // l_cSQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_nCounter])  //_M_ not an expression
+            l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_GroupBy[l_nCounter])
         endfor
     endif
         
     do case
-    case l_NumberOfHavings = 1
-        l_SQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])
-    case l_NumberOfHavings > 1
-        l_SQLCommand += [ HAVING (]
-        for l_Counter = 1 to l_NumberOfHavings
-            if l_Counter > 1
-                l_SQLCommand += [ AND ]
+    case l_nNumberOfHavings = 1
+        l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])
+    case l_nNumberOfHavings > 1
+        l_cSQLCommand += [ HAVING (]
+        for l_nCounter = 1 to l_nNumberOfHavings
+            if l_nCounter > 1
+                l_cSQLCommand += [ AND ]
             endif
-            l_SQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_Counter])+[)]
+            l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_nCounter])+[)]
         endfor
-        l_SQLCommand += [)]
+        l_cSQLCommand += [)]
     endcase
 
-    if l_NumberOfOrderBys > 0 .and. par_cAction <> "Count"
-        l_FirstOrderBy := .t.
-        for l_Counter = 1 to l_NumberOfOrderBys
+    if l_nNumberOfOrderBys > 0 .and. par_cAction <> "Count"
+        l_lFirstOrderBy := .t.
+        for l_nCounter = 1 to l_nNumberOfOrderBys
 
             //Find the column we are referring to, so to ensure we use the same casing and expression and expression. That is the reason to compare using the upper() functions.
-            l_OrderByColumn := ""
-            l_OrderByColumnUpper := upper(::p_OrderBy[l_Counter,1])
-            for l_CounterColumns := 1 to l_NumberOfFieldsToReturn
-                if !empty(::p_FieldToReturn[l_CounterColumns,2])
-                    if upper(::p_FieldToReturn[l_CounterColumns,2]) == l_OrderByColumnUpper
-                        l_OrderByColumn := ::p_FieldToReturn[l_CounterColumns,2]
+            l_cOrderByColumn := ""
+            l_cOrderByColumnUpper := upper(::p_OrderBy[l_nCounter,1])
+            for l_nCounterColumns := 1 to l_nNumberOfFieldsToReturn
+                if !empty(::p_FieldToReturn[l_nCounterColumns,2])
+                    if upper(::p_FieldToReturn[l_nCounterColumns,2]) == l_cOrderByColumnUpper
+                        l_cOrderByColumn := ::p_FieldToReturn[l_nCounterColumns,2]
                         exit
                     endif
                 else
-                    if upper(strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])) == l_OrderByColumnUpper
-                        l_OrderByColumn := strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])
+                    if upper(strtran(::p_FieldToReturn[l_nCounterColumns,1],[.],[_])) == l_cOrderByColumnUpper
+                        l_cOrderByColumn := strtran(::p_FieldToReturn[l_nCounterColumns,1],[.],[_])
                     endif
                 endif
             endfor
 
-            if empty(l_OrderByColumn)
-                ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_Counter,1],hb_orm_GetApplicationStack()}})
+            if empty(l_cOrderByColumn)
+                ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
             else
-                if l_FirstOrderBy
-                    l_SQLCommand += [ ORDER BY ]
-                    l_FirstOrderBy := .f.
+                if l_lFirstOrderBy
+                    l_cSQLCommand += [ ORDER BY ]
+                    l_lFirstOrderBy := .f.
                 else
-                    l_SQLCommand += [,]
+                    l_cSQLCommand += [,]
                 endif
-                l_SQLCommand += [`]+l_OrderByColumn+[`]
-                if ::p_OrderBy[l_Counter,2]
-                    l_SQLCommand += [ ASC]
+                l_cSQLCommand += [`]+l_cOrderByColumn+[`]
+                if ::p_OrderBy[l_nCounter,2]
+                    l_cSQLCommand += [ ASC]
                 else
-                    l_SQLCommand += [ DESC]
+                    l_cSQLCommand += [ DESC]
                 endif
             endif
         endfor
     endif
     
     if ::p_Limit > 0 .and. par_cAction <> "Count"
-        l_SQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
+        l_cSQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
     endif
     
-    l_SQLCommand := strtran(l_SQLCommand,[->],[.])
+    l_cSQLCommand := strtran(l_cSQLCommand,[->],[.])
     
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_SQLCommand := [SELECT ]
+    l_cSQLCommand := [SELECT ]
     
     do case
     case ::p_DistinctMode == 1
-        l_SQLCommand += [DISTINCT ]
-    case ::p_DistinctMode == 2
-        l_SQLCommand += [DISTINCT ON (]
+        l_cSQLCommand += [DISTINCT ]
 
-//1234567890
-// altd()
-        if l_NumberOfOrderBys > 0
-            l_FirstOrderBy := .t.
-            for l_Counter = 1 to l_NumberOfOrderBys
-                if ::p_OrderBy[l_Counter,3]   // Only care about the OrderBy set from calling the DistinctOn() method
+    case ::p_DistinctMode == 2
+        l_cSQLCommand += [DISTINCT ON (]
+
+        if l_nNumberOfOrderBys > 0
+            l_lFirstOrderBy := .t.
+            for l_nCounter = 1 to l_nNumberOfOrderBys
+                if ::p_OrderBy[l_nCounter,3]   // Only care about the OrderBy set from calling the DistinctOn() method
 
                     //Find the column we are referring to, so to ensure we use the same casing and expression. That is the reason to compare using the upper() functions.
-                    l_OrderByColumn := ""
-                    l_OrderByColumnUpper := upper(::p_OrderBy[l_Counter,1])
-                    for l_CounterColumns := 1 to l_NumberOfFieldsToReturn
+                    l_cOrderByColumn := ""
+                    l_cOrderByColumnUpper := upper(::p_OrderBy[l_nCounter,1])
+                    for l_nCounterColumns := 1 to l_nNumberOfFieldsToReturn
                         //Use the column alias for the distinct on to deal with casing issues
                         do case
-                        case upper(::p_FieldToReturn[l_CounterColumns,1]) == l_OrderByColumnUpper   // Test if the Distinct On is the column expression. If yes use it to ensure the casing will work
-                            if empty(::p_FieldToReturn[l_CounterColumns,2])
-                                l_OrderByColumn := strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])
+                        case upper(::p_FieldToReturn[l_nCounterColumns,1]) == l_cOrderByColumnUpper   // Test if the Distinct On is the column expression. If yes use it to ensure the casing will work
+                            if empty(::p_FieldToReturn[l_nCounterColumns,2])
+                                l_cOrderByColumn := strtran(::p_FieldToReturn[l_nCounterColumns,1],[.],[_])
                             else
-                                l_OrderByColumn := ::p_FieldToReturn[l_CounterColumns,2]
+                                l_cOrderByColumn := ::p_FieldToReturn[l_nCounterColumns,2]
                             endif
                             exit
-                        case !empty(::p_FieldToReturn[l_CounterColumns,2]) .and. upper(::p_FieldToReturn[l_CounterColumns,2]) == l_OrderByColumnUpper   // Test if the Distinct On is the column alias. If yes use it to ensure the casing will work
-                            l_OrderByColumn := ::p_FieldToReturn[l_CounterColumns,2]
+                        case !empty(::p_FieldToReturn[l_nCounterColumns,2]) .and. upper(::p_FieldToReturn[l_nCounterColumns,2]) == l_cOrderByColumnUpper   // Test if the Distinct On is the column alias. If yes use it to ensure the casing will work
+                            l_cOrderByColumn := ::p_FieldToReturn[l_nCounterColumns,2]
                             exit
                         endcase
                     endfor
 
-                    if empty(l_OrderByColumn)
-                        ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match Distinct On Column - "+::p_OrderBy[l_Counter,1],hb_orm_GetApplicationStack()}})
+                    if empty(l_cOrderByColumn)
+                        ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match Distinct On Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
                     else
-                        if l_FirstOrderBy
-                            l_FirstOrderBy := .f.
+                        if l_lFirstOrderBy
+                            l_lFirstOrderBy := .f.
                         else
-                            l_SQLCommand += [,]
+                            l_cSQLCommand += [,]
                         endif
-                        l_SQLCommand += ["]+l_OrderByColumn+["]  // Since we are using the column alias we can use the " .
+                        l_cSQLCommand += ["]+l_cOrderByColumn+["]  // Since we are using the column alias we can use the " .
                     endif
 
                 endif
             endfor
         endif
 
-        l_SQLCommand += [)]
+        l_cSQLCommand += [)]
     endcase
     
     do case
     case par_cAction == "Count"
-        l_SQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")
+        l_cSQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")
 
-    case empty(l_NumberOfFieldsToReturn)
-        l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
+    case empty(l_nNumberOfFieldsToReturn)
+        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
 
     otherwise
         // _M_ add support to "*"
-        for l_Counter := 1 to l_NumberOfFieldsToReturn
-            if l_Counter > 1
-                l_SQLCommand += [,]
+        for l_nCounter := 1 to l_nNumberOfFieldsToReturn
+            if l_nCounter > 1
+                l_cSQLCommand += [,]
             endif
-            l_SQLCommand += ::ExpressionToPostgreSQL(::p_FieldToReturn[l_Counter,1])
+            l_cSQLCommand += ::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1])
             
-            if !empty(::p_FieldToReturn[l_Counter,2])
-                l_SQLCommand += [ AS "]+::p_FieldToReturn[l_Counter,2]+["]
+            if !empty(::p_FieldToReturn[l_nCounter,2])
+                l_cSQLCommand += [ AS "]+::p_FieldToReturn[l_nCounter,2]+["]
             else
-                l_SQLCommand += [ AS "]+strtran(::p_FieldToReturn[l_Counter,1],[.],[_])+["]
+                l_cSQLCommand += [ AS "]+strtran(::p_FieldToReturn[l_nCounter,1],[.],[_])+["]
             endif
         endfor
 
     endcase
     
     if ::p_SchemaAndTableName == ::p_TableAlias
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
     else
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
     endif
     
-    for l_Counter = 1 to l_NumberOfJoins
+    for l_nCounter = 1 to l_nNumberOfJoins
         
         do case
-        case left(::p_Join[l_Counter,1],1) == "I"  //Inner Join
-            l_SQLCommand += [ INNER JOIN]
-        case left(::p_Join[l_Counter,1],1) == "L"  //Left Outer
-            l_SQLCommand += [ LEFT OUTER JOIN]
-        case left(::p_Join[l_Counter,1],1) == "R"  //Right Outer
-            l_SQLCommand += [ RIGHT OUTER JOIN]
-        case left(::p_Join[l_Counter,1],1) == "F"  //Full Outer
-            l_SQLCommand += [ FULL OUTER JOIN]
+        case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
+            l_cSQLCommand += [ INNER JOIN]
+        case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
+            l_cSQLCommand += [ LEFT OUTER JOIN]
+        case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
+            l_cSQLCommand += [ RIGHT OUTER JOIN]
+        case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
+            l_cSQLCommand += [ FULL OUTER JOIN]
         otherwise
             loop
         endcase
         
-        l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,2])
+        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2])
         
-        // if !empty(::p_Join[l_Counter,3])   the ::Join() method ensured it is never empty
-            l_SQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_Counter,3]))
+        // if !empty(::p_Join[l_nCounter,3])   the ::Join() method ensured it is never empty
+            l_cSQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3]))
         // endif
         
-        l_SQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_Counter,4])
+        l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_nCounter,4])
         
     endfor
     
     do case
-    case l_NumberOfWheres = 1
-        l_SQLCommand += [ WHERE (]+::ExpressionToPostgreSQL(::p_Where[1])+[)]
-    case l_NumberOfWheres > 1
-        l_SQLCommand += [ WHERE (]
-        for l_Counter = 1 to l_NumberOfWheres
-            if l_Counter > 1
-                l_SQLCommand += [ AND ]
+    case l_nNumberOfWheres = 1
+        l_cSQLCommand += [ WHERE (]+::ExpressionToPostgreSQL(::p_Where[1])+[)]
+    case l_nNumberOfWheres > 1
+        l_cSQLCommand += [ WHERE (]
+        for l_nCounter = 1 to l_nNumberOfWheres
+            if l_nCounter > 1
+                l_cSQLCommand += [ AND ]
             endif
-            l_SQLCommand += [(]+::ExpressionToPostgreSQL(::p_Where[l_Counter])+[)]
+            l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Where[l_nCounter])+[)]
         endfor
-        l_SQLCommand += [)]
+        l_cSQLCommand += [)]
     endcase
         
-    if l_NumberOfGroupBys > 0
-        l_SQLCommand += [ GROUP BY ]
-        for l_Counter = 1 to l_NumberOfGroupBys
-            if l_Counter > 1
-                l_SQLCommand += [,]
+    if l_nNumberOfGroupBys > 0
+        l_cSQLCommand += [ GROUP BY ]
+        for l_nCounter = 1 to l_nNumberOfGroupBys
+            if l_nCounter > 1
+                l_cSQLCommand += [,]
             endif
-            l_SQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_Counter])
+            // l_cSQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_nCounter])
+            l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_GroupBy[l_nCounter])
         endfor
     endif
         
     do case
-    case l_NumberOfHavings = 1
-        l_SQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])
-    case l_NumberOfHavings > 1
-        l_SQLCommand += [ HAVING (]
-        for l_Counter = 1 to l_NumberOfHavings
-            if l_Counter > 1
-                l_SQLCommand += [ AND ]
+    case l_nNumberOfHavings = 1
+        l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])
+    case l_nNumberOfHavings > 1
+        l_cSQLCommand += [ HAVING (]
+        for l_nCounter = 1 to l_nNumberOfHavings
+            if l_nCounter > 1
+                l_cSQLCommand += [ AND ]
             endif
-            l_SQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_Counter])+[)]
+            l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_nCounter])+[)]
         endfor
-        l_SQLCommand += [)]
+        l_cSQLCommand += [)]
     endcase
         
-    if l_NumberOfOrderBys > 0 .and. par_cAction <> "Count"
-        l_FirstOrderBy := .t.
-        for l_Counter = 1 to l_NumberOfOrderBys
+    if l_nNumberOfOrderBys > 0 .and. par_cAction <> "Count"
+        l_lFirstOrderBy := .t.
+        for l_nCounter = 1 to l_nNumberOfOrderBys
 
             //Find the column we are referring to, so to ensure we use the same casing and expression. That is the reason to compare using the upper() functions.
             //Then use the column alias for the order by.
-            l_OrderByColumn := ""
-            l_OrderByColumnUpper := upper(::p_OrderBy[l_Counter,1])
-            for l_CounterColumns := 1 to l_NumberOfFieldsToReturn
-                if !empty(::p_FieldToReturn[l_CounterColumns,2])
-                    if upper(::p_FieldToReturn[l_CounterColumns,2]) == l_OrderByColumnUpper
-                        l_OrderByColumn := ::p_FieldToReturn[l_CounterColumns,2]
+            l_cOrderByColumn := ""
+            l_cOrderByColumnUpper := upper(::p_OrderBy[l_nCounter,1])
+            for l_nCounterColumns := 1 to l_nNumberOfFieldsToReturn
+                if !empty(::p_FieldToReturn[l_nCounterColumns,2])
+                    if upper(::p_FieldToReturn[l_nCounterColumns,2]) == l_cOrderByColumnUpper
+                        l_cOrderByColumn := ::p_FieldToReturn[l_nCounterColumns,2]
                         exit
                     endif
                 else
-                    if upper(strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])) == l_OrderByColumnUpper
-                        l_OrderByColumn := strtran(::p_FieldToReturn[l_CounterColumns,1],[.],[_])
+                    if upper(strtran(::p_FieldToReturn[l_nCounterColumns,1],[.],[_])) == l_cOrderByColumnUpper
+                        l_cOrderByColumn := strtran(::p_FieldToReturn[l_nCounterColumns,1],[.],[_])
                     endif
                 endif
             endfor
 
-            if empty(l_OrderByColumn)
-                ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_Counter,1],hb_orm_GetApplicationStack()}})
+            if empty(l_cOrderByColumn)
+                ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
             else
-                if l_FirstOrderBy
-                    l_SQLCommand += [ ORDER BY ]
-                    l_FirstOrderBy := .f.
+                if l_lFirstOrderBy
+                    l_cSQLCommand += [ ORDER BY ]
+                    l_lFirstOrderBy := .f.
                 else
-                    l_SQLCommand += [,]
+                    l_cSQLCommand += [,]
                 endif
-                l_SQLCommand += ["]+l_OrderByColumn+["]
-                if ::p_OrderBy[l_Counter,2]
-                    l_SQLCommand += [ ASC]
+                l_cSQLCommand += ["]+l_cOrderByColumn+["]
+                if ::p_OrderBy[l_nCounter,2]
+                    l_cSQLCommand += [ ASC]
                 else
-                    l_SQLCommand += [ DESC]
+                    l_cSQLCommand += [ DESC]
                 endif
             endif
         endfor
     endif
     
     if ::p_Limit > 0 .and. par_cAction <> "Count"
-        l_SQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
+        l_cSQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
     endif
     
-    l_SQLCommand := strtran(l_SQLCommand,[->],[.])
+    l_cSQLCommand := strtran(l_cSQLCommand,[->],[.])
 
 otherwise
-    l_SQLCommand := ""
+    l_cSQLCommand := ""
     
 endcase
 
-return l_SQLCommand
+return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method SetExplainMode(par_mode) class hb_orm_SQLData                                          // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
-    ::p_ExplainMode := par_mode
+method SetExplainMode(par_nMode) class hb_orm_SQLData                                          // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
+    ::p_ExplainMode := par_nMode
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method SQL(par_1) class hb_orm_SQLData                                          // Assemble and Run SQL command
 
-local l_CursorTempName
-local l_FieldCounter
-local l_FieldName
-local l_FieldValue
-local l_ValueType
-local l_Value
-local l_OutputType
-local l_ParameterHoldingTheReferenceToTheArray
-local l_result
-local l_o_record
-local l_select := iif(used(),select(),0)
-local l_SQLResult
-local l_SQLCommand
-local l_TimeEnd
-local l_TimeStart
-local l_ErrorOccurred
-local l_NumberOfFields
-local l_RecordFieldValues := {}
+local l_cCursorTempName
+local l_nFieldCounter
+local l_cFieldName
+local l_xFieldValue
+local l_cValueType
+local l_cValue
+local l_nOutputType
+local l_aParameterHoldingTheReferenceToTheArray
+local l_xResult
+local l_oRecord
+local l_nSelect := iif(used(),select(),0)
+local l_lSQLResult
+local l_cSQLCommand
+local l_nTimeEnd
+local l_nTimeStart
+local l_lErrorOccurred
+local l_nNumberOfFields
+local l_aRecordFieldValues := {}
 local l_aErrors := {}
 // local v_InELSOffice := .f.
 
-l_result := NIL
+l_xResult := NIL
 
 ::Tally          := 0
 ::p_ErrorMessage := ""
 
-*!*	l_OutputType
+*!*	l_nOutputType
 *!*	 0 = none Only useful for :tally       // No parameters are provided and no fields where defined
 *!*	 1 = cursor                            // The parameter is a string
 *!*	 2 = array                             // The parameter is a reference to an array
 *!*	 3 = object                            // No parameter is provided and at least one field was defined.
 
-l_ParameterHoldingTheReferenceToTheArray := ""
+l_aParameterHoldingTheReferenceToTheArray := {}   // To reserve memory space.
 
 do case
 case pcount() == 1
     do case
     case valtype(par_1) == "A"   // Have to test first if it is an array, because if the first element is an array valtype(par_1) will be "N"
-        l_OutputType := 2
-        l_ParameterHoldingTheReferenceToTheArray := par_1
+        l_nOutputType := 2
+        l_aParameterHoldingTheReferenceToTheArray := par_1    //Assignment of arrays are always only their reference.
         
     case valtype(par_1) == "C"
         ::p_TableFullPath := ""
         ::p_CursorName    := par_1
-        l_OutputType      := 1
+        l_nOutputType      := 1
         ::p_oCursor       := NIL
         CloseAlias(::p_CursorName)
 
@@ -1701,9 +1907,9 @@ otherwise
     // No parameters
     ::p_CursorName := ""
     if empty(len(::p_FieldToReturn))
-        l_OutputType := 0
+        l_nOutputType := 0
     else
-        l_OutputType := 3
+        l_nOutputType := 3
     endif
     
 endcase
@@ -1715,72 +1921,72 @@ if !empty(::p_ErrorMessage)
 else
     if .t. //::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         //_M_ Add support to ::p_AddLeadingBlankRecord
-        l_SQLCommand := ::BuildSQL("Fetch")
+        l_cSQLCommand := ::BuildSQL("Fetch")
         
-        ::p_LastSQLCommand := l_SQLCommand
+        ::p_LastSQLCommand := l_cSQLCommand
         
-        l_ErrorOccurred := .t.   //Assumed it failed
+        l_lErrorOccurred := .t.   //Assumed it failed
         
         do case
         case ::p_ExplainMode > 0
-            l_OutputType := 0  // will behave as no output but l_result will be the explain text.
+            l_nOutputType := 0  // will behave as no output but l_xResult will be the explain text.
 
-            l_CursorTempName := "c_DB_Temp"
+            l_cCursorTempName := "c_DB_Temp"
             
             do case
             case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                 do case
                 case ::p_ExplainMode == 1
-                    l_SQLCommand := "EXPLAIN " + l_SQLCommand
+                    l_cSQLCommand := "EXPLAIN " + l_cSQLCommand
                 case ::p_ExplainMode == 2
-                    l_SQLCommand := "ANALYZE " + l_SQLCommand
+                    l_cSQLCommand := "ANALYZE " + l_cSQLCommand
                 endcase
             case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 do case
                 case ::p_ExplainMode == 1
-                    l_SQLCommand := "EXPLAIN " + l_SQLCommand
+                    l_cSQLCommand := "EXPLAIN " + l_cSQLCommand
                 case ::p_ExplainMode == 2
-                    l_SQLCommand := "EXPLAIN ANALYZE " + l_SQLCommand
+                    l_cSQLCommand := "EXPLAIN ANALYZE " + l_cSQLCommand
                 endcase
             endcase
 
-            l_TimeStart := seconds()
-            l_SQLResult := ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
-            l_TimeEnd := seconds()
-            ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
+            l_nTimeStart := seconds()
+            l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+            l_nTimeEnd := seconds()
+            ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
             
-            if !l_SQLResult
+            if !l_lSQLResult
                 AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
-                l_result := ""
+                l_xResult := ""
 
-                select (l_CursorTempName)
-                l_NumberOfFields := fcount()
+                select (l_cCursorTempName)
+                l_nNumberOfFields := fcount()
                 dbGoTop()
                 do while !eof()
-                    l_result += trans(recno())+chr(13)+chr(10)
-                    for l_FieldCounter := 1 to l_NumberOfFields
-                        l_FieldValue := FieldGet(l_FieldCounter)
-                        l_ValueType  := ValType(l_FieldValue)
-                        switch l_ValueType
+                    l_xResult += trans(recno())+chr(13)+chr(10)
+                    for l_nFieldCounter := 1 to l_nNumberOfFields
+                        l_xFieldValue := FieldGet(l_nFieldCounter)
+                        l_cValueType  := ValType(l_xFieldValue)
+                        switch l_cValueType
                         case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                         case "M"  // Memo field
-                            l_Value := l_FieldValue
+                            l_cValue := l_xFieldValue
                             exit
                         case "N"  // Numeric
-                            l_Value := hb_ntoc(l_FieldValue)
+                            l_cValue := hb_ntoc(l_xFieldValue)
                             exit
                         case "D"  // Date
-                            l_Value := hb_DtoC(l_FieldValue,"YYYY-MM-DD")
+                            l_cValue := hb_DtoC(l_xFieldValue,"YYYY-MM-DD")
                             exit
                         case "T"  // TimeStamp
-                            l_Value := hb_TtoC(l_FieldValue,"YYYY-MM-DD","hh:mm:ss")
+                            l_cValue := hb_TtoC(l_xFieldValue,"YYYY-MM-DD","hh:mm:ss")
                             exit
                         case "L"  // Boolean (logical)
-                            l_Value := iif(l_FieldValue,"TRUE","FALSE")
+                            l_cValue := iif(l_xFieldValue,"TRUE","FALSE")
                             exit
                         case "U"  // Undefined (NIL)
-                            l_Value := ""
+                            l_cValue := ""
                             exit
                         // case "A"  // Array
                         // case "B"  // Code-Block
@@ -1790,153 +1996,152 @@ else
                         // case "S"  // Symbolic name (*)
                         otherwise
                         endswitch                   
-                        if !empty(l_Value)
-                            l_result += "   "+FieldName(l_FieldCounter)+": "+l_Value+chr(13)+chr(10)
+                        if !empty(l_cValue)
+                            l_xResult += "   "+FieldName(l_nFieldCounter)+": "+l_cValue+chr(13)+chr(10)
                         endif
                     endfor
                     dbSkip()
                 enddo
 
-                l_ErrorOccurred := .f.
-                ::Tally        := (l_CursorTempName)->(reccount())
+                l_lErrorOccurred := .f.
+                ::Tally        := (l_cCursorTempName)->(reccount())
             endif
-            CloseAlias(l_CursorTempName)
+            CloseAlias(l_cCursorTempName)
             
+        case l_nOutputType == 0 // none
+            l_cCursorTempName := "c_DB_Temp"
             
-        case l_OutputType == 0 // none
-            l_CursorTempName := "c_DB_Temp"
+            l_nTimeStart := seconds()
+            l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+            l_nTimeEnd := seconds()
+            ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
             
-            l_TimeStart := seconds()
-            l_SQLResult := ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
-            l_TimeEnd := seconds()
-            ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
-            
-            if !l_SQLResult
+            if !l_lSQLResult
                 AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
                 //  _M_
-                // if (l_TimeEnd - l_TimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                    // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
+                // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
+                    // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
                 // endif
                 
-                l_ErrorOccurred := .f.
-                ::Tally        := (l_CursorTempName)->(reccount())
+                l_lErrorOccurred := .f.
+                ::Tally        := (l_cCursorTempName)->(reccount())
                 
             endif
-            CloseAlias(l_CursorTempName)
+            CloseAlias(l_cCursorTempName)
             
-        case l_OutputType == 1 // cursor
+        case l_nOutputType == 1 // cursor
             
-            l_TimeStart := seconds()
-            l_SQLResult := ::p_oSQLConnection:SQLExec(l_SQLCommand,::p_CursorName)
-            l_TimeEnd := seconds()
-            ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
+            l_nTimeStart := seconds()
+            l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,::p_CursorName)
+            l_nTimeEnd := seconds()
+            ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
             
-            if !l_SQLResult
+            if !l_lSQLResult
                 AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
                 select (::p_CursorName)
                 //_M_
-                // if (l_TimeEnd - l_TimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                    // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
+                // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
+                    // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
                 // endif
                 
-                l_ErrorOccurred := .f.
+                l_lErrorOccurred := .f.
                 ::Tally        := (::p_CursorName)->(reccount())
                 
                 ::p_oCursor := hb_orm_Cursor():Init():Associate(::p_CursorName)
 
                 // Can not use the following logic, since this would force to call :SQL(...) to have a variable assignment, to avoid loosing scope
-                // l_result := hb_orm_Cursor():Init()
-                // l_result:Associate(::p_CursorName)
+                // l_xResult := hb_orm_Cursor():Init()
+                // l_xResult:Associate(::p_CursorName)
                 // or the following compressed version, since Init() returns Self
-                // l_result := hb_orm_Cursor():Init():Associate(::p_CursorName)
+                // l_xResult := hb_orm_Cursor():Init():Associate(::p_CursorName)
 
             endif
             
-        case l_OutputType == 2 // array
+        case l_nOutputType == 2 // array
 
-            asize(l_ParameterHoldingTheReferenceToTheArray,0)
+            asize(l_aParameterHoldingTheReferenceToTheArray,0)
 
-            l_CursorTempName := "c_DB_Temp"
+            l_cCursorTempName := "c_DB_Temp"
                         
-            l_TimeStart := seconds()
-            l_SQLResult := ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
-            l_TimeEnd := seconds()
-            ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
+            l_nTimeStart := seconds()
+            l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+            l_nTimeEnd := seconds()
+            ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
             
-            if !l_SQLResult
+            if !l_lSQLResult
                 AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
-                // if (l_TimeEnd - l_TimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                // 	// ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
+                // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
+                // 	// ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
                 // endif
                 
-                l_ErrorOccurred := .f.
-                ::Tally        := (l_CursorTempName)->(reccount())
+                l_lErrorOccurred := .f.
+                ::Tally        := (l_cCursorTempName)->(reccount())
                 
                 if ::Tally > 0
-                    select (l_CursorTempName)
-                    l_NumberOfFields := fcount()
-                    asize(l_RecordFieldValues,l_NumberOfFields)
+                    select (l_cCursorTempName)
+                    l_nNumberOfFields := fcount()
+                    asize(l_aRecordFieldValues,l_nNumberOfFields)
 
                     dbGoTop()
                     do while !eof()
-                        for l_FieldCounter := 1 to l_NumberOfFields
-                            l_RecordFieldValues[l_FieldCounter] := FieldGet(l_FieldCounter)
+                        for l_nFieldCounter := 1 to l_nNumberOfFields
+                            l_aRecordFieldValues[l_nFieldCounter] := FieldGet(l_nFieldCounter)
                         endfor
-                        AAdd(l_ParameterHoldingTheReferenceToTheArray,AClone(l_RecordFieldValues))
+                        AAdd(l_aParameterHoldingTheReferenceToTheArray,AClone(l_aRecordFieldValues))
                         dbSkip()
                     endwhile
                 endif
 
             endif
             
-            CloseAlias(l_CursorTempName)
+            CloseAlias(l_cCursorTempName)
             
-        case l_OutputType = 3 // object
-            l_CursorTempName := "c_DB_Temp"
+        case l_nOutputType = 3 // object
+            l_cCursorTempName := "c_DB_Temp"
             
-            l_TimeStart = seconds()
-            l_SQLResult = ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
-            l_TimeEnd = seconds()
-            ::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
+            l_nTimeStart = seconds()
+            l_lSQLResult = ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+            l_nTimeEnd = seconds()
+            ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
             
-            if !l_SQLResult
+            if !l_lSQLResult
                 AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
             else
-                select (l_CursorTempName)
+                select (l_cCursorTempName)
 
-                // if (l_TimeEnd - l_TimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                // 	::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_TimeStart,l_TimeEnd,l_SQLPerformanceInfo,l_SQLCommand)
+                // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
+                // 	::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
                 // endif
                 
                 ::Tally          := reccount()
-                l_ErrorOccurred   := .f.
-                l_NumberOfFields := fcount()
+                l_lErrorOccurred   := .f.
+                l_nNumberOfFields := fcount()
                 
                 do case
                 case ::Tally == 0
                 case ::Tally == 1
-                    l_result := hb_orm_Data()
-                    for l_FieldCounter := 1 to l_NumberOfFields
-                        l_FieldName  := FieldName(l_FieldCounter)
-                        l_FieldValue := FieldGet(l_FieldCounter)
-                        l_result:AddField(l_FieldName,l_FieldValue)
+                    l_xResult := hb_orm_Data()
+                    for l_nFieldCounter := 1 to l_nNumberOfFields
+                        l_cFieldName  := FieldName(l_nFieldCounter)
+                        l_xFieldValue := FieldGet(l_nFieldCounter)
+                        l_xResult:AddField(l_cFieldName,l_xFieldValue)
                     endfor
                     
                 otherwise
                     //Create an array of objects
-                    l_result := {}   //Initialize to an empty array.
+                    l_xResult := {}   //Initialize to an empty array.
                     dbGoTop()
                     do while !eof()
-                        l_o_record := hb_orm_Data()
-                        for l_FieldCounter := 1 to l_NumberOfFields
-                            l_FieldName  := FieldName(l_FieldCounter)
-                            l_FieldValue := FieldGet(l_FieldCounter)
-                            l_o_record:AddField(l_FieldName,l_FieldValue)
+                        l_oRecord := hb_orm_Data()
+                        for l_nFieldCounter := 1 to l_nNumberOfFields
+                            l_cFieldName  := FieldName(l_nFieldCounter)
+                            l_xFieldValue := FieldGet(l_nFieldCounter)
+                            l_oRecord:AddField(l_cFieldName,l_xFieldValue)
                         endfor
-                        AAdd(l_result,l_o_record)
+                        AAdd(l_xResult,l_oRecord)
 
                         dbSkip()
                     endwhile
@@ -1944,79 +2149,81 @@ else
                 endcase
             endif
             
-            CloseAlias(l_CursorTempName)
+            CloseAlias(l_cCursorTempName)
             
         endcase
         
-        if l_ErrorOccurred
+        if l_lErrorOccurred
             ::Tally := -1
             
-            if l_OutputType == 1   //Into Cursor
+            if l_nOutputType == 1   //Into Cursor
                 select 0  //Move away from any areas on purpose
             else
-                select (l_select)
+                select (l_nSelect)
             endif
             
-            // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,1,l_SQLCommand+[ -> ]+::p_ErrorMessage)
+            // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
             
         else
-            if l_OutputType == 1   //Into Cursor
+            if l_nOutputType == 1   //Into Cursor
                 select (::p_CursorName)
             else
-                select (l_select)
+                select (l_nSelect)
             endif
             
-            // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,0,l_SQLCommand+[ -> Reccount = ]+trans(::Tally))
+            // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,0,l_cSQLCommand+[ -> Reccount = ]+trans(::Tally))
         endif
         
     endif
 endif
 
 if len(l_aErrors) > 0
+    ::p_ErrorMessage := l_aErrors
     ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
 endif
 
-return l_result
+return l_xResult
 //-----------------------------------------------------------------------------------------------------------------
 method Count() class hb_orm_SQLData                                          // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error.
 
-local l_CursorTempName
-local l_select := iif(used(),select(),0)
-local l_SQLCommand
-local l_TimeEnd
-local l_TimeStart
-local l_SQLResult
+local l_cCursorTempName
+local l_nSelect := iif(used(),select(),0)
+local l_cSQLCommand
+local l_nTimeEnd
+local l_nTimeStart
+local l_lSQLResult
 local l_aErrors := {}
 
 ::Tally          := -1
 ::p_ErrorMessage := ""
 
-l_SQLCommand := ::BuildSQL("Count")
+l_cSQLCommand := ::BuildSQL("Count")
 
-::p_LastSQLCommand := l_SQLCommand
+::p_LastSQLCommand := l_cSQLCommand
 
-l_CursorTempName := "c_DB_Temp"
+l_cCursorTempName := "c_DB_Temp"
 
-l_TimeStart := seconds()
-l_SQLResult := ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
-l_TimeEnd := seconds()
-::p_LastRunTime := l_TimeEnd-l_TimeStart+0.0000
+l_nTimeStart := seconds()
+l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+l_nTimeEnd := seconds()
+::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
 
-if !l_SQLResult
+if !l_lSQLResult
     AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Failed SQLExec in :Count().],hb_orm_GetApplicationStack()})
 
 else
-    if (l_CursorTempName)->(reccount()) == 1
-        ::Tally := (l_CursorTempName)->(FieldGet(1))
+    if (l_cCursorTempName)->(reccount()) == 1
+        ::Tally := (l_cCursorTempName)->(FieldGet(1))
     else
         AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Did not return a single row in :Count().],hb_orm_GetApplicationStack()})
     endif
 endif
-CloseAlias(l_CursorTempName)
+CloseAlias(l_cCursorTempName)
 
-select (l_select)
+select (l_nSelect)
 
 if len(l_aErrors) > 0
+    ::p_ErrorMessage := l_aErrors
     ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
 endif
 
@@ -2024,21 +2231,21 @@ return ::Tally
 //-----------------------------------------------------------------------------------------------------------------
 method Get(par_iKey) class hb_orm_SQLData             // Returns an Object with properties matching a record referred by primary key
 
-local l_NumberOfJoins          := len(::p_Join)
-local l_NumberOfHavings        := len(::p_Having)
-local l_NumberOfGroupBys       := len(::p_GroupBy)
-local l_NumberOfWheres         := len(::p_Where)
-local l_NumberOfFieldsToReturn := len(::p_FieldToReturn)
+local l_nNumberOfJoins          := len(::p_Join)
+local l_nNumberOfHavings        := len(::p_Having)
+local l_nNumberOfGroupBys       := len(::p_GroupBy)
+local l_nNumberOfWheres         := len(::p_Where)
+local l_nNumberOfFieldsToReturn := len(::p_FieldToReturn)
 
-local l_Counter
-local l_CursorTempName
-local l_FieldCounter
-local l_FieldName
-local l_FieldValue
-local l_result
-local l_select
-local l_SQLCommand
-local l_ErrorOccurred := .f.
+local l_nCounter
+local l_cCursorTempName
+local l_nFieldCounter
+local l_cFieldName
+local l_xFieldValue
+local l_oResult
+local l_nSelect
+local l_cSQLCommand
+local l_lErrorOccurred := .f.
 local l_aErrors := {}
 
 ::p_Key = par_iKey
@@ -2046,7 +2253,7 @@ local l_aErrors := {}
 ::Tally          = 0
 ::p_ErrorMessage = ""
 
-l_result := NIL
+l_oResult := NIL
 
 do case
 case len(::p_FieldsAndValues) > 0
@@ -2054,221 +2261,219 @@ case len(::p_FieldsAndValues) > 0
     AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
     
 otherwise
-    l_select = iif(used(),select(),0)
+    l_nSelect = iif(used(),select(),0)
     
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_SQLCommand := [SELECT ]
+        l_cSQLCommand := [SELECT ]
         
         if ::p_DistinctMode == 1
-            l_SQLCommand += [DISTINCT ]
+            l_cSQLCommand += [DISTINCT ]
         endif
 
-        if empty(l_NumberOfFieldsToReturn)
+        if empty(l_nNumberOfFieldsToReturn)
             //Only allowed when no joins are done
-            if empty(l_NumberOfJoins)
-                l_SQLCommand += [ *]
+            if empty(l_nNumberOfJoins)
+                l_cSQLCommand += [ *]
             else
-                l_ErrorOccurred := .t.
+                l_lErrorOccurred := .t.
                 ::p_ErrorMessage := "May not get all field when using joins."
                 AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
             endif
         else
-            for l_Counter = 1 to l_NumberOfFieldsToReturn
-                if l_Counter > 1
-                    l_SQLCommand += [,]
+            for l_nCounter = 1 to l_nNumberOfFieldsToReturn
+                if l_nCounter > 1
+                    l_cSQLCommand += [,]
                 endif
-                l_SQLCommand +=  ::ExpressionToMYSQL(::p_FieldToReturn[l_Counter,1])
+                l_cSQLCommand +=  ::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1])
                 
-                if !empty(::p_FieldToReturn[l_Counter,2])
-                    l_SQLCommand += [ AS `]+::p_FieldToReturn[l_Counter,2]+[`]
+                if !empty(::p_FieldToReturn[l_nCounter,2])
+                    l_cSQLCommand += [ AS `]+::p_FieldToReturn[l_nCounter,2]+[`]
                 else
-                    l_SQLCommand += [ AS `]+strtran(::p_FieldToReturn[l_Counter,1],[.],[_])+[`]
+                    l_cSQLCommand += [ AS `]+strtran(::p_FieldToReturn[l_nCounter,1],[.],[_])+[`]
                 endif
                 
             endfor
         endif
         
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
 
-        for l_Counter = 1 to l_NumberOfJoins
+        for l_nCounter = 1 to l_nNumberOfJoins
             
             do case
-            case left(::p_Join[l_Counter,1],1) == "I"  //Inner Join
-                l_SQLCommand += [ INNER JOIN]
-            case left(::p_Join[l_Counter,1],1) == "L"  //Left Outer
-                l_SQLCommand += [ LEFT OUTER JOIN]
-            case left(::p_Join[l_Counter,1],1) == "R"  //Right Outer
-                l_SQLCommand += [ RIGHT OUTER JOIN]
-            case left(::p_Join[l_Counter,1],1) == "F"  //Full Outer
-                l_SQLCommand += [ FULL OUTER JOIN]
+            case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
+                l_cSQLCommand += [ INNER JOIN]
+            case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
+                l_cSQLCommand += [ LEFT OUTER JOIN]
+            case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
+                l_cSQLCommand += [ RIGHT OUTER JOIN]
+            case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
+                l_cSQLCommand += [ FULL OUTER JOIN]
             otherwise
                 loop
             endcase
             
-            l_SQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,2])
-            l_SQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_Counter,3]))
-            l_SQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_Counter,4])
+            l_cSQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2])
+            l_cSQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3]))
+            l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_nCounter,4])
             
         endfor
-
         
-        if l_NumberOfWheres == 0
-            l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
+        if l_nNumberOfWheres == 0
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
         else
-            l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
-            for l_Counter = 1 to l_NumberOfWheres
-                l_SQLCommand += [ AND (]+::ExpressionToMYSQL(::p_Where[l_Counter])+[)]
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            for l_nCounter = 1 to l_nNumberOfWheres
+                l_cSQLCommand += [ AND (]+::ExpressionToMYSQL(::p_Where[l_nCounter])+[)]
             endfor
-            l_SQLCommand += [)]
+            l_cSQLCommand += [)]
         endif
 
-        if l_NumberOfGroupBys > 0
-            l_SQLCommand += [ GROUP BY ]
-            for l_Counter = 1 to l_NumberOfGroupBys
-                if l_Counter > 1
-                    l_SQLCommand += [,]
+        if l_nNumberOfGroupBys > 0
+            l_cSQLCommand += [ GROUP BY ]
+            for l_nCounter = 1 to l_nNumberOfGroupBys
+                if l_nCounter > 1
+                    l_cSQLCommand += [,]
                 endif
-                l_SQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_Counter])
+                l_cSQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_nCounter])
             endfor
         endif
 
         do case
-        case l_NumberOfHavings = 1
-            l_SQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])
-        case l_NumberOfHavings > 1
-            l_SQLCommand += [ HAVING (]
-            for l_Counter = 1 to l_NumberOfHavings
-                if l_Counter > 1
-                    l_SQLCommand += [ AND ]
+        case l_nNumberOfHavings = 1
+            l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])
+        case l_nNumberOfHavings > 1
+            l_cSQLCommand += [ HAVING (]
+            for l_nCounter = 1 to l_nNumberOfHavings
+                if l_nCounter > 1
+                    l_cSQLCommand += [ AND ]
                 endif
-                l_SQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_Counter])+[)]
+                l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_nCounter])+[)]
             endfor
-            l_SQLCommand += [)]
+            l_cSQLCommand += [)]
         endcase
 
-        l_SQLCommand := strtran(l_SQLCommand,[->],[.])
-        ::p_LastSQLCommand := l_SQLCommand
+        l_cSQLCommand := strtran(l_cSQLCommand,[->],[.])
+        ::p_LastSQLCommand := l_cSQLCommand
         
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL	
-        l_SQLCommand := [SELECT ]
+        l_cSQLCommand := [SELECT ]
         
         do case
         case ::p_DistinctMode == 1
-            l_SQLCommand += [DISTINCT ]
+            l_cSQLCommand += [DISTINCT ]
         case ::p_DistinctMode == 2
-            // l_SQLCommand += [DISTINCT ON ()]   Not Implemented for the :Get()
+            // l_cSQLCommand += [DISTINCT ON ()]   Not Implemented for the :Get()
         endcase
 
-        if empty(l_NumberOfFieldsToReturn)
+        if empty(l_nNumberOfFieldsToReturn)
             //Only allowed when no joins are done
-            if empty(l_NumberOfJoins)
-                l_SQLCommand += [ *]
+            if empty(l_nNumberOfJoins)
+                l_cSQLCommand += [ *]
             else
-                l_ErrorOccurred := .t.
+                l_lErrorOccurred := .t.
                 ::p_ErrorMessage := "May not get all field when using joins."
                 AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
             endif
         else
-            for l_Counter = 1 to l_NumberOfFieldsToReturn
-                if l_Counter > 1
-                    l_SQLCommand += [,]
+            for l_nCounter = 1 to l_nNumberOfFieldsToReturn
+                if l_nCounter > 1
+                    l_cSQLCommand += [,]
                 endif
-                l_SQLCommand +=  ::ExpressionToPostgreSQL(::p_FieldToReturn[l_Counter,1])
+                l_cSQLCommand +=  ::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1])
                 
-                if !empty(::p_FieldToReturn[l_Counter,2])
-                    l_SQLCommand += [ AS "]+::p_FieldToReturn[l_Counter,2]+["]
+                if !empty(::p_FieldToReturn[l_nCounter,2])
+                    l_cSQLCommand += [ AS "]+::p_FieldToReturn[l_nCounter,2]+["]
                 else
-                    l_SQLCommand += [ AS "]+strtran(::p_FieldToReturn[l_Counter,1],[.],[_])+["]
+                    l_cSQLCommand += [ AS "]+strtran(::p_FieldToReturn[l_nCounter,1],[.],[_])+["]
                 endif
                 
             endfor
         endif
         
-        l_SQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
 
-        for l_Counter = 1 to l_NumberOfJoins
+        for l_nCounter = 1 to l_nNumberOfJoins
             
             do case
-            case left(::p_Join[l_Counter,1],1) == "I"  //Inner Join
-                l_SQLCommand += [ INNER JOIN]
-            case left(::p_Join[l_Counter,1],1) == "L"  //Left Outer
-                l_SQLCommand += [ LEFT OUTER JOIN]
-            case left(::p_Join[l_Counter,1],1) == "R"  //Right Outer
-                l_SQLCommand += [ RIGHT OUTER JOIN]
-            case left(::p_Join[l_Counter,1],1) == "F"  //Full Outer
-                l_SQLCommand += [ FULL OUTER JOIN]
+            case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
+                l_cSQLCommand += [ INNER JOIN]
+            case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
+                l_cSQLCommand += [ LEFT OUTER JOIN]
+            case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
+                l_cSQLCommand += [ RIGHT OUTER JOIN]
+            case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
+                l_cSQLCommand += [ FULL OUTER JOIN]
             otherwise
                 loop
             endcase
             
-            l_SQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_Counter,2])
-            l_SQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_Counter,3]))
-            l_SQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_Counter,4])
+            l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2])
+            l_cSQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3]))
+            l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_nCounter,4])
             
         endfor
 
-        if l_NumberOfWheres == 0
-            l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
+        if l_nNumberOfWheres == 0
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
         else
-            l_SQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
-            for l_Counter = 1 to l_NumberOfWheres
-                l_SQLCommand += [ AND (]+::ExpressionToPostgreSQL(::p_Where[l_Counter])+[)]
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            for l_nCounter = 1 to l_nNumberOfWheres
+                l_cSQLCommand += [ AND (]+::ExpressionToPostgreSQL(::p_Where[l_nCounter])+[)]
             endfor
-            l_SQLCommand += [)]
+            l_cSQLCommand += [)]
         endif
 
-        if l_NumberOfGroupBys > 0
-            l_SQLCommand += [ GROUP BY ]
-            for l_Counter = 1 to l_NumberOfGroupBys
-                if l_Counter > 1
-                    l_SQLCommand += [,]
+        if l_nNumberOfGroupBys > 0
+            l_cSQLCommand += [ GROUP BY ]
+            for l_nCounter = 1 to l_nNumberOfGroupBys
+                if l_nCounter > 1
+                    l_cSQLCommand += [,]
                 endif
-                l_SQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_Counter])
+                l_cSQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_nCounter])
             endfor
         endif
             
         do case
-        case l_NumberOfHavings = 1
-            l_SQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])
-        case l_NumberOfHavings > 1
-            l_SQLCommand += [ HAVING (]
-            for l_Counter = 1 to l_NumberOfHavings
-                if l_Counter > 1
-                    l_SQLCommand += [ AND ]
+        case l_nNumberOfHavings = 1
+            l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])
+        case l_nNumberOfHavings > 1
+            l_cSQLCommand += [ HAVING (]
+            for l_nCounter = 1 to l_nNumberOfHavings
+                if l_nCounter > 1
+                    l_cSQLCommand += [ AND ]
                 endif
-                l_SQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_Counter])+[)]
+                l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_nCounter])+[)]
             endfor
-            l_SQLCommand += [)]
+            l_cSQLCommand += [)]
         endcase
 
-
-        l_SQLCommand := strtran(l_SQLCommand,[->],[.])
-        ::p_LastSQLCommand := l_SQLCommand
+        l_cSQLCommand := strtran(l_cSQLCommand,[->],[.])
+        ::p_LastSQLCommand := l_cSQLCommand
         
     endcase
 
-    if !l_ErrorOccurred
-        l_ErrorOccurred := .t.   // Assumed it failed
+    if !l_lErrorOccurred
+        l_lErrorOccurred := .t.   // Assumed it failed
         
-        l_CursorTempName := "c_DB_Temp"
+        l_cCursorTempName := "c_DB_Temp"
 
-        if ::p_oSQLConnection:SQLExec(l_SQLCommand,l_CursorTempName)
-            select (l_CursorTempName)
+        if ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+            select (l_cCursorTempName)
             ::Tally        := reccount()
-            l_ErrorOccurred := .f.
+            l_lErrorOccurred := .f.
             
             do case
             case ::Tally == 0
                 AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,"Error in method get() did not find record."+CRLF+::LastSQL(),hb_orm_GetApplicationStack()})
             case ::Tally == 1
                 //Build an object to return
-                l_result := hb_orm_Data()
+                l_oResult := hb_orm_Data()
                 
-                for l_FieldCounter := 1 to fcount()
-                    l_FieldName  := FieldName(l_FieldCounter)
-                    l_FieldValue := FieldGet(l_FieldCounter)
-                    l_result:AddField(l_FieldName,l_FieldValue)
+                for l_nFieldCounter := 1 to fcount()
+                    l_cFieldName  := FieldName(l_nFieldCounter)
+                    l_xFieldValue := FieldGet(l_nFieldCounter)
+                    l_oResult:AddField(l_cFieldName,l_xFieldValue)
                 endfor
             otherwise
                 //Should not happen. Returned more than 1 record.
@@ -2279,578 +2484,699 @@ otherwise
             AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,"Error in method get() "+::p_ErrorMessage,hb_orm_GetApplicationStack()})
         endif
         
-        CloseAlias(l_CursorTempName)
+        CloseAlias(l_cCursorTempName)
     endif
     
-    if l_ErrorOccurred
+    if l_lErrorOccurred
         ::Tally = -1
-        select (l_select)
+        select (l_nSelect)
     else
-        select (l_select)
+        select (l_nSelect)
     endif
 
 endcase
 
 if len(l_aErrors) > 0
+    ::p_ErrorMessage := l_aErrors
     ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
 endif
 
-return l_result
+return l_oResult
 //-----------------------------------------------------------------------------------------------------------------
-method FormatDateForSQLUpdate(par_Date) class hb_orm_SQLData
+method FormatDateForSQLUpdate(par_dDate) class hb_orm_SQLData
+local l_cResult
 
-local l_result
-if empty(par_Date)
+if empty(par_dDate)
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_result := ['0000-00-00']
+        l_cResult := ['0000-00-00']
         
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_result := [NULL]
+        l_cResult := [NULL]
         
     // case inlist(v_SQLServerType,"MSSQL2000","MSSQL2005","MSSQL2008")
-    // 	l_result := [NULL]
+    // 	l_cResult := [NULL]
         
     otherwise
-        l_result := [NULL]
+        l_cResult := [NULL]
         
     endcase
 else
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_result := [']+hb_DtoC(par_Date,"YYYY-MM-DD")+[']
+        l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
         
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_result := [']+hb_DtoC(par_Date,"YYYY-MM-DD")+[']
+        l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
         
     // case inlist(v_SQLServerType,"MSSQL2000","MSSQL2005","MSSQL2008")
-    // 	l_result := [']+hb_DtoC(par_Date,"YYYY-MM-DD")+[']
+    // 	l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
         
     otherwise
-        l_result := [']+hb_DtoC(par_Date,"YYYY-MM-DD")+[']
+        l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
         
     endcase
     
 endif
-return l_result
+return l_cResult
 //-----------------------------------------------------------------------------------------------------------------
-method FormatDateTimeForSQLUpdate(par_Dati,par_nPrecision) class hb_orm_SQLData
-
-local l_result
+method FormatDateTimeForSQLUpdate(par_tDati,par_nPrecision) class hb_orm_SQLData
+local l_cResult
 local l_nPrecision := min(hb_defaultValue(par_nPrecision,0),4)  //Harbour can only handle up to 4 precision
-if empty(par_Dati)
+
+if empty(par_tDati)
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_result := ['0000-00-00 00:00:00']
+        l_cResult := ['0000-00-00 00:00:00']
         
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_result := [NULL]
+        l_cResult := [NULL]
         
     // case inlist(v_SQLServerType,"MSSQL2000","MSSQL2005","MSSQL2008")
-    // 	l_result := [NULL]
+    // 	l_cResult := [NULL]
         
     otherwise
-        l_result := [NULL]
+        l_cResult := [NULL]
         
     endcase
     
 else
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_result := [']+hb_TtoC(par_Dati,"YYYY-MM-DD","hh:mm:ss"+iif(l_nPrecision=0,"","."+replicate("f",l_nPrecision)))+[']
+        l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss"+iif(l_nPrecision=0,"","."+replicate("f",l_nPrecision)))+[']
         
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_result := [']+hb_TtoC(par_Dati,"YYYY-MM-DD","hh:mm:ss"+iif(l_nPrecision=0,"","."+replicate("f",l_nPrecision)))+[']
+        l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss"+iif(l_nPrecision=0,"","."+replicate("f",l_nPrecision)))+[']
         
     // case inlist(v_SQLServerType,"MSSQL2000","MSSQL2005","MSSQL2008")
-    // 	l_result := [']+hb_TtoC(par_Dati,"YYYY-MM-DD","hh:mm:ss")+[']
+    // 	l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss")+[']
         
     otherwise
-        l_result := [']+hb_TtoC(par_Dati,"YYYY-MM-DD","hh:mm:ss"+iif(l_nPrecision=0,"","."+replicate("f",l_nPrecision)))+[']
+        l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss"+iif(l_nPrecision=0,"","."+replicate("f",l_nPrecision)))+[']
         
     endcase
     
 endif
-return l_result
+return l_cResult
 //-----------------------------------------------------------------------------------------------------------------
 method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors) class hb_orm_SQLData
-local l_result := .t.
-local l_Value  := NIL
-local l_FieldType := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
-local l_ValueType := Valtype(par_xValue)                       //See https://github.com/Petewg/harbour-core/wiki/V
-local l_FieldLen,l_FieldDec
+local l_lResult := .t.
+local l_cValue  := NIL
+local l_xValue
+local l_cFieldType := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
+local l_cValueType := Valtype(par_xValue)                       //See https://github.com/Petewg/harbour-core/wiki/V
+local l_nFieldLen,l_nFieldDec
 local l_nMaxValue
-local l_UnsignedLength,l_Decimals
+local l_nUnsignedLength,l_nDecimals
 
 if hb_IsNIL(par_xValue)
     if ("N" $ par_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES])
-        l_Value  := "NULL"
+        l_cValue  := "NULL"
     else
         AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" NULL is not allowed',hb_orm_GetApplicationStack()})
-        l_result := .f.
+        l_lResult := .f.
     endif
 else
-    switch l_FieldType
+    switch l_cFieldType
     case  "I" // Integer
-        if l_ValueType == "N"
+        if l_cValueType == "N"
             if par_xValue < -2147483648 .or. par_xValue > 2147483647
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not in Integer range',hb_orm_GetApplicationStack()})
-                l_result := .f.
+                l_lResult := .f.
             else
-                l_Value := hb_ntoc(par_xValue)
+                l_cValue := hb_ntoc(par_xValue)
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Integer',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case "IB" // Big Integer
-        if l_ValueType == "N"
+        if l_cValueType == "N"
             // Not Testing if in range
-            l_Value := hb_ntoc(par_xValue)
+            l_cValue := hb_ntoc(par_xValue)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Big Integer',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "Y" // Money  (4 decimals)
-        if l_ValueType == "N"
+        if l_cValueType == "N"
             // Not Testing if in range Yet
-            l_Value := hb_ntoc(par_xValue)
+            l_cValue := hb_ntoc(par_xValue)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric / Money',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "N" // numeric
         do case
-        case l_ValueType == "N"
-            l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-            l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
-            if l_FieldLen > 15
+        case l_cValueType == "N"
+            l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+            l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+            if l_nFieldLen > 15
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric with more than 15 digits.',hb_orm_GetApplicationStack()})
-                l_result := .f.
+                l_lResult := .f.
             else
-                l_nMaxValue := ((10**l_FieldLen)-1)/(10**l_FieldDec)
+                l_nMaxValue := ((10**l_nFieldLen)-1)/(10**l_nFieldDec)
                 if abs(par_xValue) <= l_nMaxValue
-                    if round(abs(par_xValue),l_FieldDec) == abs(par_xValue)  // Test if decimal is larger than allowed
-                        l_Value := hb_ntoc(par_xValue)
+                    if round(abs(par_xValue),l_nFieldDec) == abs(par_xValue)  // Test if decimal is larger than allowed
+                        l_cValue := hb_ntoc(par_xValue)
                     else
                         AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Decimals Overflow: '+alltrim(str(par_xValue)),hb_orm_GetApplicationStack()})
-                        l_result := .f.
+                        l_lResult := .f.
                     endif
                 else
                     AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Overflow: '+alltrim(str(par_xValue)),hb_orm_GetApplicationStack()})
-                    l_result := .f.
+                    l_lResult := .f.
                 endif
             endif
-        case l_ValueType == "C"
-            l_UnsignedLength := l_Decimals := 0
-            if el_AUnpack(IsStringANumber(par_xValue),,@l_UnsignedLength,@l_Decimals)
-                l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-                l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
-                if l_UnsignedLength <= l_FieldLen .and. l_Decimals <= l_FieldDec
-                    l_Value := par_xValue
+        case l_cValueType == "C"
+            l_nUnsignedLength := l_nDecimals := 0
+            if el_AUnpack(IsStringANumber(par_xValue),,@l_nUnsignedLength,@l_nDecimals)
+                l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+                l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+                if l_nUnsignedLength <= l_nFieldLen .and. l_nDecimals <= l_nFieldDec
+                    l_cValue := par_xValue
                 else
                     AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric String Overflow: '+par_xValue,hb_orm_GetApplicationStack()})
-                    l_result := .f.
+                    l_lResult := .f.
                 endif
             else
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric String',hb_orm_GetApplicationStack()})
-                l_result := .f.
+                l_lResult := .f.
             endif
         otherwise
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endcase
         exit
     case  "C" // char                                                      https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
     case "CV" // variable length char (with option max length value)
     case  "B" // binary
     case "BV" // variable length binary (with option max length value)
-        if l_ValueType == "C"
+        if l_cValueType == "C"
             if empty(par_xValue)  // At this point we already know it is not null
-                l_Value := "''"
+                l_cValue := "''"
             else
-                l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-                if len(par_xValue) <= l_FieldLen
-                    l_Value := "x'"+hb_StrToHex(par_xValue)+"'"
+                l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+                if len(par_xValue) <= l_nFieldLen
+                    l_cValue := "x'"+hb_StrToHex(par_xValue)+"'"
                 else
-                    AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_FieldType,l_FieldLen})
-                    l_Value := "x'"+hb_StrToHex(left(par_xValue,l_FieldLen))+"'"
+                    AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_cFieldType,l_nFieldLen})
+                    l_cValue := "x'"+hb_StrToHex(left(par_xValue,l_nFieldLen))+"'"
                 endif
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "M" // longtext
     case  "R" // long blob (binary)
-        if l_ValueType == "C"
+        if l_cValueType == "C"
             if len(par_xValue) == 0   //_M_ Test if this logic makes senses for MySQL
-                l_Value := "''"
+                l_cValue := "''"
             else
-                l_Value := "x'"+hb_StrToHex(par_xValue)+"'"
+                l_cValue := "x'"+hb_StrToHex(par_xValue)+"'"
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character/Binary',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "L" // Logical
-        if l_ValueType == "L"
-            l_Value := iif(par_xValue,"TRUE","FALSE")
+        if l_cValueType == "L"
+            l_cValue := iif(par_xValue,"TRUE","FALSE")
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Logical',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "D" // Date   
-        if l_ValueType == "D"
-            // l_Value := '"'+hb_DtoC(par_xValue,"YYYY-MM-DD")+'"'           //_M_  Test on 1753-01-01  Test integrity in MySQL
-            l_Value := ::FormatDateForSQLUpdate(par_xValue)
+        if l_cValueType == "D"
+            // l_cValue := '"'+hb_DtoC(par_xValue,"YYYY-MM-DD")+'"'           //_M_  Test on 1753-01-01  Test integrity in MySQL
+            l_cValue := ::FormatDateForSQLUpdate(par_xValue)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Date',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
 
     case"TOZ" // Time with time zone               'hh:mm:ss[.fraction]'
     case "TO" // Time without time zone
-        if l_ValueType == "C"
-            l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+        if l_cValueType == "C"
+            l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
             if hb_orm_CheckTimeFormatValidity(par_xValue)
-                if len(par_xValue) > 9 + l_FieldDec
+                if len(par_xValue) > 9 + l_nFieldDec
                     AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Time String precision Overflow: '+alltrim(par_xValue),hb_orm_GetApplicationStack()})
-                    l_result := .f.
+                    l_lResult := .f.
                 else
-                    l_Value := '"'+par_xValue+'"'
+                    l_cValue := '"'+par_xValue+'"'
                 endif
             else
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a valid Time String',hb_orm_GetApplicationStack()})
-                l_result := .f.
+                l_lResult := .f.
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Time String',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
 
     case"DTZ" // Date Time with time zone           https://dev.mysql.com/doc/refman/8.0/en/datetime.html  _M_ Support for Time fractions and test for precision.
     case "DT" // Date Time without time zone
     case  "T" // Date Time without time zone
-        if l_ValueType == "T"
-            // l_Value := '"'+hb_TtoC(l_Value,"YYYY-MM-DD","hh:mm:ss")+'"'           //_M_  Test on 1753-01-01
-            l_Value := ::FormatDateTimeForSQLUpdate(par_xValue,3)
+        if l_cValueType == "T"
+            // l_cValue := '"'+hb_TtoC(l_cValue,"YYYY-MM-DD","hh:mm:ss")+'"'           //_M_  Test on 1753-01-01
+            l_cValue := ::FormatDateTimeForSQLUpdate(par_xValue,3)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Datetime',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
+        endif
+        exit
+    case "JS" // json string
+        if l_cValueType == "C"
+            if len(par_xValue) == 0   //_M_ Test if this logic makes senses for MySQL
+                l_cValue := "''"
+            else
+                l_cValue := "x'"+hb_StrToHex(par_xValue)+"'"
+            endif
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" a string',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+        exit
+    case "UUI" // uuid string
+        if l_cValueType == "C"
+            if len(par_xValue) == 0   //_M_ Test if this logic makes senses for MySQL
+                l_cValue := "''"
+            else
+                l_cValue := "'"+lower(par_xValue)+"'"
+            endif
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" a string',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
         endif
         exit
     otherwise // "?" Unknown
-        AAdd(l_aErrors,{par_cTableName,par_nKey,"Skipped "+par_cAction+" unknown value type: "+l_ValueType+' Field "'+par_cFieldName+'" of Unknown type',hb_orm_GetApplicationStack()})
-        l_result := .f.
+        AAdd(l_aErrors,{par_cTableName,par_nKey,"Skipped "+par_cAction+" unknown value type: "+l_cValueType+' Field "'+par_cFieldName+'" of Unknown type',hb_orm_GetApplicationStack()})
+        l_lResult := .f.
         exit
     endcase
 endif
 
-return {l_result,l_Value}
+return {l_lResult,l_cValue}
 //-----------------------------------------------------------------------------------------------------------------
 method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors) class hb_orm_SQLData
-local l_result := .t.
-local l_Value  := NIL
-local l_FieldType := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
-local l_ValueType := Valtype(par_xValue)                       //See https://github.com/Petewg/harbour-core/wiki/V
-local l_FieldLen,l_FieldDec
+local l_lResult := .t.
+local l_cValue  := NIL
+local l_xValue
+local l_cFieldType := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
+local l_cValueType := Valtype(par_xValue)                       //See https://github.com/Petewg/harbour-core/wiki/V
+local l_nFieldLen,l_nFieldDec
 local l_nMaxValue
-local l_UnsignedLength,l_Decimals
+local l_nUnsignedLength,l_nDecimals
 
 if hb_IsNIL(par_xValue)
     if ("N" $ par_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES])
-        l_Value  := "NULL"
+        l_cValue  := "NULL"
     else
         AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" NULL is not allowed',hb_orm_GetApplicationStack()})
-        l_result := .f.
+        l_lResult := .f.
     endif
 else
-    switch l_FieldType
+    switch l_cFieldType
     case  "I" // Integer
-        if l_ValueType == "N"
+        if l_cValueType == "N"
             if par_xValue < -2147483648 .or. par_xValue > 2147483647
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not in Integer range',hb_orm_GetApplicationStack()})
-                l_result := .f.
+                l_lResult := .f.
             else
-                l_Value := hb_ntoc(par_xValue)
+                l_cValue := hb_ntoc(par_xValue)
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Integer',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case "IB" // Big Integer
-        if l_ValueType == "N"
+        if l_cValueType == "N"
             // Not Testing if in range
-            l_Value := hb_ntoc(par_xValue)
+            l_cValue := hb_ntoc(par_xValue)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Big Integer',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "Y" // Money  (4 decimals)
-        if l_ValueType == "N"
+        if l_cValueType == "N"
             // Not Testing if in range Yet
-            l_Value := hb_ntoc(par_xValue)
+            l_cValue := hb_ntoc(par_xValue)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric / Money',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "N" // numeric
         do case
-        case l_ValueType == "N"
-            l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-            l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
-            if l_FieldLen > 15
+        case l_cValueType == "N"
+            l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+            l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+            if l_nFieldLen > 15
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric with more than 15 digits.',hb_orm_GetApplicationStack()})
-                l_result := .f.
+                l_lResult := .f.
             else
-                l_nMaxValue := ((10**l_FieldLen)-1)/(10**l_FieldDec)
+                l_nMaxValue := ((10**l_nFieldLen)-1)/(10**l_nFieldDec)
                 if abs(par_xValue) <= l_nMaxValue
-                    if round(abs(par_xValue),l_FieldDec) == abs(par_xValue)  // Test if decimal is larger than allowed
-                        l_Value := hb_ntoc(par_xValue)
+                    if round(abs(par_xValue),l_nFieldDec) == abs(par_xValue)  // Test if decimal is larger than allowed
+                        l_cValue := hb_ntoc(par_xValue)
                     else
                         AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Decimals Overflow: '+alltrim(str(par_xValue)),hb_orm_GetApplicationStack()})
-                        l_result := .f.
+                        l_lResult := .f.
                     endif
                 else
                     AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric Overflow: '+alltrim(str(par_xValue)),hb_orm_GetApplicationStack()})
-                    l_result := .f.
+                    l_lResult := .f.
                 endif
             endif
-        case l_ValueType == "C"
-            l_UnsignedLength := l_Decimals := 0
-            if el_AUnpack(IsStringANumber(par_xValue),,@l_UnsignedLength,@l_Decimals)
-                l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-                l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
-                if l_UnsignedLength <= l_FieldLen .and. l_Decimals <= l_FieldDec
-                    l_Value := par_xValue
+        case l_cValueType == "C"
+            l_nUnsignedLength := l_nDecimals := 0
+            if el_AUnpack(IsStringANumber(par_xValue),,@l_nUnsignedLength,@l_nDecimals)
+                l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+                l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+                if l_nUnsignedLength <= l_nFieldLen .and. l_nDecimals <= l_nFieldDec
+                    l_cValue := par_xValue
                 else
                     AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Numeric String Overflow: '+par_xValue,hb_orm_GetApplicationStack()})
-                    l_result := .f.
+                    l_lResult := .f.
                 endif
             else
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric String',hb_orm_GetApplicationStack()})
-                l_result := .f.
+                l_lResult := .f.
             endif
         otherwise
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endcase
         exit
     case  "C" // char 
     case "CV" // variable length char (with option max length value)
     case  "B" // binary
     case "BV" // variable length binary (with option max length value)
-        if l_ValueType == "C"
+        if l_cValueType == "C"
             if empty(par_xValue)  // At this point we already know it is not null
-                l_Value := "''"
+                l_cValue := "''"
             else
-                l_FieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-                if len(par_xValue) <= l_FieldLen
-                    // l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
-                    if "B" $ l_FieldType
-                        l_Value := hb_orm_PostgresqlEncodeBinary(par_xValue)
+                l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+                if len(par_xValue) <= l_nFieldLen
+                    // l_cValue := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
+                    if "B" $ l_cFieldType
+                        l_cValue := hb_orm_PostgresqlEncodeBinary(par_xValue)
                     else
-                        l_Value := hb_orm_PostgresqlEncodeUTFString(par_xValue)
+                        l_cValue := hb_orm_PostgresqlEncodeUTFString(par_xValue)
                     endif
                 else
-                    AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_FieldType,l_FieldLen})
-                    // l_Value := "E'\x"+hb_StrToHex(left(par_xValue,l_FieldLen),"\x")+"'"
-                    if "B" $ l_FieldType
-                        l_Value := hb_orm_PostgresqlEncodeBinary(left(par_xValue,l_FieldLen))
+                    AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_cFieldType,l_nFieldLen})
+                    // l_cValue := "E'\x"+hb_StrToHex(left(par_xValue,l_nFieldLen),"\x")+"'"
+                    if "B" $ l_cFieldType
+                        l_cValue := hb_orm_PostgresqlEncodeBinary(left(par_xValue,l_nFieldLen))
                     else
-                        l_Value := hb_orm_PostgresqlEncodeUTFString(left(par_xValue,l_FieldLen))
+                        l_cValue := hb_orm_PostgresqlEncodeUTFString(left(par_xValue,l_nFieldLen))
                     endif
                 endif
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "M" // longtext
     case  "R" // long blob (binary)
-        if l_ValueType == "C"
+        if l_cValueType == "C"
             if len(par_xValue) == 0
-                l_Value := "''"
+                l_cValue := "''"
             else
-                // l_Value := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
-                if l_FieldType == "M"
-                    l_Value := hb_orm_PostgresqlEncodeUTFString(par_xValue)
+                // l_cValue := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
+                if l_cFieldType == "M"
+                    l_cValue := hb_orm_PostgresqlEncodeUTFString(par_xValue)
                 else
-                    l_Value := hb_orm_PostgresqlEncodeBinary(par_xValue)
+                    l_cValue := hb_orm_PostgresqlEncodeBinary(par_xValue)
                 endif
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character/Binary',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "L" // Logical
-        if l_ValueType == "L"
-            l_Value := iif(par_xValue,"TRUE","FALSE")
+        if l_cValueType == "L"
+            l_cValue := iif(par_xValue,"TRUE","FALSE")
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Logical',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
     case  "D" // Date 
-        if l_ValueType == "D"
-            // l_Value := '"'+hb_DtoC(par_xValue,"YYYY-MM-DD")+'"'           //_M_  Test integrity in MySQL
-            l_Value := ::FormatDateForSQLUpdate(par_xValue)
+        if l_cValueType == "D"
+            // l_cValue := '"'+hb_DtoC(par_xValue,"YYYY-MM-DD")+'"'           //_M_  Test integrity in MySQL
+            l_cValue := ::FormatDateForSQLUpdate(par_xValue)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Date',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
 
     case"TOZ" // Time with time zone               'hh:mm:ss[.fraction]'
     case "TO" // Time without time zone
-        if l_ValueType == "C"
+        if l_cValueType == "C"
             //if (SecToTime(TimeToSec(par_xValue),len(par_xValue)=11) == par_xValue)   //_M_ Verify format validity
-            l_FieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+            l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
             if hb_orm_CheckTimeFormatValidity(par_xValue)
-                if len(par_xValue) > 9 + l_FieldDec
+                if len(par_xValue) > 9 + l_nFieldDec
                     AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Time String precision Overflow: '+alltrim(par_xValue),hb_orm_GetApplicationStack()})
-                    l_result := .f.
+                    l_lResult := .f.
                 else
-                    l_Value := "'"+par_xValue+"'"
+                    l_cValue := "'"+par_xValue+"'"
                 endif
             else
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a valid Time String',hb_orm_GetApplicationStack()})
-                l_result := .f.
+                l_lResult := .f.
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Time String',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
 
     case"DTZ" // Date Time with time zone           _M_ Support for Time fractions and test for precision.
     case "DT" // Date Time without time zone
     case  "T" // Date Time without time zone
-        if l_ValueType == "T"
-            l_Value := ::FormatDateTimeForSQLUpdate(par_xValue,3)
+        if l_cValueType == "T"
+            l_cValue := ::FormatDateTimeForSQLUpdate(par_xValue,3)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Datetime',hb_orm_GetApplicationStack()})
-            l_result := .f.
+            l_lResult := .f.
         endif
         exit
+    case "JS" // json string
+        if l_cValueType == "C"
+            l_xValue := vfp_strtran(par_xValue,"::json","",-1,-1,1)
+            if len(l_xValue) == 0
+                l_cValue := "{}::json"
+            else
+                l_cValue := hb_orm_PostgresqlEncodeUTFString(l_xValue)+"::json"
+            endif
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a string',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+
+        exit
+    case "UUI" // uuid
+        if l_cValueType == "C"
+            l_xValue := vfp_strtran(par_xValue,"::uuid","",-1,-1,1)
+            if len(l_xValue) == 0
+                l_cValue := "''::uuid"
+            else
+                l_cValue := "'"+lower(alltrim(l_xValue))+"'::uuid"
+            endif
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a string',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+
+        exit
     otherwise // "?" Unknown
-        AAdd(l_aErrors,{par_cTableName,par_nKey,"Skipped "+par_cAction+" unknown value type: "+l_ValueType+' Field "'+par_cFieldName+'" of Unknown type',hb_orm_GetApplicationStack()})
-        l_result := .f.
+        AAdd(l_aErrors,{par_cTableName,par_nKey,"Skipped "+par_cAction+" unknown value type: "+l_cValueType+' Field "'+par_cFieldName+'" of Unknown type',hb_orm_GetApplicationStack()})
+        l_lResult := .f.
         exit
     endcase
 endif
 
-return {l_result,l_Value}
+return {l_lResult,l_cValue}
 //-----------------------------------------------------------------------------------------------------------------
-static function IsStringANumber(par_cNumber)
-local l_Result := .t.
-local l_nPos
-local l_char
-local l_FoundPeriod := .f.
-local l_UnsignedLength  := 0
-local l_decimal := 0
+method GetPostgreSQLCastForFieldType(par_cFieldType,par_nFieldLen,par_nFieldDec) class hb_orm_SQLData
+local l_cCast
 
-if empty(par_cNumber)
-    l_Result := .f.
-else
-    l_char := left(par_cNumber,1)
+do case
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     do case
-    case l_char == "-"
-    case l_char $ "0123456789"
-        l_UnsignedLength += 1
+    case par_cFieldType == "I"
+        l_cCast := [integer]
+    case par_cFieldType == "IB"
+        l_cCast := [bigint]
+    case par_cFieldType == "N"
+        l_cCast := [numeric(]+trans(par_nFieldLen)+[,]+trans(par_nFieldDec)+[)]
+    case par_cFieldType == "C"
+        l_cCast := [character(]+trans(par_nFieldLen)+[)]
+    case par_cFieldType == "CV"
+        l_cCast := [character varying]+iif(empty(par_nFieldLen),[],[(]+trans(par_nFieldLen)+[)])
+    case par_cFieldType == "B"
+        l_cCast := [bytea]
+    case par_cFieldType == "BV"
+        l_cCast := [bytea]
+    case par_cFieldType == "M"
+        l_cCast := [text]
+    case par_cFieldType == "R"
+        l_cCast := [bytea]
+    case par_cFieldType == "L"
+        l_cCast := [boolean]
+    case par_cFieldType == "D"
+        l_cCast := [date]
+    case par_cFieldType == "TOZ"
+        if vfp_between(par_nFieldDec,0,6)
+            l_cCast := [time(]+trans(par_nFieldDec)+[) with time zone]
+        else
+            l_cCast := [time with time zone]
+        endif
+    case par_cFieldType == "TO"
+        if vfp_between(par_nFieldDec,0,6)
+            l_cCast := [time(]+trans(par_nFieldDec)+[) without time zone]
+        else
+            l_cCast := [time without time zone]
+        endif
+    case par_cFieldType == "DTZ"
+        if vfp_between(par_nFieldDec,0,6)
+            l_cCast := [timestamp(]+trans(par_nFieldDec)+[) with time zone]
+        else
+            l_cCast := [timestamp with time zone]
+        endif
+    case par_cFieldType == "DT" .or. par_cFieldType == "T"
+        if vfp_between(par_nFieldDec,0,6)
+            l_cCast := [timestamp(]+trans(par_nFieldDec)+[) without time zone]
+        else
+            l_cCast := [timestamp without time zone]
+        endif
+    case par_cFieldType == "Y"
+        l_cCast := [money]
+    case par_cFieldType == "UUI"
+        l_cCast := [uuid]
+    case par_cFieldType == "JS"
+        l_cCast := [json]
     otherwise
-        l_Result := .f.
+        l_cCast := ""
     endcase
 
-    if l_Result
+endcase
+
+return l_cCast
+//-----------------------------------------------------------------------------------------------------------------
+static function IsStringANumber(par_cNumber)
+local l_lResult := .t.
+local l_nPos
+local l_cChar
+local l_lFoundPeriod := .f.
+local l_nUnsignedLength  := 0
+local l_nDecimal := 0
+
+if empty(par_cNumber)
+    l_lResult := .f.
+else
+    l_cChar := left(par_cNumber,1)
+    do case
+    case l_cChar == "-"
+    case l_cChar $ "0123456789"
+        l_nUnsignedLength += 1
+    otherwise
+        l_lResult := .f.
+    endcase
+
+    if l_lResult
         for l_nPos := 2 to Len(par_cNumber)
-            l_char := substr(par_cNumber,l_nPos,1)
+            l_cChar := substr(par_cNumber,l_nPos,1)
             do case
-            case l_char $ "0123456789"
-                l_UnsignedLength += 1
-                if l_FoundPeriod
-                    l_decimal += 1
+            case l_cChar $ "0123456789"
+                l_nUnsignedLength += 1
+                if l_lFoundPeriod
+                    l_nDecimal += 1
                 endif
-            case l_char == "."
-                if l_FoundPeriod
+            case l_cChar == "."
+                if l_lFoundPeriod
                     //More than 1 period
-                    l_Result := .f.
+                    l_lResult := .f.
                     exit
                 else
-                    l_FoundPeriod := .t.
+                    l_lFoundPeriod := .t.
                 endif
             otherwise
-                l_Result := .f.
+                l_lResult := .f.
                 exit
             endcase
         endfor
     endif
 endif
-return {l_Result,l_UnsignedLength,l_decimal}
+return {l_lResult,l_nUnsignedLength,l_nDecimal}
 
 //-----------------------------------------------------------------------------------------------------------------
 function hb_orm_CheckTimeFormatValidity(par_cTime)
-local l_Result := .t.
+local l_lResult := .t.
 local l_nPos
 
 //Max 23:59:59.999999
 do case
 case !(substr(par_cTime,1,1) $ "012")
-    l_Result := .f.
+    l_lResult := .f.
 case !(substr(par_cTime,2,1) $ "0123456789")
-    l_Result := .f.
+    l_lResult := .f.
 case val(substr(par_CTime,1,2)) > 23
-    l_Result := .f.
+    l_lResult := .f.
 case !(substr(par_cTime,3,1) == ":")
-    l_Result := .f.
+    l_lResult := .f.
 case !(substr(par_cTime,4,1) $ "012345")
-    l_Result := .f.
+    l_lResult := .f.
 case !(substr(par_cTime,5,1) $ "0123456789")
-    l_Result := .f.
+    l_lResult := .f.
 case val(substr(par_CTime,4,2)) > 59
-    l_Result := .f.
+    l_lResult := .f.
 case !(substr(par_cTime,6,1) == ":")
-    l_Result := .f.
+    l_lResult := .f.
 case !(substr(par_cTime,7,1) $ "012345")
-    l_Result := .f.
+    l_lResult := .f.
 case !(substr(par_cTime,8,1) $ "0123456789")
-    l_Result := .f.
+    l_lResult := .f.
 case val(substr(par_CTime,7,2)) > 59
-    l_Result := .f.
+    l_lResult := .f.
 case len(par_CTime) = 8
     //Done Testing is valid
 case len(par_CTime) = 9  //would need some decimal values
-    l_Result := .f.
+    l_lResult := .f.
 case len(par_CTime) > 15
-    l_Result := .f. // More than 6 decimals
+    l_lResult := .f. // More than 6 decimals
 case len(par_CTime) > 8
     if !(substr(par_CTime,9,1) == ".")
-        l_Result := .f.
+        l_lResult := .f.
     else
         for l_nPos := 10 to len(par_CTime)
             if !(substr(par_cTime,l_nPos,1) $ "0123456789")
-                l_Result := .f.
+                l_lResult := .f.
                 exit
             endif
         endfor
     endif
 endcase
 
-return l_Result
+return l_lResult
 
 //-----------------------------------------------------------------------------------------------------------------
 

@@ -39,5 +39,3 @@ hb_orm_cursor.prg
 hb_orm_cursor_c.c
 
 ExportTableToHtmlFile.prg
-
-debugger.hbm

@@ -1,11 +1,11 @@
-//Copyright (c) 2022 Eric Lendvai MIT License
+//Copyright (c) 2023 Eric Lendvai MIT License
 
 #include "hb_vfp.ch"
 #include "hb_orm.ch"
 
 #include "dbinfo.ch"
 
-REQUEST HB_CODEPAGE_UTF8
+REQUEST HB_CODEPAGE_UTF8EX
 
 REQUEST SQLMIX , SDDODBC
 
@@ -38,29 +38,29 @@ class hb_orm_Cursor
         method Init()
         method GetName()                inline ::p_CursorName
 
-        method Field(par_cName,par_Type,par_Length,par_Decimal,par_Flags)                 //Add or update a field definition. Should be used before calling :CreateCursor()
+        method Field(par_cName,par_cType,par_nLength,par_nDecimal,par_cFlags)                 //Add or update a field definition. Should be used before calling :CreateCursor()
                                                                                           //Flags can be "N" for AllowNul,"+" for IsAutoIncrement,"B" for Binary,"T" for Trimmed,"U" for Unicode, "Z" or "C" for Compressed. Will not support "Encrypted" since in memory.
         method RemoveField(par_cName)                                                     //Remove a field definition. To be used before calling :CreateCursor()
         method CreateCursor(par_cName)
         
-        method Index(par_cName,par_Expression,par_Unique)                                 //Add or update an index definition. Should be used before calling :CreateIndexes()
-        //  Future  (par_cName,par_Expression,par_Direction,par_Unique,par_ForExpression)  //Currently SQLMix does not seems to support ordCondSet()
+        method Index(par_cName,par_cExpression,par_lUnique)                                 //Add or update an index definition. Should be used before calling :CreateIndexes()
+        //  Future  (par_cName,par_cExpression,par_cDirection,par_lUnique,par_ForExpression)  //Currently SQLMix does not seems to support ordCondSet()
 
         method RemoveIndex(par_cName)                                                     //Remove a index definition. To be used before calling :CreateIndexes()
         method CreateIndexes()                                                           //Create the index tags after the :Index() were called
         method SetOrder(par_cName)                                                        //Set the Tax(index) on the cursor
         
         method AppendBlank()                                                             //Add a blank record and respect autoincrement and Set Null Values
-        method SetFieldValue(par_cFieldName,par_Value)
-        method SetFieldValues(par_HashFieldValues)
+        method SetFieldValue(par_cFieldName,par_xValue)
+        method SetFieldValues(par_hFieldValues)
         method GetFieldValue(par_cFieldName)
-        method InsertRecord(par_HashFieldValues)                                         //Returns 0 or the last AutoIncrement value
+        method InsertRecord(par_hFieldValues)                                         //Returns 0 or the last AutoIncrement value
         // method Insert()                                                               //Add an complete record with all the values. Return the last AutoIncrement Value if at least one field was used.
         method Close()                                                                   //Close the Cursor and removes all field definitions
         method Zap()                                                                     //Remove All the records, while maintaining the structure and indexes
         data p_RecordCount init 0 READONLY                                               //Places as a public Attribute
 
-        method Associate(par_CursorName)                                                 //Called by hb_orm_sqldata when the result is a cursor
+        method Associate(par_cCursorName)                                                 //Called by hb_orm_sqldata when the result is a cursor
 
     DESTRUCTOR destroy()
 endclass
@@ -85,18 +85,18 @@ hb_HClear(::p_Indexes)
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Field(par_cName,par_Type,par_Length,par_Decimal,par_Flags) class hb_orm_Cursor    //Add a field definition
-local l_AllowNull,l_IsAutoIncrement,l_Binary,l_Trimmed,l_Unicode,l_Compressed
-local l_Flags := upper(hb_DefaultValue(par_flags,""))
+method Field(par_cName,par_cType,par_nLength,par_nDecimal,par_cFlags) class hb_orm_Cursor    //Add a field definition
+local l_lAllowNull,l_lIsAutoIncrement,l_lBinary,l_lTrimmed,l_lUnicode,l_lCompressed
+local l_cFlags := upper(hb_DefaultValue(par_cFlags,""))
 
-l_AllowNull       := ("N" $ l_Flags)
-l_IsAutoIncrement := ("+" $ l_Flags)
-l_Binary          := ("B" $ l_Flags)
-l_Trimmed         := ("T" $ l_Flags) .and. (par_Type $ "C" .or. par_Type $ "CV")
-l_Unicode         := ("U" $ l_Flags)
-l_Compressed      := (("Z" $ l_Flags) .or. ("C" $ l_Flags))
+l_lAllowNull       := ("N" $ l_cFlags)
+l_lIsAutoIncrement := ("+" $ l_cFlags)
+l_lBinary          := ("B" $ l_cFlags)
+l_lTrimmed         := ("T" $ l_cFlags) .and. (par_cType $ "C" .or. par_cType $ "CV")
+l_lUnicode         := ("U" $ l_cFlags)
+l_lCompressed      := (("Z" $ l_cFlags) .or. ("C" $ l_cFlags))
 
-::p_Fields[par_cName] := {0,par_Type,par_Length,par_Decimal,l_AllowNull,l_IsAutoIncrement,l_Binary,l_Trimmed,l_Unicode,l_Compressed}
+::p_Fields[par_cName] := {0,par_cType,par_nLength,par_nDecimal,l_lAllowNull,l_lIsAutoIncrement,l_lBinary,l_lTrimmed,l_lUnicode,l_lCompressed}
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
@@ -110,12 +110,12 @@ method SetOrder(par_cName) class hb_orm_Cursor
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method CreateCursor(par_cName) class hb_orm_Cursor
-local l_Structure := {}
-local l_FieldStructure
-local l_FieldType
-local l_FieldFlags
-local l_FieldName
-local l_FieldPos := 0
+local l_aStructure := {}
+local l_aFieldStructure
+local l_cFieldType
+local l_cFieldFlags
+local l_cFieldName
+local l_nFieldPos := 0
 
 if !empty(::p_CursorName)
     CloseAlias(::p_CursorName)
@@ -132,57 +132,57 @@ CloseAlias(par_cName)
 ::p_AutoIncrementLastValue := 0
 
 //Will create an array that is compatible with DbCreate()
-for each l_FieldStructure in ::p_Fields
-    l_FieldName := l_FieldStructure:__enumKey()
+for each l_aFieldStructure in ::p_Fields
+    l_cFieldName := l_aFieldStructure:__enumKey()
     
-    ::p_Fields[l_FieldName][HB_ORM_CURSOR_STRUCTURE_POS] := ++l_FieldPos
+    ::p_Fields[l_cFieldName][HB_ORM_CURSOR_STRUCTURE_POS] := ++l_nFieldPos
 
-    l_FieldFlags := iif(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]    ,"N","") +;
-                    iif(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC] ,"+","") +;
-                    iif(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY]  ,"B","") +;
-                    iif(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_UNICODE] ,"U","") +;
-                    iif(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_COMPRESS],"Z","")
+    l_cFieldFlags := iif(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]    ,"N","") +;
+                    iif(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC] ,"+","") +;
+                    iif(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY]  ,"B","") +;
+                    iif(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_UNICODE] ,"U","") +;
+                    iif(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_COMPRESS],"Z","")
 
-    if empty(l_FieldFlags)
-        l_FieldType  := l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TYPE]
+    if empty(l_cFieldFlags)
+        l_cFieldType  := l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_TYPE]
     else
-        l_FieldType  := l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TYPE]+":"+l_FieldFlags
-        // AAdd(::p_FieldsForAppend,hb_HClone(l_FieldStructure:__enumValue()))   //Have to clone, since otherwise passed by reference
+        l_cFieldType  := l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_TYPE]+":"+l_cFieldFlags
+        // AAdd(::p_FieldsForAppend,hb_HClone(l_aFieldStructure:__enumValue()))   //Have to clone, since otherwise passed by reference
     endif
-    if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC] .or. ;
-       l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL] .or. ;
-       l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY] .or. ;
-       l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
+    if l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC] .or. ;
+       l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL] .or. ;
+       l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY] .or. ;
+       l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
            
-        AAdd(::p_FieldsForAppend,{l_FieldStructure[1],;
-                                  l_FieldStructure[2],;
-                                  l_FieldStructure[3],;
-                                  l_FieldStructure[4],;
-                                  l_FieldStructure[5],;
-                                  l_FieldStructure[6],;
-                                  l_FieldStructure[7],;
-                                  l_FieldStructure[8],;
-                                  l_FieldStructure[9],;
-                                  l_FieldStructure[10];
+        AAdd(::p_FieldsForAppend,{l_aFieldStructure[1],;
+                                  l_aFieldStructure[2],;
+                                  l_aFieldStructure[3],;
+                                  l_aFieldStructure[4],;
+                                  l_aFieldStructure[5],;
+                                  l_aFieldStructure[6],;
+                                  l_aFieldStructure[7],;
+                                  l_aFieldStructure[8],;
+                                  l_aFieldStructure[9],;
+                                  l_aFieldStructure[10];
                                   })
     endif
 
-    AAdd(l_Structure,{l_FieldName,l_FieldType,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN],l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_DEC]})
+    AAdd(l_aStructure,{l_cFieldName,l_cFieldType,l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN],l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_DEC]})
     
 endfor
 
-DbCreate(::p_CursorName,l_Structure,'SQLMIX',.T.,::p_CursorName,,"UTF8")
+DbCreate(::p_CursorName,l_aStructure,'SQLMIX',.T.,::p_CursorName,,"UTF8EX")
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-//method Index(par_cName,par_Expression,par_Direction,par_Unique,par_ForExpression) class hb_orm_Cursor
-// ::p_Indexes[par_cName] := {par_Expression,;
-//                           iif(hb_IsNil(par_Unique),.f.,par_Unique),;
-//                           iif(hb_IsNil(par_Direction),"A",upper(left(par_Direction,1))),;
+//method Index(par_cName,par_cExpression,par_cDirection,par_lUnique,par_ForExpression) class hb_orm_Cursor
+// ::p_Indexes[par_cName] := {par_cExpression,;
+//                           iif(hb_IsNil(par_lUnique),.f.,par_lUnique),;
+//                           iif(hb_IsNil(par_cDirection),"A",upper(left(par_cDirection,1))),;
 //                           iif(hb_IsNil(par_ForExpression),.f.,par_ForExpression)}
 
-method Index(par_cName,par_Expression,par_Unique) class hb_orm_Cursor
-::p_Indexes[par_cName] := {par_Expression,iif(hb_IsNil(par_Unique),.f.,par_Unique)}
+method Index(par_cName,par_cExpression,par_lUnique) class hb_orm_Cursor
+::p_Indexes[par_cName] := {par_cExpression,iif(hb_IsNil(par_lUnique),.f.,par_lUnique)}
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method RemoveIndex(par_cName) class hb_orm_Cursor
@@ -190,125 +190,130 @@ hb_hDel(::p_Indexes,par_cName)
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method CreateIndexes() class hb_orm_Cursor
-local l_select := iif(used(),select(),0)
-local l_TagName
-local l_IndexStructure
+local l_nSelect := iif(used(),select(),0)
+local l_cTagName
+local l_aIndexStructure
+
 if !empty(::p_CursorName)
     select (::p_CursorName)
-    for each l_IndexStructure in ::p_Indexes
-        l_TagName := l_IndexStructure:__enumKey()
-        //Currently {par_Expression 1,par_Unique 2}
+    for each l_aIndexStructure in ::p_Indexes
+        l_cTagName := l_aIndexStructure:__enumKey()
+        //Currently {par_cExpression 1,par_lUnique 2}
         //OrdCreate( cBagName, cTagName, cIndexExpression, /* bIndexExpression */, lUnique )
-        OrdCreate( ::p_CursorName, l_TagName, l_IndexStructure[1], /* bIndexExpression */, l_IndexStructure[2] )
+        OrdCreate( ::p_CursorName, l_cTagName, l_aIndexStructure[1], /* bIndexExpression */, l_aIndexStructure[2] )
         //Idea: To support Descending and other filters, could create an extra physical column that would hold and integer like 999999-<x> where <x> is created while traversing the records the ascending way, then indexing on that column.
         //      The problem is that system could not work for added/updated records.
     endfor
-    select (l_select)
+    select (l_nSelect)
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method AppendBlank() class hb_orm_Cursor
-local l_select := iif(used(),select(),0)
-local l_FieldStructure
+local l_nSelect := iif(used(),select(),0)
+local l_aFieldStructure
+
 if !empty(::p_CursorName)
     select (::p_CursorName)
     dbAppend()
     ::p_RecordCount++
 
-    for each l_FieldStructure in ::p_FieldsForAppend
+    for each l_aFieldStructure in ::p_FieldsForAppend
         do case
-        case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]
-            FieldPut(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],++::p_AutoIncrementLastValue)
-        case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]
-            FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],NIL)
-        case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY]
-            FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],'')
-        case l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
-            FieldPutAllowNull(l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],'')
+        case l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]
+            FieldPut(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],++::p_AutoIncrementLastValue)
+        case l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]
+            FieldPutAllowNull(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],NIL)
+        case l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY]
+            FieldPutAllowNull(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],'')
+        case l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
+            FieldPutAllowNull(l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_POS],'')
         endcase
     endfor
-    select (l_select)
+    select (l_nSelect)
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method SetFieldValue(par_cFieldName,par_Value) class hb_orm_Cursor
-local l_select := iif(used(),select(),0)
-local l_FieldPos
-local l_FieldStructure
-local l_ValueLen
+method SetFieldValue(par_cFieldName,par_xValue) class hb_orm_Cursor
+local l_nSelect := iif(used(),select(),0)
+local l_nFieldPos
+local l_aFieldStructure
+local l_nValueLen
 
 if !empty(::p_CursorName)
     select (::p_CursorName)
-    l_FieldPos := FieldPos(par_cFieldName)
-    if l_FieldPos > 0
-        l_FieldStructure := ::p_Fields[par_cFieldName]
-        if !l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]        //Prevent Overwritting AutoIncrement Field
-            if par_Value == NIL
-                if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]   //Ensure the field is nullable
-                    FieldPutAllowNull(l_FieldPos,NIL)
+    l_nFieldPos := FieldPos(par_cFieldName)
+    if l_nFieldPos > 0
+        l_aFieldStructure := ::p_Fields[par_cFieldName]
+        if !l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC]        //Prevent Overwritting AutoIncrement Field
+            if par_xValue == NIL
+                if l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL]   //Ensure the field is nullable
+                    FieldPutAllowNull(l_nFieldPos,NIL)
                 endif
             else
-                switch l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TYPE]
+                switch l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_TYPE]
                 case "C"
-                    //_M_ Test if par_Value is of matching Type
+                    //_M_ Test if par_xValue is of matching Type
 
-                    l_ValueLen := len(par_Value)
-                    if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
+                    l_nValueLen := len(par_xValue)
+                    if l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
                         //Field does not store trailing blanks
-                        if l_ValueLen <= l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
-                            FieldPut(l_FieldPos,par_Value)   //Fits in the field
+                        if l_nValueLen <= l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
+                            FieldPut(l_nFieldPos,par_xValue)   //Fits in the field
                         else
-                            FieldPut(l_FieldPos,Trim(left(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN])))   //Value has to be cut, than trimmed.
+                            FieldPut(l_nFieldPos,Trim(left(par_xValue,l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN])))   //Value has to be cut, than trimmed.
                         endif
                     else
                         //Field must have trailing blanks (classic DBF Character field)
                         do case
-                        case l_ValueLen == l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
-                            FieldPut(l_FieldPos,par_Value)   //Exact match
-                        case l_ValueLen < l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
-                            FieldPut(l_FieldPos,padr(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]))   //Add missing blanks possibly
+                        case l_nValueLen == l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
+                            FieldPut(l_nFieldPos,par_xValue)   //Exact match
+                        case l_nValueLen < l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]
+                            FieldPut(l_nFieldPos,padr(par_xValue,l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]))   //Add missing blanks possibly
                         otherwise
-                            FieldPut(l_FieldPos,left(par_Value,l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]))   //Value has to be cut
+                            FieldPut(l_nFieldPos,left(par_xValue,l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_LEN]))   //Value has to be cut
                         endcase
                     endif
 
                     exit
                 otherwise
-                    FieldPut(l_FieldPos,par_Value) 
+                    FieldPut(l_nFieldPos,par_xValue) 
                 endswitch
             endif
         endif
     endif
-    select (l_select)
+    select (l_nSelect)
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method SetFieldValues(par_HashFieldValues) class hb_orm_Cursor
-local l_FieldValue
-for each l_FieldValue in par_HashFieldValues
-    ::SetFieldValue(l_FieldValue:__enumKey,l_FieldValue)
+method SetFieldValues(par_hFieldValues) class hb_orm_Cursor
+local l_xFieldValue
+
+for each l_xFieldValue in par_hFieldValues
+    ::SetFieldValue(l_xFieldValue:__enumKey,l_xFieldValue)
 endfor
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method GetFieldValue(par_cFieldName) class hb_orm_Cursor
 return iif(!empty(::p_CursorName),(::p_CursorName)->(FieldGet(FieldPos(par_cFieldName))),nil)
 //-----------------------------------------------------------------------------------------------------------------
-method InsertRecord(par_HashFieldValues) class hb_orm_Cursor
-local l_CurrentAutoIncrementValue := ::p_AutoIncrementLastValue
-//_M_ Later could optimize by not setting default values for field in par_HashFieldValues, but getting this from a schema definition
+method InsertRecord(par_hFieldValues) class hb_orm_Cursor
+local l_iCurrentAutoIncrementValue := ::p_AutoIncrementLastValue
+
+//_M_ Later could optimize by not setting default values for field in par_hFieldValues, but getting this from a schema definition
 ::AppendBlank()
-::SetFieldValues(par_HashFieldValues)
-return iif(l_CurrentAutoIncrementValue == ::p_AutoIncrementLastValue,0,::p_AutoIncrementLastValue)
+::SetFieldValues(par_hFieldValues)
+return iif(l_iCurrentAutoIncrementValue == ::p_AutoIncrementLastValue,0,::p_AutoIncrementLastValue)
 //-----------------------------------------------------------------------------------------------------------------
 method Zap() class hb_orm_Cursor
-local l_select
+local l_nSelect
+
 if !empty(::p_CursorName)
-    l_select := iif(used(),select(),0)
+    l_nSelect := iif(used(),select(),0)
     select (::p_CursorName)
     //Since Zap and Pack are not supported, simply have to recreate the cursor. Hopefully the user did not call RemoveField() before
     ::CreateCursor(::p_CursorName)
     ::CreateIndexes()
-    select (l_select)
+    select (l_nSelect)
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
@@ -329,7 +334,6 @@ local bWhileExpression := if( empty( cWhileExpression ), nil                  , 
 
 default lUnique := .f., lDescend := .f., lAdditive := .f., lUseCurrent := .f.
 
-altd()
 //_M_ Similar but as in OrdCreate and the bIndexExpression for the other b...Expression
 
 // OrdCondSet( cForExpression, bForExpression, bWhileExpression,,,,,,,, lDescend,, lAdditive, lUseCurrent,,,, )
@@ -346,18 +350,18 @@ static function Compile( cExp )
 return &( "{||" + cExp + "}" )
 */
 //-----------------------------------------------------------------------------------------------------------------
-method Associate(par_CursorName) class hb_orm_Cursor
-local l_select := iif(used(),select(),0)
-local l_NumberOfFields
-local l_FieldCounter
-local l_AllowNull,l_IsAutoIncrement,l_Binary,l_Trimmed,l_Unicode,l_Compressed
-local l_pos
-local l_FieldName
-local l_FieldType
-local l_FieldFlags
-local l_FieldStructure
+method Associate(par_cCursorName) class hb_orm_Cursor
+local l_nSelect := iif(used(),select(),0)
+local l_nNumberOfFields
+local l_nFieldCounter
+local l_lAllowNull,l_lIsAutoIncrement,l_lBinary,l_lTrimmed,l_lUnicode,l_lCompressed
+local l_nPos
+local l_cFieldName
+local l_cFieldType
+local l_cFieldFlags
+local l_aFieldStructure
 
-::p_CursorName  := par_CursorName
+::p_CursorName  := par_cCursorName
 ::UpdateRecordCount()
 
 hb_HClear(::p_Fields)
@@ -366,53 +370,53 @@ ASize(::p_FieldsForAppend,0)
 ::p_AutoIncrementLastValue := 0    //_M_ Not certain how to initialize this property
 
 //Load the ListOfFields
-select (par_CursorName)
-l_NumberOfFields := FCount()
-for l_FieldCounter := 1 to l_NumberOfFields
-    l_FieldName := FieldName(l_FieldCounter)
-    l_FieldType := hb_FieldType(l_FieldCounter)
+select (par_cCursorName)
+l_nNumberOfFields := FCount()
+for l_nFieldCounter := 1 to l_nNumberOfFields
+    l_cFieldName := FieldName(l_nFieldCounter)
+    l_cFieldType := hb_FieldType(l_nFieldCounter)
 
-    // hb_orm_SendToDebugView("Field Type",l_FieldType)
+    // hb_orm_SendToDebugView("Field Type",l_cFieldType)
 
-    l_pos := at(":",l_FieldType)
-    if empty(l_pos)
-        l_FieldFlags := ""
+    l_nPos := at(":",l_cFieldType)
+    if empty(l_nPos)
+        l_cFieldFlags := ""
     else
-        l_FieldFlags := substr(l_FieldType,l_pos+1)
-        l_FieldType  := left(l_FieldType,l_pos-1)
+        l_cFieldFlags := substr(l_cFieldType,l_nPos+1)
+        l_cFieldType  := left(l_cFieldType,l_nPos-1)
     endif
 
-    l_AllowNull       := ("N" $ l_FieldFlags)
-    l_IsAutoIncrement := ("+" $ l_FieldFlags)
-    l_Binary          := ("B" $ l_FieldFlags)
-    l_Trimmed         := .t.    // Since this is a coming back from SQL backend, Usually trims Character Fields
-    l_Unicode         := ("U" $ l_FieldFlags)
-    l_Compressed      := (("Z" $ l_FieldFlags) .or. ("C" $ l_FieldFlags))
+    l_lAllowNull       := ("N" $ l_cFieldFlags)
+    l_lIsAutoIncrement := ("+" $ l_cFieldFlags)
+    l_lBinary          := ("B" $ l_cFieldFlags)
+    l_lTrimmed         := .t.    // Since this is a coming back from SQL backend, Usually trims Character Fields
+    l_lUnicode         := ("U" $ l_cFieldFlags)
+    l_lCompressed      := (("Z" $ l_cFieldFlags) .or. ("C" $ l_cFieldFlags))
 
-    l_FieldStructure := {l_FieldCounter,l_FieldType,hb_FieldLen(l_FieldCounter),hb_FieldDec(l_FieldCounter),l_AllowNull,l_IsAutoIncrement,l_Binary,l_Trimmed,l_Unicode,l_Compressed}
+    l_aFieldStructure := {l_nFieldCounter,l_cFieldType,hb_FieldLen(l_nFieldCounter),hb_FieldDec(l_nFieldCounter),l_lAllowNull,l_lIsAutoIncrement,l_lBinary,l_lTrimmed,l_lUnicode,l_lCompressed}
 
-    if l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC] .or. ;
-       l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL] .or. ;
-       l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY] .or. ;
-       l_FieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
+    if l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_AUTOINC] .or. ;
+       l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_NULL] .or. ;
+       l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_BINARY] .or. ;
+       l_aFieldStructure[HB_ORM_CURSOR_STRUCTURE_TRIM]
            
-        AAdd(::p_FieldsForAppend,{l_FieldStructure[1],;
-                                     l_FieldStructure[2],;
-                                     l_FieldStructure[3],;
-                                     l_FieldStructure[4],;
-                                     l_FieldStructure[5],;
-                                     l_FieldStructure[6],;
-                                     l_FieldStructure[7],;
-                                     l_FieldStructure[8],;
-                                     l_FieldStructure[9],;
-                                     l_FieldStructure[10];
+        AAdd(::p_FieldsForAppend,{l_aFieldStructure[1],;
+                                     l_aFieldStructure[2],;
+                                     l_aFieldStructure[3],;
+                                     l_aFieldStructure[4],;
+                                     l_aFieldStructure[5],;
+                                     l_aFieldStructure[6],;
+                                     l_aFieldStructure[7],;
+                                     l_aFieldStructure[8],;
+                                     l_aFieldStructure[9],;
+                                     l_aFieldStructure[10];
                                      })
     endif
 
-    ::p_Fields[l_FieldName] := l_FieldStructure
+    ::p_Fields[l_cFieldName] := l_aFieldStructure
 
 endfor
 
-select (l_select)
+select (l_nSelect)
 return Self
 //-----------------------------------------------------------------------------------------------------------------

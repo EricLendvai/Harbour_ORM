@@ -25,6 +25,7 @@ class hb_orm_SQLConnect
         data p_LockTimeout                init 20   //In Seconds
         data p_SQLExecErrorMessage        init ""
         data p_DoNotReportErrors          init .f.
+        data p_SchemaCacheLogLastPk       init 0            // Used in case of schema caching
         
         classdata MaxDigitsInTableNumber  init  5  // Needed for the lock/unlock methods. With 5 digits we should have less than 99999 tables.
         classdata ReservedWordsMySQL      init {"ACCESSIBLE","ADD","ALL","ALTER","ANALYZE","AND","AS","ASC","ASENSITIVE","BEFORE","BETWEEN","BIGINT","BINARY","BLOB","BOTH","BY","CALL","CASCADE","CASE","CHANGE","CHAR","CHARACTER","CHECK","COLLATE","COLUMN","CONDITION","CONSTRAINT","CONTINUE","CONVERT","CREATE","CROSS","CUBE","CUME_DIST","CURRENT_DATE","CURRENT_TIME","CURRENT_TIMESTAMP","CURRENT_USER","CURSOR","DATABASE","DATABASES","DAY_HOUR","DAY_MICROSECOND","DAY_MINUTE","DAY_SECOND","DEC","DECIMAL","DECLARE","DEFAULT","DELAYED","DELETE","DENSE_RANK","DESC","DESCRIBE","DETERMINISTIC","DISTINCT","DISTINCTROW","DIV","DOUBLE","DROP","DUAL","EACH","ELSE","ELSEIF","EMPTY","ENCLOSED","ESCAPED","EXCEPT","EXISTS","EXIT","EXPLAIN","FALSE","FETCH","FIRST_VALUE","FLOAT","FLOAT4","FLOAT8","FOR","FORCE","FOREIGN","FROM","FULLTEXT","FUNCTION","GENERATED","GET","GRANT","GROUP","GROUPING","GROUPS","HAVING","HIGH_PRIORITY","HOUR_MICROSECOND","HOUR_MINUTE","HOUR_SECOND","IF","IGNORE","IN","INDEX","INFILE","INNER","INOUT","INSENSITIVE","INSERT","INT","INT1","INT2","INT3","INT4","INT8","INTEGER","INTERVAL","INTO","IO_AFTER_GTIDS","IO_BEFORE_GTIDS","IS","ITERATE","JOIN","JSON_TABLE","KEY","KEYS","KILL","LAG","LAST_VALUE","LATERAL","LEAD","LEADING","LEAVE","LEFT","LIKE","LIMIT","LINEAR","LINES","LOAD","LOCALTIME","LOCALTIMESTAMP","LOCK","LONG","LONGBLOB","LONGTEXT","LOOP","LOW_PRIORITY","MASTER_BIND","MASTER_SSL_VERIFY_SERVER_CERT","MATCH","MAXVALUE","MEDIUMBLOB","MEDIUMINT","MEDIUMTEXT","MIDDLEINT","MINUTE_MICROSECOND","MINUTE_SECOND","MOD","MODIFIES","NATURAL","NOT","NO_WRITE_TO_BINLOG","NTH_VALUE","NTILE","NULL","NUMERIC","OF","ON","OPTIMIZE","OPTIMIZER_COSTS","OPTION","OPTIONALLY","OR","ORDER","OUT","OUTER","OUTFILE","OVER","PARTITION","PERCENT_RANK","PRECISION","PRIMARY","PROCEDURE","PURGE","RANGE","RANK","READ","READS","READ_WRITE","REAL","RECURSIVE","REFERENCES","REGEXP","RELEASE","RENAME","REPEAT","REPLACE","REQUIRE","RESIGNAL","RESTRICT","RETURN","REVOKE","RIGHT","RLIKE","ROW","ROWS","ROW_NUMBER","SCHEMA","SCHEMAS","SECOND_MICROSECOND","SELECT","SENSITIVE","SEPARATOR","SET","SHOW","SIGNAL","SMALLINT","SPATIAL","SPECIFIC","SQL","SQLEXCEPTION","SQLSTATE","SQLWARNING","SQL_BIG_RESULT","SQL_CALC_FOUND_ROWS","SQL_SMALL_RESULT","SSL","STARTING","STORED","STRAIGHT_JOIN","SYSTEM","TABLE","TERMINATED","THEN","TINYBLOB","TINYINT","TINYTEXT","TO","TRAILING","TRIGGER","TRUE","UNDO","UNION","UNIQUE","UNLOCK","UNSIGNED","UPDATE","USAGE","USE","USING","UTC_DATE","UTC_TIME","UTC_TIMESTAMP","VALUES","VARBINARY","VARCHAR","VARCHARACTER","VARYING","VIRTUAL","WHEN","WHERE","WHILE","WINDOW","WITH","WRITE","XOR","YEAR_MONTH","ZEROFILL"}
@@ -35,19 +36,22 @@ class hb_orm_SQLConnect
         method AddIndex(par_cSchemaName,par_cTableName,par_hFields,par_cIndexName,par_aIndexDefinition)
         method UpdateField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition,par_aCurrentFieldDefinition)
         method FixCasingOfSchemaCacheTables(par_cTableName)
+        method NormalizeFieldDefaultForCurrentEngineType(par_cFieldDefault,par_cFieldType,par_nFieldDec)
+
     exported:
         data p_Schema  init {=>}                                         //List of Tables Names. Each element is a 2 cell array ["Hash of Field Definition","Hash of Index Definitions"]. Named it with a leading "p_" to be threaded as internal.
         data Connected init .f.                                          //true if connected to a server
+        data p_hb_orm_version init HB_ORM_BUILDVERSION
         method SetBackendType(par_cName)                                 // For Example, "MariaDB","MySQL","PostgreSQL"
         method GetSQLEngineType()     inline ::p_SQLEngineType           // 1 for"MariaDB" and "MySQL", 2 for "PostgreSQL"
         method SetDriver(par_cName)
         method SetServer(par_cName)
         method GetServer() inline ::p_Server
-        method SetPort(par_number)
+        method SetPort(par_nNumber)
         method GetPort() inline ::p_Port
         method SetUser(par_cName)
         method GetUser() inline ::p_User
-        method SetPassword(par_password)
+        method SetPassword(par_cPassword)
         method SetDatabase(par_cName)
         method GetDatabase() inline ::p_Database
         method SetCurrentSchemaName(par_cName)             //only used for PostgreSQL     Return the name of the schema before being set
@@ -57,15 +61,15 @@ class hb_orm_SQLConnect
         method SetCreationTimeFieldName(par_cName)
         method GetModificationTimeFieldName() inline ::p_ModificationTimeFieldName
         method SetModificationTimeFieldName(par_cName)
-        method SetAllSettings(par_BackendType,par_Driver,par_Server,par_Port,par_User,par_Password,par_Database,par_Schema,par_PKFN)
+        method SetAllSettings(par_cBackendType,par_cDriver,par_Server,par_nPort,par_cUser,par_cPassword,par_cDatabase,par_cSchema,par_cPKFN)
         method Connect()
         method Disconnect()
         method GetHandle()
         method GetErrorMessage()
-        method Lock(par_cSchemaAndTableName,par_Key)
-        method Unlock(par_cSchemaAndTableName,par_Key)
+        method Lock(par_cSchemaAndTableName,par_iKey)
+        method Unlock(par_cSchemaAndTableName,par_iKey)
         
-        method SQLExec(par_Command,par_cCursorName)   //Used by the Locking system
+        method SQLExec(par_cCommand,par_cCursorName)   //Used by the Locking system
         method GetSQLExecErrorMessage() inline ::p_SQLExecErrorMessage
         method GetConnectionNumber()    inline ::p_ConnectionNumber
         method GetCurrentSchemaName()   inline iif(::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL,::p_SchemaName,"")
@@ -77,13 +81,15 @@ class hb_orm_SQLConnect
         method MigrateSchema(par_hSchemaDefinition)                // Will Call GenerateMigrateSchemaScript() and UpdateSchemaCache() and UpdateORMSchemaTableNumber()
         method GenerateCurrentSchemaHarbourCode(par_cFileName)     // For All Schema Namespaces
 
-        method EnableSchemaChangeTracking()   // Currently only PostgreSQL ready
-        method DisableSchemaChangeTracking()  // Currently only PostgreSQL ready
-        method RemoveSchemaChangeTracking()   // Currently only PostgreSQL ready
+        method EnableSchemaChangeTracking()   // Currently only PostgreSQL aware
+        method DisableSchemaChangeTracking()  // Currently only PostgreSQL aware
+        method RemoveSchemaChangeTracking()   // Currently only PostgreSQL aware
 
-        method UpdateSchemaCache(par_Force) // To help with speed problems especially in PostgreSQL
+        method UpdateSchemaCache(par_lForce) // To help with speed problems especially in PostgreSQL
 
         method CheckIfStillConnected() // Returns .t. if connected. Will test if the connection is still present
+
+        method CheckIfSchemaCacheShouldBeUpdated()   // Return .t. if schema had changed since connected. Currently only PostgreSQL aware
 
         //Set any of the following properties BEFORE calling Connect() method
         data PostgreSQLIdentifierCasing                 init 1
@@ -96,10 +102,11 @@ class hb_orm_SQLConnect
         method IsReservedWord(par_cIdentifier)
         method FormatIdentifier(par_cName)
 
-        method CaseTableName(par_cSchemaAndTableName)                                                    // Format the tokens as handled by the SQL Server
-        method CaseFieldName(par_cSchemaAndTableName,par_cFieldName)                                     // Format the tokens as handled by the SQL Server
+        method CaseTableName(par_cSchemaAndTableName)                                                   // Gets the schema and table name properly cased or return empty if not found in dictionary
+        method CaseFieldName(par_cSchemaAndTableName,par_cFieldName)                                    // Get the field name properly cased or return empty if not found in dictionary
+        method GetFieldInfo(par_cSchemaAndTableName,par_cFieldName)                                     // Returns Array {SchemaName,TableName,FieldName,FieldType,FieldLen,FieldDec,FieldAllowNull,FieldAutoIncrement,FieldArray,FieldDefault}
         
-        method FixCasingInFieldExpression(par_hFields,par_expression)
+        method FixCasingInFieldExpression(par_hFields,par_cExpression)
 
         method DeleteTable(par_cSchemaAndTableName)
         method DeleteIndex(par_cSchemaAndTableName,par_cIndexName)                                      // will only delete indexes created / managed by the orm. Restricted by index on file naming convention.
@@ -117,7 +124,10 @@ class hb_orm_SQLConnect
         method LogAutoTrimEvent(par_cEventId,par_cSchemaAndTableName,par_nKey,par_aAutoTrimmedFields)
         method LogErrorEvent(par_cEventId,par_aErrors)                                                  // The par_aErrors is an array of arrays like {<cSchemaAndTableName>,<nKey>,<cErrorMessage>,<cAppStack>}
 
+        method SanitizeFieldDefaultFromDefaultBehavior(par_cSQLEngineType,par_cFieldType,par_cFieldAttributes,par_cFieldDefault)
+        
         method GetUUIDString()                                                                          //Will return a UUID string
+
 
     DESTRUCTOR destroy()
         

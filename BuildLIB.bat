@@ -57,10 +57,10 @@ del build\win64\%HB_COMPILER%\%BuildMode%\*.ppo
 
 :: since this is a library will also fail on warnings.
 if %BuildMode% == debug (
-    copy debugger_on.hbm debugger.hbm
-    hbmk2 %LIBName%_windows.hbp -b -p -w3 -dDONOTINCLUDE -shared -dDEBUGVIEW
+rem    copy debugger_on.hbm debugger.hbm
+    hbmk2 %LIBName%_windows.hbp vscode_debugger.prg -b -p -w3 -dDONOTINCLUDE -shared -dDEBUGVIEW
 ) else (
-    copy debugger_off.hbm debugger.hbm
+rem    copy debugger_off.hbm debugger.hbm
     hbmk2 %LIBName%_windows.hbp -w3 -dDONOTINCLUDE -fullstatic -dDEBUGVIEW
 )
 

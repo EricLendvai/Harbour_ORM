@@ -1,36 +1,90 @@
 //Copyright (c) 2023 Eric Lendvai MIT License
 
 #include "hbmemory.ch"
-
-//#include "inkey.ch"     // not needed since not using function inkey()
+#include "inkey.ch"
 
 #include "hb_orm.ch"
 #include "hb_vfp.ch"
 
-//REQUEST HB_CODEPAGE_UTF8EX  // not needed. The hb_orm already loads it.
+#include "dbinfo.ch"   // for the export to html file
+
+//Needed for table004 and table005 example
+REQUEST VFPCDX
+REQUEST DBFCDX
+REQUEST HB_MEMIO
+
+REQUEST HB_CODEPAGE_UTF8EX
 
 //=================================================================================================================
 Function Main()
 
 local l_oCursor1
-local l_nLoop
+local l_aStructure := {}
+local l_RunStartTime
+local l_loop
 local l_iResult
 local l_nMemoryFrom
 local l_nMemoryTo
 local l_MemoryOption := HB_MEM_USED
-local l_tTimeStamp1,l_tTimeStamp2
 
 hb_orm_SendToDebugView("[Harbour] Main")
 ?VFP_GetCompatibilityPackVersion()
-// altd()
+
 //?"------------------------------------------------------"
 
 hb_cdpSelect("UTF8EX") 
 
+AAdd(l_aStructure,{"KEY","I:+",4,0})
+AAdd(l_aStructure,{"FNAME","C",20,0})
+AAdd(l_aStructure,{"LNAME","C",20,0})
+AAdd(l_aStructure,{"INFO","C:N",100,0})
+AAdd(l_aStructure,{"DOB","D:N",0,0})
+AAdd(l_aStructure,{"Binary","C:BN",50,0})
+AAdd(l_aStructure,{"Long_field_name_extra_text","N:N",5,2})
+
+//=====================================================================================
+
+// ?"Before table004. Press Enter"
+// do while inkey(0) <> K_ENTER
+// enddo
+// ?"Pressed Enter"
+// DbCreate("mem:table004.dbf",l_aStructure,'DBFCDX',.T.,"table004",,"UTF8EX")
+// select table004
+// AppendData(.f.)
+// ?"After table004"
+// ExportTableToHtmlFile("table004","Cursor_Table004Records","mem dbf",10,10,.t.)
+// ?"After table004. Press Enter"
+// do while inkey(0) <> K_ENTER
+// enddo
+// ?"Pressed Enter"
+
+//=====================================================================================
+
+// DbCreate("mem:table005.dbf",l_aStructure,'VFPCDX',.T.,"table005",,"UTF8EX")
+// select table005
+// AppendData(.f.)
+//ExportTableToHtmlFile("table005","Cursor_Table005Records","mem vfp",10,10,.t.)
+
+//=====================================================================================
+
+// ?"Before table006. Press Enter"
+// do while inkey(0) <> K_ENTER
+// enddo
+// ?"Pressed Enter"
+// DbCreate("table006",l_aStructure,'SQLMIX',.T.,"table006",,"UTF8EX")
+// select table006
+// AppendData(.t.)
+// ?"After table006"
+// ExportTableToHtmlFile("table006","Cursor_table006Records","SQLMix",10,10,.t.)
+// ?"After table006. Press Enter"
+// do while inkey(0) <> K_ENTER
+// enddo
+// ?"Pressed Enter"
+
 //=====================================================================================
 l_oCursor1 := hb_Cursor()
 with object l_oCursor1
-// Altd()
+
     :Field("KEY"                       ,"I",  4,0,"+")
     :Field("ID"                        ,"C", 10,0)
     :Field("FNAME"                     ,"C", 20,0,"T")
@@ -43,26 +97,43 @@ with object l_oCursor1
     :CreateCursor("table007")
     ?":p_RecordCount = "+allt(Str(:p_RecordCount))
 
-
-    select 0  // To prove the ORM handles not being on the created alias
-
+    // altd()
+    // dbUseArea(.t.,"SQLMIX","table007","table007bis",.t.,"UTF8EX")
+    // select table007bis
+    
+    select table007
     :AppendBlank()
-    table007->DOB := ctod("01/01/2020")
-    :SetFieldValue("dob",ctod("01/03/2020"))
-    :SetFieldValue("fname","Roger")
-    :SetFieldValue("lname","Moore")
+    Field->DOB := ctod("05/02/2020")
+    :SetFieldValue("dob",ctod("05/03/2020"))
+    :SetFieldValue("fname","Eric")
+    :SetFieldValue("lname","Lendvai")
     :SetFieldValue("info",replicate("?",100000))
 
     :AppendBlank()
     :SetFieldValues({"fname"=>"Maria","lname"=>"Smith"})
 
-    l_iResult := :InsertRecord({"fname"=>"AHercules","lname"=>"Moore","dob"=>date(),"info"=>"hero"})
+    l_iResult := :InsertRecord({"fname"=>"AHercules","lname"=>"Lendvai","dob"=>date(),"info"=>"hero"})
     if !hb_isNil(l_iResult)
         ?"New Key = "+trans(l_iResult)
     endif
 
     :InsertRecord({"fname"=>"John","lname"=>"Bonjovi"})
+// AltD()
     ?":p_RecordCount = "+allt(Str(:p_RecordCount))
+
+    // l_nMemoryFrom := memory(l_MemoryOption)
+    // l_RunStartTime := DateTime()
+    // for l_loop :=1 to 10000  //00
+    //     :AppendBlank()
+    // endfor
+    // ?"Milliseconds To Add 1000000 records = "+Trans(GetTimeDeltaInMs(l_RunStartTime,hb_DateTime()))
+
+
+    // l_nMemoryTo   := memory(l_MemoryOption)
+    // ?"Memory Consumed = "+trans(l_nMemoryTo-l_nMemoryFrom)
+    // :Zap()
+    // l_nMemoryTo   := memory(l_MemoryOption)
+    // ?"Memory Consumed = "+trans(l_nMemoryTo-l_nMemoryFrom)
     
     :Index("upperfname","upper(fname)")
     :Index("upperlname","upper(lname)")
@@ -84,19 +155,8 @@ with object l_oCursor1
     :Field("KEY2"                       ,"I",  4,0,"+")
     :CreateCursor("table008")
     :AppendBlank()
-    :InsertRecord({"fname"=>"Toni","lname"=>"Curtis","dob"=>date(),"info"=>"Hero"})
-    :InsertRecord({"fname"=>"Albert","lname"=>"Einstein","dob"=>{^ 1879-03-14},"info"=>"Genius"})
+    :InsertRecord({"fname"=>"Hercules","lname"=>"Lendvai","dob"=>date(),"info"=>"Hero"})
     ExportTableToHtmlFile("table008","Cursor_table008Records","SQLMix",10,20,.t.)
-
-    l_tTimeStamp1  := hb_DateTime()
-    for l_nLoop :=1 to 1000    //000
-        :AppendBlank()  // instead of using direct record function dbAppend()
-    endfor
-    l_tTimeStamp2  := hb_DateTime()
-
-    ?"Reccount in alias "+alias()+" ="+trans(reccount())
-    ?"Run Time in alias "+alias()+" = "+alltrim( str((l_tTimeStamp2-l_tTimeStamp1)*(24*3600*1000),10) )+" (ms)"
-    ExportTableToHtmlFile("table008","Cursor_table008ExtraRecords","SQLMix With Extra Records",10,20,.t.)
 
 
 endwith
@@ -109,16 +169,16 @@ init procedure hello()
 hb_orm_SendToDebugView("[Harbour] Init Procedure")
 return
 //=================================================================================================================
-static function AppendData(par_ApplyNull)  // This function is no used but left as an example of non ORM data updates
+static function AppendData(par_ApplyNull)
 
-local l_nLoop
+local l_loop
 local l_nMemoryFrom
 local l_nMemoryTo
 local l_MemoryOption := HB_MEM_USED //HB_MEM_USED
-local l_tTimeStamp1,l_tTimeStamp2
+local l_TimeStamp1,l_TimeStamp2
 
 l_nMemoryFrom := memory(l_MemoryOption)
-l_tTimeStamp1  := hb_DateTime()
+l_TimeStamp1  := hb_DateTime()
 
 dbAppend()
 field->fname  := "Eric"
@@ -148,20 +208,20 @@ if par_ApplyNull
     field->info   := NIL
 endif
 
-for l_nLoop := 1 to 1000
+for l_loop := 1 to 1000
     dbAppend()
     field->info := replicate('.',10)   // hb_RandStr(1000)
 endfor
 
 l_nMemoryTo   := memory(l_MemoryOption)
 
-l_tTimeStamp2  := hb_DateTime()
+l_TimeStamp2  := hb_DateTime()
 
 
 hb_orm_SendToDebugView("[Harbour] "+alias()+" Memory Consumed = "+trans(l_nMemoryTo-l_nMemoryFrom))
 
 ?"Reccount in alias "+alias()+" ="+trans(reccount())
-?"Run Time in alias "+alias()+" = "+alltrim( str((l_tTimeStamp2-l_tTimeStamp1)*(24*3600*1000),10) )+" (ms)"
+?"Run Time in alias "+alias()+" = "+alltrim( str((l_TimeStamp2-l_TimeStamp1)*(24*3600*1000),10) )+" (ms)"
 
 return NIL
 //=================================================================================================================

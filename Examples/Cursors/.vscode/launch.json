@@ -18,8 +18,8 @@
                 "workingDir": "${workspaceFolder}\\",
                 "sourcePaths": [
                     "${workspaceFolder}\\",
-                    "C:\\Harbour_ORM\\",
-                    "C:\\Harbour_VFP\\"
+                    "R:\\Harbour_ORM\\",
+                    "R:\\Harbour_VFP\\"
                 ]
             },
             "linux":{
@@ -32,8 +32,8 @@
                 "workingDir": "${workspaceFolder}/",
                 "sourcePaths": [
                     "${workspaceFolder}/",
-                    "/etc/Harbour_ORM/",
-                    "/etc/Harbour_VFP/"
+                    "/opt/Harbour_ORM/",
+                    "/opt/Harbour_VFP/"
                 ]
             }
         }

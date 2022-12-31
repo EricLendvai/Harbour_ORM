@@ -1,5 +1,18 @@
 # Harbour ORM - Change Log
 
+## 12/31/2022 v 3.1
+* Code refactor on local variable names
+* Simplified build of debug mode
+* Multiple fixes in :SQL() method
+* Support for UUID and JSON field types
+* Multiple fixes in PostgreSQL structure caching and connection speed increase
+* PostgreSQL native support for array column types
+* Support to set default values
+
+## 07/17/2022 v 2.1
+* Fix on Binary Fixed and Variable length in PostgreSQL. Using the comment field of columns.
+* New p_hb_orm_version property of connection object
+
 ## 07/04/2022
 * Enhancements for UTF8 support
 

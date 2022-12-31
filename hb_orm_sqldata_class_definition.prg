@@ -24,7 +24,7 @@ class hb_orm_SQLData
 
         data p_AliasToSchemaAndTableNames init {=>}  //Used by method FixAliasAndFieldNameCasingInExpression() to fix casing of field names
 
-        data p_FieldsAndValues            init {=>}   // p_FieldsAndValues[FieldName] := FieldValue
+        data p_FieldsAndValues            init {=>}   // p_FieldsAndValues[FieldName] := {nType,xFieldValue}    where nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array
 
         data p_FieldToReturn              init {}
                // 1 - ""   Expression
@@ -81,64 +81,74 @@ class hb_orm_SQLData
         data p_NumberOfSQLDataStrings init 0
         data p_SQLDataStrings init {}
                // 1 - ""
-
         data p_ExplainMode init 0     // 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
 
         method IsConnected()                                                    //Return .t. if has a connection
-        method PrepExpression(par_Expression,...)                               //Used to "Freeze" parameters as values in "^" places
-        method ExpressionToMYSQL(par_Expression)                                //_M_  to generalize UDF translation to backend
-        method ExpressionToPostgreSQL(par_Expression)                           //_M_  to generalize UDF translation to backend
-        method FixAliasAndFieldNameCasingInExpression(par_Expression)           // to handle the casing of tables and fields, by using the connection's :p_schema Since it is more of alias.field for now will assume alias same as table name and will use ::p_SchemaName
+        method PrepExpression(par_cExpression,...)                               //Used to "Freeze" parameters as values in "^" places
+        method ExpressionToMYSQL(par_cExpression)                                //_M_  to generalize UDF translation to backend
+        method ExpressionToPostgreSQL(par_cExpression)                           //_M_  to generalize UDF translation to backend
+        method FixAliasAndFieldNameCasingInExpression(par_cExpression)           // to handle the casing of tables and fields, by using the connection's :p_schema Since it is more of alias.field for now will assume alias same as table name and will use ::p_SchemaName
         method BuildSQL(par_cAction)                                            //  par_cAction can be "Count" "Fetch"
         method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method SetEventId(par_xId)                                              // Called by Table() and Delete(). Used to identify SQL(), Add(), Update(), Delete() query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
-        
+        method FieldSet(par_cName,par_nType,par_xValue)                         // Called by all other Field* methods. par_nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array
+        method GetPostgreSQLCastForFieldType(par_cFieldType,par_nFieldLen,par_nFieldDec)   // Used by :Add() and :Update()
     exported:
         data Tally init 0 READONLY
         data p_oCursor                //In case :SQL("<CursorName>") was called, meaning a hb_orm_cursor was created. Named with leading "p_" since used internally.
 
         method Init()          constructor  //Harbour does not call the constructor by default (BIG design mistake)
         method UseConnection(par_oSQLConnection)
-        method Echo(par_Text)
-        method Table(par_xEventId,par_cSchemaAndTableName,par_cAlias)      // par_EventId can be a numeric or string. Will help in case of errors and should be unique across an application. par_cAlias is optional
+        method Echo(par_cText)
+        method Table(par_xEventId,par_cSchemaAndTableName,par_cAlias)     // par_EventId can be a numeric or string. Will help in case of errors and should be unique across an application. par_cAlias is optional
         method UsedInUnion(par_o_dl)
-        method Distinct(par_Mode)
+        method Distinct(par_lMode)
         method Limit(par_Limit)
-        method Force(par_Mode)                                           //Used for VFP ORM, to disabled rushmore optimizer
+        method Force(par_lMode)                                           //Used for VFP ORM, to disabled rushmore optimizer
         method NoTrack()
-        method Key(par_Key)                                              //Set the key or retrieve the last used key
-        method Field(par_cName,par_Value)                                //To set a field (par_cName) in the Table() to the value (par_value). If par_Value is not provided, will return the value from previous set field value. If par_Value is an array, the first element tell how to handle the following one. It {"S",<string>} will be handled 
-        method ErrorMessage()                                            //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add(), :Update(), :Delete()
-        // method GetFormattedErrorMessage()                             //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add(), :Update(), :Delete() in an HTML formatted Fasion  (ELS)
-        method Add(par_Key)                                              //Adds a record. par_Key is optional and can only be used with table with non auto-increment key field
-        method Delete(par_xEventId,par_cSchemaAndTableName,par_iKey)     //Delete record. Should be called as .Delete(uuid,TableName,Key).
-        method Update(par_Key)                                           //Update a record in .Table(TableName)  where .Field(...) was called first
+        method Key(par_iKey)                                              //Set the key or retrieve the last used key
+
+
+        // For all the following Field* method the par_cName will be processed by ignoring any text before the rightmost ".". This allow to include a schema.table name that can assist when searching the source code.
+        //Following should be deprecated and one of the other 3 method Field* should be used
+        method Field(par_cName,par_xValue)                                //To set a field (par_cName) in the Table() to the value (par_xValue). If par_xValue is not provided, will return the value from previous set field value. If par_xValue is an array, the first element tell how to handle the following one. It {"S",<string>} will be handled 
+
+        method FieldValue(par_cName,par_xValue)                           //To set a field (par_cName) in the Table() to the a value (non array). The value will be formatted for the engine type.
+        method FieldExpression(par_cName,par_cValue)                      //To set a field (par_cName) in the Table() to an expression to be passed to the server. For example "now()"
+        method FieldArray(par_cName,par_aValue)                           //Only for PostgreSQL. To set a field (par_cName) in the Table() to the an array of values
+
+
+        method ErrorMessage()                                             //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add(), :Update(), :Delete()
+        // method GetFormattedErrorMessage()                              //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add(), :Update(), :Delete() in an HTML formatted Fasion  (ELS)
+        method Add(par_iKey)                                              //Adds a record. par_iKey is optional and can only be used with table with non auto-increment key field
+        method Delete(par_xEventId,par_cSchemaAndTableName,par_iKey)      //Delete record. Should be called as .Delete(uuid,TableName,Key).
+        method Update(par_iKey)                                           //Update a record in .Table(TableName)  where .Field(...) was called first
         
-        method Column(par_Expression,par_Columns_Alias,...)              //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
+        method Column(par_cExpression,par_cColumnsAlias,...)              //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
 
-        method Join(par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...)                        // Join Tables
-        method ReplaceJoin(par_JoinNumber,par_Type,par_cSchemaAndTableName,par_cAlias,par_expression,...)  // Replace a Join tables definition
+        method Join(par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...)                        // Join Tables
+        method ReplaceJoin(par_nJoinNumber,par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...)  // Replace a Join tables definition
 
-        method Where(par_Expression,...)                                                             // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
-        method ReplaceWhere(par_WhereNumber,par_Expression,...)                                      // Replace a Where definition
+        method Where(par_cExpression,...)                                                             // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
+        method ReplaceWhere(par_nWhereNumber,par_cExpression,...)                                      // Replace a Where definition
 
-        method Having(par_Expression,...)                                                             // Adds Having condition. Will return a handle that can be used later by ReplaceHaving()
-        method ReplaceHaving(par_HavingNumber,par_Expression,...)                                     // Replace a Having definition
+        method Having(par_cExpression,...)                                                             // Adds Having condition. Will return a handle that can be used later by ReplaceHaving()
+        method ReplaceHaving(par_nHavingNumber,par_cExpression,...)                                     // Replace a Having definition
 
-        method KeywordCondition(par_Keywords,par_FieldToSearchFor,par_Operand,par_AsHaving)           // Creates Where or Having conditions as multi text search in fields.
+        method KeywordCondition(par_cKeywords,par_cFieldToSearchFor,par_cOperand,par_lAsHaving)           // Creates Where or Having conditions as multi text search in fields.
         
-        method GroupBy(par_Expression)                                                                // Add a Group By definition
-        method OrderBy(par_Expression,par_Direction)                                                  // Add an Order By definition    par_Direction = "A"scending or "D"escending
-        method DistinctOn(par_Expression,par_Direction)                                               // PostgreSQL ONLY. Will use the "distinct on ()" feature and Add an Order By definition    par_Direction = "A"scending or "D"escending
+        method GroupBy(par_cExpression)                                                                // Add a Group By definition
+        method OrderBy(par_cExpression,par_cDirection)                                                  // Add an Order By definition    par_cDirection = "A"scending or "D"escending
+        method DistinctOn(par_cExpression,par_cDirection)                                               // PostgreSQL ONLY. Will use the "distinct on ()" feature and Add an Order By definition    par_cDirection = "A"scending or "D"escending
 
         method ResetOrderBy()                                                                         // Delete all OrderBy definitions
-        method ReadWrite(par_value)                                                                   // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable
+        method ReadWrite(par_lValue)                                                                   // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable
 
         method AddLeadingBlankRecord()                                                                // If the result cursor should have a leading blank record, used mainly to create the concept of "not-selected" row
-        method AddLeadingRecords(par_CursorName)                                                      // Specify to add records from par_CursorName as leading record to the future result cursor
+        method AddLeadingRecords(par_cCursorName)                                                      // Specify to add records from par_cCursorName as leading record to the future result cursor
 
-        method SetExplainMode(par_mode)                                                               // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
+        method SetExplainMode(par_nMode)                                                               // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
         method SQL(par_1)                                                                             // Assemble and Run SQL command
         method Count()                                                                                // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error. The par_SQLID is optional (used if reporting error info).
 
@@ -148,8 +158,8 @@ class hb_orm_SQLData
         method Get(par_iKey)                                                                          // Returns an Object with properties matching a record referred by primary key 
                                                                                                       //Either use (<par_cSchemaAndTableName>,<par_iKey>)   or  (<par_iKey>))  as parameters
 
-        method FormatDateForSQLUpdate(par_Date)
-        method FormatDateTimeForSQLUpdate(par_Dati,par_nPrecision)
+        method FormatDateForSQLUpdate(par_dDate)
+        method FormatDateTimeForSQLUpdate(par_tDati,par_nPrecision)
 
     DESTRUCTOR destroy()
 

@@ -1,7 +1,9 @@
-//Copyright (c) 2021 Eric Lendvai MIT License
+//Copyright (c) 2023 Eric Lendvai MIT License
 
-#ifndef HB_ORM_CH_
-#define HB_ORM_CH_
+#ifndef HB_ORM_BUILDVERSION
+#define HB_ORM_BUILDVERSION "3.1"
+
+#define HB_ORM_TRIGGERVERSION 2
 
 #include "hb_vfp.ch"
 #include "hbclass.ch"
@@ -30,6 +32,7 @@
 #define HB_ORM_SCHEMA_FIELD_LENGTH         3
 #define HB_ORM_SCHEMA_FIELD_DECIMALS       4
 #define HB_ORM_SCHEMA_FIELD_ATTRIBUTES     5
+#define HB_ORM_SCHEMA_FIELD_DEFAULT        6
 
 #define HB_ORM_SCHEMA_INDEX_BACKEND_TYPES   1
 #define HB_ORM_SCHEMA_INDEX_EXPRESSION      2
@@ -41,4 +44,15 @@
 
 #define HB_ORM_MAX_EVENTID_SIZE 50
 
-#endif /* HB_ORM_CH_ */
+#define HB_ORM_GETFIELDINFO_SCHEMANAME          1
+#define HB_ORM_GETFIELDINFO_TABLENAME           2
+#define HB_ORM_GETFIELDINFO_FIELDNAME           3
+#define HB_ORM_GETFIELDINFO_FIELDTYPE           4
+#define HB_ORM_GETFIELDINFO_FIELDLENGTH         5
+#define HB_ORM_GETFIELDINFO_FIELDDECIMALS       6
+#define HB_ORM_GETFIELDINFO_FIELDALLOWNULL      7
+#define HB_ORM_GETFIELDINFO_FIELDAUTOINCREMENT  8
+#define HB_ORM_GETFIELDINFO_FIELDARRAY          9
+#define HB_ORM_GETFIELDINFO_FIELDDEFAULT       10
+
+#endif /* HB_ORM_BUILDVERSION */

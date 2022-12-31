@@ -1,41 +1,43 @@
-//Copyright (c) 2022 Eric Lendvai MIT License
+//Copyright (c) 2023 Eric Lendvai MIT License
 
 #include "hb_orm.ch"
 #include "dbinfo.ch"   // for hb_orm_isnull
 
 //=================================================================================================================
 //Class Constructors
-function hb_SQLConnect(par_BackendType,par_Driver,par_Server,par_Port,par_User,par_Password,par_Database,par_Schema)
-return hb_orm_SQLConnect():SetAllSettings(par_BackendType,par_Driver,par_Server,par_Port,par_User,par_Password,par_Database,par_Schema)
+function hb_SQLConnect(par_cBackendType,par_cDriver,par_Server,par_nPort,par_cUser,par_cPassword,par_cDatabase,par_cSchema)
+return hb_orm_SQLConnect():SetAllSettings(par_cBackendType,par_cDriver,par_Server,par_nPort,par_cUser,par_cPassword,par_cDatabase,par_cSchema)
 //----------------------------------------
 function hb_SQLData(par_oConnection)
-local l_o_result
-l_o_result := hb_orm_SQLData():Init()   //Trick to ensure call a class construtor
+local l_oResult
+
+l_oResult := hb_orm_SQLData():Init()   //Trick to ensure call a class construtor
 if ValType(par_oConnection) == "O"
-    l_o_result:UseConnection(par_oConnection)
+    l_oResult:UseConnection(par_oConnection)
 endif
-return l_o_result
+return l_oResult
 //----------------------------------------
 function hb_Cursor()
 return hb_orm_Cursor():Init()   //Trick to ensure call a class construtor
 //=================================================================================================================
 class hb_orm_Data
     data  p_FieldValues init {=>}      // Named with leading "p_" since used internally
-    method AddField(par_cName,par_Value)
+    method AddField(par_cName,par_xValue)
     method ClearFields()
     error handler OnError( ... )
 endclass
 //-----------------------------------------------------------------------------------------------------------------
 method OnError(...) class hb_orm_Data
 local l_cMsg := __GetMessage()
+
 return hb_hGetDef( ::p_FieldValues, l_cMsg, NIL )
 //-----------------------------------------------------------------------------------------------------------------
 method ClearFields() class hb_orm_Data
 hb_HClear(::p_FieldValues)
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method AddField(par_cName,par_Value) class hb_orm_Data
-::p_FieldValues[par_cName] := par_Value
+method AddField(par_cName,par_xValue) class hb_orm_Data
+::p_FieldValues[par_cName] := par_xValue
 return NIL
 
 //=================================================================================================================
@@ -45,7 +47,15 @@ local l_cResult := ""
 local l_nPos
 local l_nChar
 local l_cUTFEncoding
+
+// hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTFString begin "+trans(len(par_cString))+" "+par_cString)
+
 if !empty(par_cString)
+
+// if len(par_cString) > 50000
+//     hb_memoWrit("d:\hb_orm_PostgresqlEncodeUTFString_source.txt",par_cString)
+// endif
+
     l_cResult += [E']
     for l_nPos := 1 to hb_utf8Len(par_cString)
         l_nChar := hb_utf8Peek(par_cString,l_nPos)
@@ -67,13 +77,14 @@ if !empty(par_cString)
     l_cResult += [']
 endif
 
+// hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTFString end")
 //hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTFString "+par_cString+" = ",l_cResult)
 
 return l_cResult
 //=================================================================================================================
 function hb_orm_PostgresqlEncodeBinary(par_cString)
 local l_cResult
-local l_nPos
+
 if empty(par_cString)
     l_cResult := ""
 else
@@ -140,21 +151,21 @@ function hb_orm_SendToDebugView(par_cStep,par_xValue)
 return .T.
 //=================================================================================================================
 function hb_orm_isnull(par_cAliasName,par_cFieldName)
-local l_l_result := .f.
-local l_FieldValue
-local l_FieldCounter
-local l_FieldNilInfo
+local l_lResult := .f.
+local l_xFieldValue
+local l_nFieldCounter
+local l_xFieldNilInfo
 
 if ((select(par_cAliasName)>0)) //Alias is in use.
-    l_FieldCounter := (par_cAliasName)->(FieldPos(par_cFieldName))
-    if l_FieldCounter > 0
-        l_FieldValue   := (par_cAliasName)->(FieldGet(l_FieldCounter))
-        l_FieldNilInfo := (par_cAliasName)->(DBFieldInfo( DBS_ISNULL, l_FieldCounter ))
-        l_l_result := ((!hb_IsNIL(l_FieldNilInfo) .and. l_FieldNilInfo) .or. hb_IsNIL(l_FieldValue))   //Method to handle mem:tables and SQLMIX tables
+    l_nFieldCounter := (par_cAliasName)->(FieldPos(par_cFieldName))
+    if l_nFieldCounter > 0
+        l_xFieldValue   := (par_cAliasName)->(FieldGet(l_nFieldCounter))
+        l_xFieldNilInfo := (par_cAliasName)->(DBFieldInfo( DBS_ISNULL, l_nFieldCounter ))
+        l_lResult := ((!hb_IsNIL(l_xFieldNilInfo) .and. l_xFieldNilInfo) .or. hb_IsNIL(l_xFieldValue))   //Method to handle mem:tables and SQLMIX tables
     endif
 endif
 
-return l_l_result
+return l_lResult
 //=================================================================================================================
 function hb_orm_buildinfo()
 #include "BuildInfo.txt"

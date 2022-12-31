@@ -57,15 +57,14 @@ static procedure CheckSocket(lStopSent)
    // if no server then search it.
    // 140+130+120+110+100+90+80+70+60+50+40+30+20+10=1050 wait 1sec at start, then 0
    do while (empty(t_oDebugInfo['socket']) .and. t_oDebugInfo['timeCheckForDebug']<=14)
-      //QOut("try to connect to debug server",t_oDebugInfo['timeCheckForDebug'], seconds()," timeout:",140-t_oDebugInfo['timeCheckForDebug']*10)
+      //? "try to connect to debug server",t_oDebugInfo['timeCheckForDebug'], seconds()," timeout:",140-t_oDebugInfo['timeCheckForDebug']*10
       hb_inetInit()
       t_oDebugInfo['socket'] := hb_inetCreate(140-t_oDebugInfo['timeCheckForDebug']*10)
       hb_inetConnect("127.0.0.1",DBG_PORT,t_oDebugInfo['socket'])
       if hb_inetErrorCode(t_oDebugInfo['socket']) <> 0
-         //QOut("failed")			// no server found
+         //? "failed"         // no server found
          tmp := "NO"
       else
-         //QOut("connected") //server found, send my exeName and my processId
 #ifdef INAPACHE
          hb_inetSend(t_oDebugInfo['socket'],GetAppName()+CRLF+str(__PIDNum())+CRLF)
 #else
@@ -75,10 +74,10 @@ static procedure CheckSocket(lStopSent)
             hb_idleSleep(0.2)
          end do
          tmp := hb_inetRecvLine(t_oDebugInfo['socket']) // if the server does not respond "NO" it is ok
-         //QOut("returned ",tmp)
+         ? "connected, returned ",tmp
          // End of handshake
       endif
-      if tmp="NO" //server not found or handshake failed
+      if tmp!="HELLO" //server not found or handshake failed
          t_oDebugInfo['socket'] := nil
          t_oDebugInfo['timeCheckForDebug']+=1
       endif
@@ -89,9 +88,9 @@ static procedure CheckSocket(lStopSent)
       return
    endif
    do while .T.
-      if hb_inetErrorCode(t_oDebugInfo['socket']) <> 0
+      if empty(t_oDebugInfo['socket']) .or. hb_inetErrorCode(t_oDebugInfo['socket']) <> 0
          // disconected?
-         //QOut("socket error",hb_inetErrorDesc( t_oDebugInfo['socket'] ))
+         //? ("socket error",hb_inetErrorDesc( t_oDebugInfo['socket'] ))
          t_oDebugInfo['socket'] := nil
          t_oDebugInfo['lRunning'] := .T.
          t_oDebugInfo['aBreaks'] := {=>}
@@ -102,7 +101,7 @@ static procedure CheckSocket(lStopSent)
       do while hb_inetDataReady(t_oDebugInfo['socket']) = 1
          tmp := hb_inetRecvLine(t_oDebugInfo['socket'])
          if .not. empty(tmp)
-				//? "<<", tmp
+               //? "<<", tmp
             if subStr(tmp,4,1)==":"
                sendCoumpoundVar(tmp, hb_inetRecvLine(t_oDebugInfo['socket']))
                loop
@@ -253,7 +252,7 @@ static procedure CheckSocket(lStopSent)
             endif
          endif
       endif
-      if t_oDebugInfo['lRunning']
+      if t_oDebugInfo['lRunning'] .or. empty(t_oDebugInfo['socket'])
          return
       else
          t_oDebugInfo['lInternalRun'] := .T.
@@ -308,21 +307,27 @@ static procedure sendStack()
    //next
 return
 
+static function formatString(value)
+   value=StrTran(value,e"\n","\$\n")
+   value=StrTran(value,e"\r","\$\r")
+   if at('"',value)==0
+      value='"'+value+'"'
+   elseif at("'",value)==0
+      value="'"+value+"'"
+   elseif at("[",value)==0
+      value="["+value+"]" //i don't like it decontexted
+   else
+      value='e"'+StrTran(value,'"','\"')+'"'
+   endif
+return hb_StrToUTF8(value)
+
 static function format(value)
    switch valtype(value)
       case "U"
          return "nil"
       case "C"
       case "M"
-         value=StrTran(value,e"\n","\$\n")
-         value=StrTran(value,e"\r","\$\r")
-         if at('"',value)==0
-            return '"'+value+'"'
-         elseif at("'",value)==0
-            return "'"+value+"'"
-         else
-            return "["+value+"]" //i don't like it decontexted
-         endif
+         return formatString(value)
       case "N"
          return alltrim(str(value))
       case "L"
@@ -532,11 +537,13 @@ static function MyGetSta(iStack,varIndex)
    local aStack := t_oDebugInfo['aStack']
    local aModules := t_oDebugInfo['aModules']
    LOCAL cModule, idxModule
-   local nVarMod, aInfo, nVarStack := iif(iStack>0,len(aStack[iStack,HB_DBG_CS_STATICS]),0)
-   if iStack>0
+   local nVarMod, aInfo, nVarStack
+   if iStack>0 .and. iStack<=len(aStack)
+      nVarStack := len(aStack[iStack,HB_DBG_CS_STATICS])
       cModule := lower(allTrim(aStack[iStack,HB_DBG_CS_MODULE]))
       idxModule := aScan(aModules, {|v| v[1]=cModule})
    else
+      nVarStack := 0
       idxModule := 0
    endif
    if idxModule>0
@@ -1378,7 +1385,7 @@ PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
             tmp[HB_DBG_CS_FUNCTION] := substr(uParam1,i+1)
          endif
 #endif
-         ? "moduleName",uParam1,t_oDebugInfo['maxLevel'], t_oDebugInfo['__dbgEntryLevel'], procFile(1), __dbgProcLevel()-1, lAdd
+         //? "moduleName",uParam1,t_oDebugInfo['maxLevel'], t_oDebugInfo['__dbgEntryLevel'], procFile(1), __dbgProcLevel()-1, lAdd
 
          tmp[HB_DBG_CS_LINE] := procLine(1) // line
          tmp[HB_DBG_CS_LEVEL] := __dbgProcLevel()-1 // level
@@ -1466,7 +1473,7 @@ PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
          t_oDebugInfo['bInitLines'] := .F.
          exit
       case HB_DBG_SHOWLINE
-         ? "show line:" + procFile(1) + "("+alltrim(str(uParam1))+")", __dbgProcLevel()
+         //? "show line:" + procFile(1) + "("+alltrim(str(uParam1))+")", __dbgProcLevel()
          //for i:= 1 to len(t_oDebugInfo['aStack'])
          //	? i,t_oDebugInfo['aStack',i,HB_DBG_CS_FUNCTION],t_oDebugInfo['aStack',i,HB_DBG_CS_LINE]
          //next
@@ -1509,11 +1516,14 @@ static proc dbgQOut(...)
    LOCAL nPar := PCOUNT()
    LOCAL cMsg := ""
    LOCAL oSocket := __DEBUGITEM()['socket']
-   IF nPar == 0 .or. empty(oSocket)
+   IF nPar == 0
          RETURN
    ENDIF
    aEval(HB_APARAMS(), {|x| cMsg += hb_ValToStr(x)+" " })
-   hb_inetSend(oSocket,"LOG:"+cMsg+CRLF)
+   wapi_OutputDebugString(cMsg+CRLF)
+   if !empty(oSocket)
+      hb_inetSend(oSocket,"LOG:"+cMsg+CRLF)
+   endif
 RETURN
 #endif
 

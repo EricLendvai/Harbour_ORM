@@ -28,8 +28,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
-                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "HB_VFP_ROOT":"R:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"debug",
                         // "HB_COMPILER":"${input:CCompiler}"
@@ -53,8 +53,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/etc/Harbour_VFP",
-                        "HB_ORM_ROOT":"/etc/Harbour_ORM",
+                        "HB_VFP_ROOT":"/opt/Harbour_VFP",
+                        "HB_ORM_ROOT":"/opt/Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"debug",
                         "RunAfterCompile":"no",
@@ -80,8 +80,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
-                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "HB_VFP_ROOT":"R:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"release",
                         "RunAfterCompile":"yes",
@@ -104,8 +104,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/etc/Harbour_VFP",
-                        "HB_ORM_ROOT":"/etc/Harbour_ORM",
+                        "HB_VFP_ROOT":"/opt/Harbour_VFP",
+                        "HB_ORM_ROOT":"/opt/Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"release",
                         "RunAfterCompile":"yes",
@@ -131,8 +131,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
-                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "HB_VFP_ROOT":"R:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"release",
                         "RunAfterCompile":"no",
@@ -155,8 +155,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/etc/Harbour_VFP",
-                        "HB_ORM_ROOT":"/etc/Harbour_ORM",
+                        "HB_VFP_ROOT":"/opt/Harbour_VFP",
+                        "HB_ORM_ROOT":"/opt/Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"release",
                         "RunAfterCompile":"no",
