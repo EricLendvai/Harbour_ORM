@@ -55,8 +55,8 @@ else
                 echo "Failed To build lib${LIBName}.a"
             else
                 if [ $nHbmk2Status -eq 0 ]; then
-                    cp ${LIBName}_linux.hbx build/lin64/${HB_COMPILER}/${BuildMode}/ >null
-                    rm ${LIBName}_linux.hbx >null
+                    cp ${LIBName}_linux.hbx build/lin64/${HB_COMPILER}/${BuildMode}/ >/dev/null
+                    rm ${LIBName}_linux.hbx >/dev/null
 
                     echo ""
                     echo "No Errors"
