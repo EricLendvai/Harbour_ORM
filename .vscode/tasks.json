@@ -4,6 +4,37 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "SwitchOS",
+            "windows": {
+                "command": "${command:remote-containers.reopenInContainer}",
+                "options": {
+                    "statusbar": {"label" : "<Open Container - Go to Ubuntu>","hide" : false}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
+            },
+            "linux": {
+                "command": "${command:remote-containers.reopenLocally}",
+                "options": {
+                    "statusbar": {"label" : "<Close Container - Go to Windows>","hide" : false}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
+            }
+        },
+        {
             "label": "CompileDebug",
             "windows":{
                 "type": "shell",
@@ -33,7 +64,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/etc/Harbour_VFP",
+                        "HB_VFP_ROOT":"/src/Harbour_VFP",
                         "LIBName":"hb_orm",
                         "BuildMode":"debug",
                         "HB_COMPILER":"gcc"
@@ -80,7 +111,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/etc/Harbour_VFP",
+                        "HB_VFP_ROOT":"/src/Harbour_VFP",
                         "LIBName":"hb_orm",
                         "BuildMode":"release",
                         "HB_COMPILER":"gcc"

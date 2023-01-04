@@ -8,32 +8,26 @@
             "type": "harbour-dbg",
             "request": "launch",
             "name": "Launch ORM Example SQL_CRUD",
+            "stopOnEntry": false,
+            //In the following "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
+            "terminalType": "integrated",
+            "preLaunchTask": "CompileDebug",
+            "postDebugTask": "",
+            "workingDir": "${workspaceFolder}",
             "windows":{
                 "program": "${workspaceFolder}\\build\\win64\\mingw64\\debug\\SQL_CRUD.exe",
-                "stopOnEntry": false,
-                //In the following "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
-                "terminalType": "integrated",
-                "preLaunchTask": "CompileDebug",
-                "postDebugTask": "",
-                "workingDir": "${workspaceFolder}\\",
                 "sourcePaths": [
-                    "${workspaceFolder}\\",
-                    "R:\\Harbour_ORM\\",
-                    "R:\\Harbour_VFP\\"
+                    "${workspaceFolder}",
+                    "C:\\Harbour_ORM\\",
+                    "C:\\Harbour_VFP\\"
                 ]
             },
             "linux":{
                 "program": "${workspaceFolder}/build/lin64/gcc/debug/SQL_CRUD.exe",
-                "stopOnEntry": false,
-                //In the following "integrated" means the TERMINAL. Use "none" to use the DEBUG CONSOLE instead.
-                "terminalType": "integrated",
-                "preLaunchTask": "CompileDebug",
-                "postDebugTask": "",
-                "workingDir": "${workspaceFolder}/",
                 "sourcePaths": [
-                    "${workspaceFolder}/",
-                    "/opt/Harbour_ORM/",
-                    "/opt/Harbour_VFP/"
+                    "${workspaceFolder}",
+                    "/src/Harbour_ORM/",
+                    "/src/Harbour_VFP/"
                 ]
             }
         }

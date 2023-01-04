@@ -6,7 +6,7 @@ ORMs are a method to access and manipulate data using objects, instead of direct
 
 View [ChangeLog.md](ChangeLog.md) for list of enhancements and fixes.
 
-## Warning
+## Warnings
 This project is still under development but already functions to provide query (SQL) and CRUD (Create, Read, Update and Delete) features.
 
 Please review the file DevelopmentNotes.md for notes and roadmaps for this package.

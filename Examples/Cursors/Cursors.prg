@@ -22,7 +22,8 @@ local l_tTimeStamp1,l_tTimeStamp2
 
 hb_orm_SendToDebugView("[Harbour] Main")
 ?VFP_GetCompatibilityPackVersion()
-// altd()
+
+ altd()
 //?"------------------------------------------------------"
 
 hb_cdpSelect("UTF8EX") 
@@ -42,7 +43,6 @@ with object l_oCursor1
 
     :CreateCursor("table007")
     ?":p_RecordCount = "+allt(Str(:p_RecordCount))
-
 
     select 0  // To prove the ORM handles not being on the created alias
 

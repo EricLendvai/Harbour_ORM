@@ -8,6 +8,9 @@ REQUEST HB_CODEPAGE_UTF8EX
 //=================================================================================================================
 Function Main()
 
+local l_lInDocker := File("/.dockerenv")
+local l_cOutputFolder := iif(l_lInDocker,"Output/","Output\")
+
 local l_lAccessPostgresql := .t.
 local l_lAccessMariaDB    := .t.
 
@@ -54,12 +57,18 @@ local l_iLiquidOil
 local l_iLiquidMilk
 
 
-
+altd()
 hb_cdpSelect("UTF8EX") 
+
+hb_DirCreate(l_cOutputFolder)
 
 //===========================================================================================================================
 ?"------------------------------------------------------"
 //===========================================================================================================================
+
+if l_lInDocker
+    l_lAccessMariaDB := .f.
+endif
 
 if l_lAccessMariaDB
     l_oSQLConnection1 := hb_SQLConnect()
@@ -89,7 +98,12 @@ if l_lAccessMariaDB
 endif
 
 if l_lAccessPostgresql
-    l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL ODBC Driver(UNICODE)","localhost",5432,"postgres","rndrnd","test001","set001")
+    if l_lInDocker
+        l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL Unicode","host.docker.internal",5432,"postgres","rndrnd","test001","set001")
+    else
+        l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL ODBC Driver(UNICODE)","localhost",5432,"postgres","rndrnd","test001","set001")
+    endif
+
     with object l_oSQLConnection2
         ?"PostgreSQL - ORM version - "+:p_hb_orm_version
         :PostgreSQLIdentifierCasing := HB_ORM_POSTGRESQL_CASE_SENSITIVE
@@ -328,21 +342,21 @@ endif
 if l_lAccessMariaDB
     if l_oSQLConnection1:Connected
         hb_orm_SendToDebugView("MariaDB - Will GenerateCurrentSchemaHarbourCode")
-        l_oSQLConnection1:GenerateCurrentSchemaHarbourCode("d:\CurrentSchema_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_.txt")
-        hb_orm_SendToDebugView("MariaDB - Done d:\CurrentSchema_PostgreSQL_...text")
+        l_oSQLConnection1:GenerateCurrentSchemaHarbourCode(l_cOutputFolder+"CurrentSchema_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_.txt")
+        hb_orm_SendToDebugView("MariaDB - Done CurrentSchema_PostgreSQL_...text")
 
         // altd()
         // l_cSQLScript := l_cLastError := ""
         if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hSchemaDefinitionA),,@l_cSQLScript,@l_cLastError) > 0
-            hb_orm_SendToDebugView("MariaDB - Updated d:\MigrationSqlScript_MariaDB_....txt")
+            hb_orm_SendToDebugView("MariaDB - Updated MigrationSqlScript_MariaDB_....txt")
         else
             if !empty(l_cLastError)
-                hb_orm_SendToDebugView("MariaDB - Failed Migrate d:\MigrationSqlScript_MariaDB_....txt")
-                hb_MemoWrit("d:\MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+".txt",l_cLastError)
+                hb_orm_SendToDebugView("MariaDB - Failed Migrate MigrationSqlScript_MariaDB_....txt")
+                hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+".txt",l_cLastError)
             endif
         endif
         // altd()
-        hb_MemoWrit("d:\MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+".txt",l_cSQLScript)
+        hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+".txt",l_cSQLScript)
 
     endif
 endif
@@ -353,33 +367,33 @@ if l_lAccessPostgresql
         l_oSQLConnection2:SetCurrentSchemaName("set001")
 
         hb_orm_SendToDebugView("PostgreSQL - Will GenerateCurrentSchemaHarbourCode")
-        l_oSQLConnection2:GenerateCurrentSchemaHarbourCode("d:\CurrentSchema_PostgreSQL_"+l_oSQLConnection2:GetDatabase()+"_.txt")
-        hb_orm_SendToDebugView("PostgreSQL - Done d:\CurrentSchema_PostgreSQL_...text")
+        l_oSQLConnection2:GenerateCurrentSchemaHarbourCode(l_cOutputFolder+"CurrentSchema_PostgreSQL_"+l_oSQLConnection2:GetDatabase()+"_.txt")
+        hb_orm_SendToDebugView("PostgreSQL - Done CurrentSchema_PostgreSQL_...text")
 
         l_cSQLScript := ""
         if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hSchemaDefinitionA),,@l_cSQLScript,@l_cLastError) > 0
-            hb_orm_SendToDebugView("PostgreSQL - Updated d:\MigrationSqlScript_PostgreSQL_set001....txt")
+            hb_orm_SendToDebugView("PostgreSQL - Updated MigrationSqlScript_PostgreSQL_set001....txt")
         else
             if !empty(l_cLastError)
-                hb_orm_SendToDebugView("PostgreSQL - Failed Migrate d:\MigrationSqlScript_PostgreSQL_set001_....txt")
-                hb_MemoWrit("d:\MigrationSqlScript_PostgreSQL_set001_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_cLastError)
+                hb_orm_SendToDebugView("PostgreSQL - Failed Migrate MigrationSqlScript_PostgreSQL_set001_....txt")
+                hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_PostgreSQL_set001_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_cLastError)
             endif
         endif
-        hb_MemoWrit("d:\MigrationSqlScript_PostgreSQL_set001_"+l_oSQLConnection2:GetDatabase()+".txt",l_cSQLScript)
+        hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_PostgreSQL_set001_"+l_oSQLConnection2:GetDatabase()+".txt",l_cSQLScript)
 
 
         l_cPreviousSchemaName := l_oSQLConnection2:SetCurrentSchemaName("set002")
 
         l_cSQLScript := ""
         if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hSchemaDefinitionB),,@l_cSQLScript,@l_cLastError) > 0
-            hb_orm_SendToDebugView("PostgreSQL - Updated d:\MigrationSqlScript_PostgreSQL_set002....txt")
+            hb_orm_SendToDebugView("PostgreSQL - Updated MigrationSqlScript_PostgreSQL_set002....txt")
         else
             if !empty(l_cLastError)
-                hb_orm_SendToDebugView("PostgreSQL - Failed Migrate d:\MigrationSqlScript_PostgreSQL_set002_....txt")
-                hb_MemoWrit("d:\MigrationSqlScript_PostgreSQL_set002_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_cLastError)
+                hb_orm_SendToDebugView("PostgreSQL - Failed Migrate MigrationSqlScript_PostgreSQL_set002_....txt")
+                hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_PostgreSQL_set002_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_cLastError)
             endif
         endif
-        hb_MemoWrit("d:\MigrationSqlScript_PostgreSQL_set002_"+l_oSQLConnection2:GetDatabase()+".txt",l_cSQLScript)
+        hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_PostgreSQL_set002_"+l_oSQLConnection2:GetDatabase()+".txt",l_cSQLScript)
 
 
 
@@ -483,7 +497,7 @@ if l_lAccessMariaDB
             // l_cLastSQL      := :LastSQL()
             // l_TestResult   := l_oSQLConnection1:p_Schema["table003"][1]
 
-            ExportTableToHtmlFile("Table003Records","MySQL_Table003Records","From MySQL",,,.t.)
+            ExportTableToHtmlFile("Table003Records",l_cOutputFolder+"MySQL_Table003Records","From MySQL",,,.t.)
 
 
             :Table(2,"table001")
@@ -548,7 +562,7 @@ if l_lAccessMariaDB
                 ?"MySQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
             endscan
             
-            ExportTableToHtmlFile("AllRecords","MySQL_Table001_Join_Table002","From MySQL",,,.t.)
+            ExportTableToHtmlFile("AllRecords",l_cOutputFolder+"MySQL_Table001_Join_Table002","From MySQL",,,.t.)
 
             ?"----------------------------------------------"
 
@@ -622,7 +636,7 @@ l_cLastSQL := :LastSQL()
                 ?"SQL on AllTypesRecords : Last SQL Command = "+:LastSQL()
             endif
 
-            ExportTableToHtmlFile("AllTypesRecords","Postgresql_AllTypesRecords","From Postgresql",,,.t.)
+            ExportTableToHtmlFile("AllTypesRecords",l_cOutputFolder+"Postgresql_AllTypesRecords","From Postgresql",,,.t.)
             //html
 
 
@@ -713,7 +727,7 @@ if !empty(l_cLastSQLError)
     ?"l_cLastSQLError = ",l_cLastSQLError
 endif
 
-            ExportTableToHtmlFile("Table003Records","PostgreSQL_Table003Records.html","From PostgreSQL",,25,.t.)
+            ExportTableToHtmlFile("Table003Records",l_cOutputFolder+"PostgreSQL_Table003Records.html","From PostgreSQL",,25,.t.)
 
             :Table("Postgres 9","table001")
             :Field("age","a6")
@@ -919,7 +933,7 @@ endif
             // l_cLastSQL := :LastSQL()
             // altd()
 
-            ExportTableToHtmlFile("AllItems","PostgreSQL_AllItems.html","From PostgreSQL",,25,.t.)
+            ExportTableToHtmlFile("AllItems",l_cOutputFolder+"PostgreSQL_AllItems.html","From PostgreSQL",,25,.t.)
 
 
         end

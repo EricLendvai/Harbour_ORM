@@ -5,6 +5,37 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "SwitchOS",
+            "windows": {
+                "command": "${command:remote-containers.reopenInContainer}",
+                "options": {
+                    "statusbar": {"label" : "<Open Container - Go to Ubuntu>","hide" : false}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
+            },
+            "linux": {
+                "command": "${command:remote-containers.reopenLocally}",
+                "options": {
+                    "statusbar": {"label" : "<Close Container - Go to Windows>","hide" : false}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
+            }
+        },
+        {
             "label": "RunDebug",
             "command": "${command:workbench.action.debug.start}",
             "options": {
@@ -24,12 +55,12 @@
             "label": "CompileDebug",
             "windows":{
                 "type": "shell",
-                "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+                "command": "${workspaceFolder}\\BuildEXE.bat",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"R:\\Harbour_VFP",
-                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
+                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"debug",
                         // "HB_COMPILER":"${input:CCompiler}"
@@ -49,12 +80,12 @@
             },
             "linux":{
                 "type": "shell",
-                "command": "${workspaceFolder}/../BuildEXE.sh",
+                "command": "${workspaceFolder}/BuildEXE.sh",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/opt/Harbour_VFP",
-                        "HB_ORM_ROOT":"/opt/Harbour_ORM",
+                        "HB_VFP_ROOT":"/src/Harbour_VFP",
+                        "HB_ORM_ROOT":"/src/Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"debug",
                         "RunAfterCompile":"no",
@@ -76,12 +107,12 @@
             "label": "CompileAndRunRelease",
             "windows":{
                 "type": "shell",
-                "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+                "command": "${workspaceFolder}\\BuildEXE.bat",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"R:\\Harbour_VFP",
-                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
+                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"release",
                         "RunAfterCompile":"yes",
@@ -100,12 +131,12 @@
             },
             "linux":{
                 "type": "shell",
-                "command": "${workspaceFolder}/../BuildEXE.sh",
+                "command": "${workspaceFolder}/BuildEXE.sh",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/opt/Harbour_VFP",
-                        "HB_ORM_ROOT":"/opt/Harbour_ORM",
+                        "HB_VFP_ROOT":"/src/Harbour_VFP",
+                        "HB_ORM_ROOT":"/src/Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"release",
                         "RunAfterCompile":"yes",
@@ -127,12 +158,12 @@
             "label": "CompileRelease",
             "windows":{
                 "type": "shell",
-                "command": "${workspaceFolder}\\..\\BuildEXE.bat",
+                "command": "${workspaceFolder}\\BuildEXE.bat",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"R:\\Harbour_VFP",
-                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
+                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"release",
                         "RunAfterCompile":"no",
@@ -151,12 +182,12 @@
             },
             "linux":{
                 "type": "shell",
-                "command": "${workspaceFolder}/../BuildEXE.sh",
+                "command": "${workspaceFolder}/BuildEXE.sh",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/opt/Harbour_VFP",
-                        "HB_ORM_ROOT":"/opt/Harbour_ORM",
+                        "HB_VFP_ROOT":"/src/Harbour_VFP",
+                        "HB_ORM_ROOT":"/src/Harbour_ORM",
                         "EXEName":"SQL_CRUD",
                         "BuildMode":"release",
                         "RunAfterCompile":"no",

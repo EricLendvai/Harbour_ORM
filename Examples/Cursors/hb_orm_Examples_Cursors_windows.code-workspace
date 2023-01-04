@@ -9,13 +9,9 @@
         "harbour.compilerExecutable": "C:\\Harbour\\bin\\win\\mingw64\\harbour.exe",
         "harbour.extraOptions": "-iC:\\Harbour\\include",
         "harbour.extraIncludePaths":["C:\\Harbour\\include\\",
-                                     "R:\\Harbour_ORM\\",
-                                     "R:\\Harbour_VFP\\"],
+                                     "C:\\Harbour_ORM\\",
+                                     "C:\\Harbour_VFP\\"],
         "harbour.warningLevel":1,
-        "harbour.decorator":true,
-        "local-history.path": "R:\\VSCode_History\\Harbour_ORM",
-        "local-history.treeLocation": "localHistory",
-        "local-history.daysLimit": 0,
-        "local-history.maxDisplay": 5
+        "harbour.decorator":true
     }
 }

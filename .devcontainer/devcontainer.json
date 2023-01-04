@@ -1,0 +1,29 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.195.0/containers/javascript-node
+{
+    "name": "harbour_orm"
+    ,"build": {
+        "dockerfile": "Dockerfile",
+        "context":".."
+    }
+
+    // Set *default* container specific settings.json values on container create.
+    ,"settings": {
+        "files.autoSave": "onFocusChange",
+        "harbour.compilerExecutable": "/src/harbour/bin/linux/gcc/harbour",
+        "harbour.extraOptions": "-i/src/harbour/include/",
+        "harbour.extraIncludePaths":["/src/harbour/include/",
+                                     "/src/Harbour_VFP/"],
+        "harbour.warningLevel":1,
+        "harbour.decorator":true
+    }
+
+    ,"mounts": ["source=C:\\Harbour_VFP,target=/src/Harbour_VFP,type=bind,consistency=default"]
+
+    // Add the IDs of extensions you want installed when the container is created.
+    ,"extensions": [
+        "aperricone.harbour",
+        "actboy168.tasks"
+    ]
+
+}

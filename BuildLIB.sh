@@ -19,11 +19,7 @@ else
 
         echo "HB_COMPILER = ${HB_COMPILER}"
 
-        mkdir "build" 2>/dev/null
-        mkdir "build/lin64" 2>/dev/null
-        mkdir "build/lin64/${HB_COMPILER}" 2>/dev/null
-        mkdir "build/lin64/${HB_COMPILER}/${BuildMode}" 2>/dev/null
-        mkdir "build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2" 2>/dev/null
+        mkdir -p "build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2" 2>/dev/null
 
         now=$(date +'%m/%d/%Y %H:%M:%S')
         echo local l_cBuildInfo := \"${HB_COMPILER} ${BuildMode} ${now}\">BuildInfo.txt

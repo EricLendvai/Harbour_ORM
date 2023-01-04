@@ -1,0 +1,2 @@
+## Implementation Note
+Due to Devcontainers using a mapped method for the source code, it is not possible to use a .. (parent folder) references, had to place the BuildEXE.* and vscode_debugger.prg files in each example folders.
