@@ -18,7 +18,7 @@
         "harbour.decorator":true
     }
 
-    ,"mounts": ["source=C:\\Harbour_VFP,target=/src/Harbour_VFP,type=bind,consistency=default"]
+    ,"mounts": ["source=R:\\Harbour_VFP,target=/src/Harbour_VFP,type=bind,consistency=default"]
 
     // Add the IDs of extensions you want installed when the container is created.
     ,"extensions": [

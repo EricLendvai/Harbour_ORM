@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 01/04/2023 v 3.1
+* Modified examples for using a common BuildTools folder to compile applications
+
 ## 01/03/2023 v 3.1
 * Code refactor on local variable names
 * Simplified build of debug mode
