@@ -42,7 +42,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"R:\\Harbour_VFP",
+                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
                         "LIBName":"hb_orm",
                         "BuildMode":"debug",
                         "HB_COMPILER":"mingw64"
@@ -89,7 +89,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"R:\\Harbour_VFP",
+                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
                         "LIBName":"hb_orm",
                         "BuildMode":"release",
                         "HB_COMPILER":"${input:CCompiler}"
