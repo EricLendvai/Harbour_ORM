@@ -788,7 +788,6 @@ if empty(::p_ErrorMessage)
 
             ::p_LastSQLCommand = l_cSQLCommand
             
-hb_orm_SendToDebugView("Before "+l_cSQLCommand)
             if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
                 ::Tally = 1
                 // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
@@ -2894,7 +2893,7 @@ else
                     if "B" $ l_cFieldType
                         l_cValue := hb_orm_PostgresqlEncodeBinary(par_xValue)
                     else
-                        l_cValue := hb_orm_PostgresqlEncodeUTFString(par_xValue)
+                        l_cValue := hb_orm_PostgresqlEncodeUTF8String(par_xValue)
                     endif
                 else
                     AAdd(l_aAutoTrimmedFields,{par_cFieldName,par_xValue,l_cFieldType,l_nFieldLen})
@@ -2902,7 +2901,7 @@ else
                     if "B" $ l_cFieldType
                         l_cValue := hb_orm_PostgresqlEncodeBinary(left(par_xValue,l_nFieldLen))
                     else
-                        l_cValue := hb_orm_PostgresqlEncodeUTFString(left(par_xValue,l_nFieldLen))
+                        l_cValue := hb_orm_PostgresqlEncodeUTF8String(left(par_xValue,l_nFieldLen))
                     endif
                 endif
             endif
@@ -2919,7 +2918,7 @@ else
             else
                 // l_cValue := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
                 if l_cFieldType == "M"
-                    l_cValue := hb_orm_PostgresqlEncodeUTFString(par_xValue)
+                    l_cValue := hb_orm_PostgresqlEncodeUTF8String(par_xValue)
                 else
                     l_cValue := hb_orm_PostgresqlEncodeBinary(par_xValue)
                 endif
@@ -2985,7 +2984,7 @@ else
             if len(l_xValue) == 0
                 l_cValue := "{}::json"
             else
-                l_cValue := hb_orm_PostgresqlEncodeUTFString(l_xValue)+"::json"
+                l_cValue := hb_orm_PostgresqlEncodeUTF8String(l_xValue)+"::json"
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a string',hb_orm_GetApplicationStack()})

@@ -40,47 +40,139 @@ method AddField(par_cName,par_xValue) class hb_orm_Data
 ::p_FieldValues[par_cName] := par_xValue
 return NIL
 
+
+
 //=================================================================================================================
-function hb_orm_PostgresqlEncodeUTFString(par_cString)
+function hb_orm_PostgresqlEncodeUTF8String(par_cString)
 //https://www.postgresql.org/docs/current/sql-syntax-lexical.html    4.1.2.2. String Constants with C-Style Escapes
-local l_cResult := ""
-local l_nPos
-local l_nChar
+
+local l_cEncodedText
 local l_cUTFEncoding
+local l_nPos
+local l_nUTF8Value := 0
+local l_nNumberOfBytesOfTheCharacter := 0
 
-// hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTFString begin "+trans(len(par_cString))+" "+par_cString)
+if empty(par_cString)
+    l_cEncodedText := []
+else
+    l_cEncodedText := [E']
 
-if !empty(par_cString)
+    l_nPos := 1
+    do while (l_nPos <= len(par_cString)) 
+        if hb_UTF8FastPeek(par_cString,l_nPos,@l_nUTF8Value,@l_nNumberOfBytesOfTheCharacter)
+            if l_nNumberOfBytesOfTheCharacter > 0  // UTF Character
+                l_nPos += l_nNumberOfBytesOfTheCharacter
+            else
+                l_nPos++
+            endif
 
-// if len(par_cString) > 50000
-//     hb_memoWrit("d:\hb_orm_PostgresqlEncodeUTFString_source.txt",par_cString)
-// endif
+            if l_nUTF8Value < 31 .or. l_nUTF8Value > 126 .or. l_nUTF8Value == 92 .or. l_nUTF8Value == 39 .or. l_nUTF8Value == 34 .or. l_nUTF8Value == 63
+                l_cUTFEncoding := hb_NumToHex(l_nUTF8Value,8)
+                do case
+                case l_cUTFEncoding == [00000000]
+                    //To clean up bad data
+                    exit
+                case left(l_cUTFEncoding,4) == [0000]
+                    l_cEncodedText += [\u]+right(l_cUTFEncoding,4)
+                otherwise
+                    l_cEncodedText += [\U]+l_cUTFEncoding
+                endcase
+            else
+                l_cEncodedText += chr(l_nUTF8Value)
+            endif
 
-    l_cResult += [E']
-    for l_nPos := 1 to hb_utf8Len(par_cString)
-        l_nChar := hb_utf8Peek(par_cString,l_nPos)
-        if l_nChar < 31 .or. l_nChar > 126 .or. l_nChar == 92 .or. l_nChar == 39 .or. l_nChar == 34 .or. l_nChar == 63
-            l_cUTFEncoding := hb_NumToHex(l_nChar,8)
-            do case
-            case l_cUTFEncoding == [00000000]
-                //To clean up bad data
-                exit
-            case left(l_cUTFEncoding,4) == [0000]
-                l_cResult += [\u]+right(l_cUTFEncoding,4)
-            otherwise
-                l_cResult += [\U]+l_cUTFEncoding
-            endcase
         else
-            l_cResult += chr(l_nChar)
+            //Skip the bad character
+            l_nPos++
         endif
-    endfor
-    l_cResult += [']
+    enddo
+    l_cEncodedText += [']
+
 endif
 
-// hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTFString end")
-//hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTFString "+par_cString+" = ",l_cResult)
+return l_cEncodedText
+//=================================================================================================================
+// function hb_orm_PostgresqlEncodeUTF8String_ToSlow(par_cString)
+// //https://www.postgresql.org/docs/current/sql-syntax-lexical.html    4.1.2.2. String Constants with C-Style Escapes
+// local l_cResult := ""
+// local l_nPos
+// local l_nChar
+// local l_cUTFEncoding
 
-return l_cResult
+
+// local l_cInputString := par_cString
+// local l_nInputStringLength := hb_utf8Len(par_cString)
+// local l_nSliceSize := 1000  // the value seems to be a good balance for speed.
+// local l_nNumberOfSegments  := ceiling(l_nInputStringLength/l_nSliceSize)
+// local l_nSliceNumber
+// local l_nCurrentSliceSize
+// local l_cSlice
+
+// // hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTF8String begin "+trans(len(par_cString))+" "+par_cString)
+// // hb_orm_SendToDebugView("New Version orm 3")
+
+// if !empty(par_cString)
+
+//     l_cResult += [E']
+
+//     //Slowest Method
+//     // for l_nPos := 1 to hb_utf8Len(par_cString)
+//     //     l_nChar := hb_utf8Peek(par_cString,l_nPos)
+//     //     if l_nChar < 31 .or. l_nChar > 126 .or. l_nChar == 92 .or. l_nChar == 39 .or. l_nChar == 34 .or. l_nChar == 63
+//     //         l_cUTFEncoding := hb_NumToHex(l_nChar,8)
+//     //         do case
+//     //         case l_cUTFEncoding == [00000000]
+//     //             //To clean up bad data
+//     //             exit
+//     //         case left(l_cUTFEncoding,4) == [0000]
+//     //             l_cResult += [\u]+right(l_cUTFEncoding,4)
+//     //         otherwise
+//     //             l_cResult += [\U]+l_cUTFEncoding
+//     //         endcase
+//     //     else
+//     //         l_cResult += chr(l_nChar)
+//     //     endif
+//     // endfor
+
+
+//     //New logic to process slices ot string at a time. This will help speed performance due to the performance issue with hb_utf8Peek
+//     for l_nSliceNumber := 1 to l_nNumberOfSegments
+//         if l_nSliceNumber < l_nNumberOfSegments
+//             l_cSlice            := hb_utf8Left(l_cInputString,l_nSliceSize)
+//             l_cInputString      := hb_utf8SubStr(l_cInputString,l_nSliceSize+1)
+//             l_nCurrentSliceSize := l_nSliceSize
+//         else
+//             l_cSlice            := l_cInputString
+//             l_nCurrentSliceSize := hb_utf8Len(l_cSlice)
+//         endif
+        
+//         for l_nPos := 1 to l_nCurrentSliceSize
+//             l_nChar := hb_utf8Peek(l_cSlice,l_nPos)
+//             if l_nChar < 31 .or. l_nChar > 126 .or. l_nChar == 92 .or. l_nChar == 39 .or. l_nChar == 34 .or. l_nChar == 63
+//                 l_cUTFEncoding := hb_NumToHex(l_nChar,8)
+//                 do case
+//                 case l_cUTFEncoding == [00000000]
+//                     //To clean up bad data
+//                     exit
+//                 case left(l_cUTFEncoding,4) == [0000]
+//                     l_cResult += [\u]+right(l_cUTFEncoding,4)
+//                 otherwise
+//                     l_cResult += [\U]+l_cUTFEncoding
+//                 endcase
+//             else
+//                 l_cResult += chr(l_nChar)
+//             endif
+//         endfor
+//     endfor
+
+//     l_cResult += [']
+
+// endif
+
+// // hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTF8String end")
+// //hb_orm_SendToDebugView("hb_orm_PostgresqlEncodeUTF8String "+par_cString+" = ",l_cResult)
+
+// return l_cResult
 //=================================================================================================================
 function hb_orm_PostgresqlEncodeBinary(par_cString)
 local l_cResult

@@ -1,5 +1,9 @@
 # Harbour ORM - Change Log
 
+## 01/08/2023 v 3.2
+* Renamed function hb_orm_PostgresqlEncodeUTFString to hb_orm_PostgresqlEncodeUTF8String
+* New Harbour function hb_UTF8FastPeek. Make Big-O performance of O(n) instead of O(n^2) made by hb_UTF8Peek. For example of how to use it, see function hb_orm_PostgresqlEncodeUTFString.
+
 ## 01/04/2023 v 3.1
 * Modified examples for using a common BuildTools folder to compile applications
 

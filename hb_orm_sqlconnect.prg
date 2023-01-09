@@ -667,7 +667,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         else
             //Text UTF
             // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cValue,"\x")+[',]
-            l_cSQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cValue)+[,]
+            l_cSQLCommand += hb_orm_PostgresqlEncodeUTF8String(l_cValue)+[,]
             l_cSQLCommand += [NULL]
         endif
 
@@ -812,7 +812,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cSQLCommand += [NULL,]
         else
             // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cAppStack,"\x")+[',]
-            l_cSQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cAppStack)+[,]
+            l_cSQLCommand += hb_orm_PostgresqlEncodeUTF8String(l_cAppStack)+[,]
         endif
         l_cSQLCommand += [current_timestamp,]
         l_cSQLCommand += [inet_client_addr(),]
@@ -820,7 +820,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSQLCommand += iif(hb_IsNIL(l_cTableName)  , [NULL,] , [']+l_cTableName+[',])
         l_cSQLCommand += iif(hb_IsNIL(l_nKey)        , [NULL,] , trans(l_nKey)+[,])
         // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cErrorMessage,"\x")+[']
-        l_cSQLCommand += hb_orm_PostgresqlEncodeUTFString(l_cErrorMessage)
+        l_cSQLCommand += hb_orm_PostgresqlEncodeUTF8String(l_cErrorMessage)
 
         l_cSQLCommand +=  [)]
     endfor

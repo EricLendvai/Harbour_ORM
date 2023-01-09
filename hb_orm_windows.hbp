@@ -8,7 +8,7 @@
 
 
 #To include the hb_vfp module, and even alow its debugging
--incpath=${HB_VFP_ROOT}\
+-incpath=${HB_VFP_ROOT}\build\win64\${HB_COMPILER}\${BuildMode}
 #Update the Path where the HB_VFP package is installed
 -L${HB_VFP_ROOT}\build\win64\${HB_COMPILER}\${BuildMode}
 -lhb_vfp
