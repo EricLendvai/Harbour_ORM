@@ -1,5 +1,10 @@
 # Harbour ORM - Change Log
 
+## 01/23/2023 v 3.3
+* Beautify the output of LastSQL() when calling SQL() or Get() methods. Added CR+LF and blank spaces to align SQL() generated code.
+* If a value is used with hb_orm_SendToDebugView function, any carriage return or line feed is converted to the text <br>.
+* New GetLastEventId() method to return the ID used by the last Table() method. For example use hb_orm_SendToDebugView(:GetLastEventId(),:LastSQL()) to output to DebugView (Or Syslog on Linux) the SQL statement last created and used by the ORM. In Windows, we can use NotePad++ to convert "<br>" to actually line feed (\n).
+
 ## 01/08/2023 v 3.2
 * Renamed function hb_orm_PostgresqlEncodeUTFString to hb_orm_PostgresqlEncodeUTF8String
 * New Harbour function hb_UTF8FastPeek. Make Big-O performance of O(n) instead of O(n^2) made by hb_UTF8Peek. For example of how to use it, see function hb_orm_PostgresqlEncodeUTFString.

@@ -956,9 +956,9 @@ method Column(par_cExpression,par_cColumnsAlias,...) class hb_orm_SQLData     //
 
 if !empty(par_cExpression)
     if pcount() < 2
-        AAdd(::p_FieldToReturn,{::PrepExpression(par_cExpression,...) , allt(strtran(strtran(allt(par_cExpression),[->],[_]),[.],[_]))})
+        AAdd(::p_FieldToReturn,{::PrepExpression(par_cExpression,...), allt(strtran(strtran(allt(par_cExpression),[->],[_]),[.],[_]))})
     else
-        AAdd(::p_FieldToReturn,{::PrepExpression(par_cExpression,...) , allt(par_cColumnsAlias)})
+        AAdd(::p_FieldToReturn,{::PrepExpression(par_cExpression,...), allt(par_cColumnsAlias)})
     endif
 endif
 
@@ -1483,7 +1483,7 @@ endif
 
 return l_cResult
 //-----------------------------------------------------------------------------------------------------------------
-method BuildSQL(par_cAction) class hb_orm_SQLData   // Used internally. par_cAction can be "Count" "Fetch"
+method BuildSQL(par_cAction) class hb_orm_SQLData   // Used internally. par_cAction can be "Count" or "Fetch".
 
 local l_nCounter
 local l_nCounterColumns
@@ -1497,6 +1497,12 @@ local l_nNumberOfFieldsToReturn := len(::p_FieldToReturn)
 local l_cOrderByColumn
 local l_cOrderByColumnUpper
 local l_lFirstOrderBy
+local l_nMaxTextLength1
+local l_nMaxTextLength2
+local l_nMaxTextLength3
+
+local l_cEndOfLine    := CRLF
+local l_cColumnIndent := replicate(chr(1),7)
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -1505,21 +1511,33 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     if ::p_DistinctMode == 1
         l_cSQLCommand += [DISTINCT ]
     endif
+
+    l_cSQLCommand += l_cEndOfLine
     
     do case
     case par_cAction == "Count"
-        l_cSQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")
+        l_cSQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count") + l_cEndOfLine
 
     case empty(l_nNumberOfFieldsToReturn)
-        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
+        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName) + l_cEndOfLine
 
     otherwise
+        //Precompute the max length of the Column Expression
+        l_nMaxTextLength1 := 0
+        for l_nCounter := 1 to l_nNumberOfFieldsToReturn
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1])))
+        endfor
+
         // _M_ add support to "*"
         for l_nCounter := 1 to l_nNumberOfFieldsToReturn
             if l_nCounter > 1
-                l_cSQLCommand += [,]
+                l_cSQLCommand += [,]+l_cEndOfLine
             endif
-            l_cSQLCommand += ::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1])
+            if l_cSQLCommand == [SELECT ]+l_cEndOfLine
+                l_cSQLCommand := [SELECT ]+padr(::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+            else
+                l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+            endif
             
             if !empty(::p_FieldToReturn[l_nCounter,2])
                 l_cSQLCommand += [ AS `]+::p_FieldToReturn[l_nCounter,2]+[`]
@@ -1527,77 +1545,100 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                 l_cSQLCommand += [ AS `]+strtran(::p_FieldToReturn[l_nCounter,1],[.],[_])+[`]
             endif
         endfor
+        l_cSQLCommand += l_cEndOfLine
 
     endcase
     
     if ::p_SchemaAndTableName == ::p_TableAlias
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+l_cEndOfLine
     else
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
     endif
     
+    l_nMaxTextLength1 := 0
+    l_nMaxTextLength2 := 0
+    l_nMaxTextLength3 := 0
+
     for l_nCounter = 1 to l_nNumberOfJoins
-        
         do case
         case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
-            l_cSQLCommand += [ INNER JOIN]
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ INNER JOIN]))
         case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
-            l_cSQLCommand += [ LEFT OUTER JOIN]
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ LEFT OUTER JOIN]))
         case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
-            l_cSQLCommand += [ RIGHT OUTER JOIN]
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ RIGHT OUTER JOIN]))
         case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
-            l_cSQLCommand += [ FULL OUTER JOIN]
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ FULL OUTER JOIN]))
+        otherwise
+            loop
+        endcase
+
+        l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]) ))
+
+        l_nMaxTextLength3 := max(l_nMaxTextLength3,len( ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])) ))
+
+    endfor
+
+    for l_nCounter = 1 to l_nNumberOfJoins
+        do case
+        case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
+            l_cSQLCommand += padr([ INNER JOIN],l_nMaxTextLength1,chr(1))
+        case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
+            l_cSQLCommand += padr([ LEFT OUTER JOIN],l_nMaxTextLength1,chr(1))
+        case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
+            l_cSQLCommand += padr([ RIGHT OUTER JOIN],l_nMaxTextLength1,chr(1))
+        case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
+            l_cSQLCommand += padr([ FULL OUTER JOIN],l_nMaxTextLength1,chr(1))
         otherwise
             loop
         endcase
         
-        l_cSQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2])
+        l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]),l_nMaxTextLength2,chr(1))
         
-        // if !empty(::p_Join[l_nCounter,3])   the ::Join() method ensured it is never empty
-            l_cSQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3]))
-        // endif
+        l_cSQLCommand += [ AS ] + padr(::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])),l_nMaxTextLength3,chr(1))
 
-        l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_nCounter,4])
+        l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_nCounter,4])+l_cEndOfLine
         
     endfor
     
     do case
     case l_nNumberOfWheres = 1
-        l_cSQLCommand += [ WHERE (]+::ExpressionToMYSQL(::p_Where[1])+[)]
+        l_cSQLCommand += [ WHERE (]+::ExpressionToMYSQL(::p_Where[1])+[)]+l_cEndOfLine
     case l_nNumberOfWheres > 1
         l_cSQLCommand += [ WHERE (]
         for l_nCounter = 1 to l_nNumberOfWheres
             if l_nCounter > 1
-                l_cSQLCommand += [ AND ]
+                l_cSQLCommand += l_cEndOfLine+ padl([ AND ],7,chr(1))
             endif
             l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Where[l_nCounter])+[)]
         endfor
-        l_cSQLCommand += [)]
+        l_cSQLCommand += [)]+l_cEndOfLine
     endcase
         
     if l_nNumberOfGroupBys > 0
         l_cSQLCommand += [ GROUP BY ]
         for l_nCounter = 1 to l_nNumberOfGroupBys
             if l_nCounter > 1
-                l_cSQLCommand += [,]
+                l_cSQLCommand += [,]+l_cEndOfLine+replicate(chr(1),len([ GROUP BY ]))
             endif
             // l_cSQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_nCounter])  //_M_ not an expression
             l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_GroupBy[l_nCounter])
         endfor
+        l_cSQLCommand += l_cEndOfLine
     endif
         
     do case
     case l_nNumberOfHavings = 1
-        l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])
+        l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])+l_cEndOfLine
     case l_nNumberOfHavings > 1
         l_cSQLCommand += [ HAVING (]
         for l_nCounter = 1 to l_nNumberOfHavings
             if l_nCounter > 1
-                l_cSQLCommand += [ AND ]
+                l_cSQLCommand += l_cEndOfLine+padl([ AND ],8,chr(1))
             endif
             l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_nCounter])+[)]
         endfor
-        l_cSQLCommand += [)]
+        l_cSQLCommand += [)]+l_cEndOfLine
     endcase
 
     if l_nNumberOfOrderBys > 0 .and. par_cAction <> "Count"
@@ -1628,6 +1669,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                     l_lFirstOrderBy := .f.
                 else
                     l_cSQLCommand += [,]
+                    l_cSQLCommand += l_cEndOfLine + replicate(chr(1),len([ ORDER BY ]))
                 endif
                 l_cSQLCommand += [`]+l_cOrderByColumn+[`]
                 if ::p_OrderBy[l_nCounter,2]
@@ -1637,10 +1679,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                 endif
             endif
         endfor
+        l_cSQLCommand += l_cEndOfLine
     endif
     
     if ::p_Limit > 0 .and. par_cAction <> "Count"
-        l_cSQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
+        l_cSQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]+l_cEndOfLine
     endif
     
     l_cSQLCommand := strtran(l_cSQLCommand,[->],[.])
@@ -1650,7 +1693,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     
     do case
     case ::p_DistinctMode == 1
-        l_cSQLCommand += [DISTINCT ]
+        l_cSQLCommand += [DISTINCT ]+l_cEndOfLine
 
     case ::p_DistinctMode == 2
         l_cSQLCommand += [DISTINCT ON (]
@@ -1694,23 +1737,35 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             endfor
         endif
 
-        l_cSQLCommand += [)]
+        l_cSQLCommand += [)]+l_cEndOfLine
+    otherwise
+        l_cSQLCommand += l_cEndOfLine
     endcase
     
     do case
     case par_cAction == "Count"
-        l_cSQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")
+        l_cSQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")+l_cEndOfLine
 
     case empty(l_nNumberOfFieldsToReturn)
-        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
+        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+l_cEndOfLine
 
     otherwise
+        //Precompute the max length of the Column Expression
+        l_nMaxTextLength1 := 0
+        for l_nCounter := 1 to l_nNumberOfFieldsToReturn
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1])))
+        endfor
+        
         // _M_ add support to "*"
         for l_nCounter := 1 to l_nNumberOfFieldsToReturn
             if l_nCounter > 1
-                l_cSQLCommand += [,]
+                l_cSQLCommand += [,]+l_cEndOfLine
             endif
-            l_cSQLCommand += ::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1])
+            if l_cSQLCommand == [SELECT ]+l_cEndOfLine
+                l_cSQLCommand := [SELECT ]+padr(::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+            else
+                l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+            endif
             
             if !empty(::p_FieldToReturn[l_nCounter,2])
                 l_cSQLCommand += [ AS "]+::p_FieldToReturn[l_nCounter,2]+["]
@@ -1718,77 +1773,100 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_cSQLCommand += [ AS "]+strtran(::p_FieldToReturn[l_nCounter,1],[.],[_])+["]
             endif
         endfor
+        l_cSQLCommand += l_cEndOfLine
 
     endcase
     
     if ::p_SchemaAndTableName == ::p_TableAlias
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+l_cEndOfLine
     else
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
     endif
     
+    l_nMaxTextLength1 := 0
+    l_nMaxTextLength2 := 0
+    l_nMaxTextLength3 := 0
+
     for l_nCounter = 1 to l_nNumberOfJoins
-        
         do case
         case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
-            l_cSQLCommand += [ INNER JOIN]
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ INNER JOIN]))
         case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
-            l_cSQLCommand += [ LEFT OUTER JOIN]
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ LEFT OUTER JOIN]))
         case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
-            l_cSQLCommand += [ RIGHT OUTER JOIN]
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ RIGHT OUTER JOIN]))
         case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
-            l_cSQLCommand += [ FULL OUTER JOIN]
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ FULL OUTER JOIN]))
+        otherwise
+            loop
+        endcase
+
+        l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]) ))
+
+        l_nMaxTextLength3 := max(l_nMaxTextLength3,len( ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])) ))
+
+    endfor
+
+    for l_nCounter = 1 to l_nNumberOfJoins
+        do case
+        case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
+            l_cSQLCommand += padr([ INNER JOIN],l_nMaxTextLength1,chr(1))
+        case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
+            l_cSQLCommand += padr([ LEFT OUTER JOIN],l_nMaxTextLength1,chr(1))
+        case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
+            l_cSQLCommand += padr([ RIGHT OUTER JOIN],l_nMaxTextLength1,chr(1))
+        case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
+            l_cSQLCommand += padr([ FULL OUTER JOIN],l_nMaxTextLength1,chr(1))
         otherwise
             loop
         endcase
         
-        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2])
+        l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]),l_nMaxTextLength2,chr(1))
         
-        // if !empty(::p_Join[l_nCounter,3])   the ::Join() method ensured it is never empty
-            l_cSQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3]))
-        // endif
+        l_cSQLCommand += [ AS ] + padr(::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])),l_nMaxTextLength3,chr(1))
         
-        l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_nCounter,4])
+        l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_nCounter,4])+l_cEndOfLine
         
     endfor
     
     do case
     case l_nNumberOfWheres = 1
-        l_cSQLCommand += [ WHERE (]+::ExpressionToPostgreSQL(::p_Where[1])+[)]
+        l_cSQLCommand += [ WHERE (]+::ExpressionToPostgreSQL(::p_Where[1])+[)]+l_cEndOfLine
     case l_nNumberOfWheres > 1
         l_cSQLCommand += [ WHERE (]
         for l_nCounter = 1 to l_nNumberOfWheres
             if l_nCounter > 1
-                l_cSQLCommand += [ AND ]
+                l_cSQLCommand += l_cEndOfLine+padl([ AND ],7,chr(1))
             endif
             l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Where[l_nCounter])+[)]
         endfor
-        l_cSQLCommand += [)]
+        l_cSQLCommand += [)]+l_cEndOfLine
     endcase
         
     if l_nNumberOfGroupBys > 0
         l_cSQLCommand += [ GROUP BY ]
         for l_nCounter = 1 to l_nNumberOfGroupBys
             if l_nCounter > 1
-                l_cSQLCommand += [,]
+                l_cSQLCommand += [,]+l_cEndOfLine+replicate(chr(1),len([ GROUP BY ]))
             endif
             // l_cSQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_nCounter])
             l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_GroupBy[l_nCounter])
         endfor
+        l_cSQLCommand += l_cEndOfLine
     endif
         
     do case
     case l_nNumberOfHavings = 1
-        l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])
+        l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])+l_cEndOfLine
     case l_nNumberOfHavings > 1
         l_cSQLCommand += [ HAVING (]
         for l_nCounter = 1 to l_nNumberOfHavings
             if l_nCounter > 1
-                l_cSQLCommand += [ AND ]
+                l_cSQLCommand += l_cEndOfLine+padl([ AND ],8,chr(1))
             endif
             l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_nCounter])+[)]
         endfor
-        l_cSQLCommand += [)]
+        l_cSQLCommand += [)]+l_cEndOfLine
     endcase
         
     if l_nNumberOfOrderBys > 0 .and. par_cAction <> "Count"
@@ -1820,6 +1898,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                     l_lFirstOrderBy := .f.
                 else
                     l_cSQLCommand += [,]
+                    l_cSQLCommand += l_cEndOfLine + replicate(chr(1),len([ ORDER BY ]))
                 endif
                 l_cSQLCommand += ["]+l_cOrderByColumn+["]
                 if ::p_OrderBy[l_nCounter,2]
@@ -1829,10 +1908,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 endif
             endif
         endfor
+        l_cSQLCommand += l_cEndOfLine
     endif
     
     if ::p_Limit > 0 .and. par_cAction <> "Count"
-        l_cSQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]
+        l_cSQLCommand += [ LIMIT ]+trans(::p_Limit)+[ ]+l_cEndOfLine
     endif
     
     l_cSQLCommand := strtran(l_cSQLCommand,[->],[.])
@@ -1842,10 +1922,13 @@ otherwise
     
 endcase
 
+::p_LastSQLCommand := strtran(l_cSQLCommand,chr(1)," ")
+l_cSQLCommand      := strtran(l_cSQLCommand,chr(1),"")
+
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
 method SetExplainMode(par_nMode) class hb_orm_SQLData                                          // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
-    ::p_ExplainMode := par_nMode
+::p_ExplainMode := par_nMode
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method SQL(par_1) class hb_orm_SQLData                                          // Assemble and Run SQL command
@@ -1920,9 +2003,8 @@ if !empty(::p_ErrorMessage)
 else
     if .t. //::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         //_M_ Add support to ::p_AddLeadingBlankRecord
-        l_cSQLCommand := ::BuildSQL("Fetch")
         
-        ::p_LastSQLCommand := l_cSQLCommand
+        l_cSQLCommand := ::BuildSQL("Fetch")
         
         l_lErrorOccurred := .t.   //Assumed it failed
         
@@ -2198,8 +2280,6 @@ local l_aErrors := {}
 
 l_cSQLCommand := ::BuildSQL("Count")
 
-::p_LastSQLCommand := l_cSQLCommand
-
 l_cCursorTempName := "c_DB_Temp"
 
 l_nTimeStart := seconds()
@@ -2247,6 +2327,13 @@ local l_cSQLCommand
 local l_lErrorOccurred := .f.
 local l_aErrors := {}
 
+local l_cEndOfLine    := CRLF
+local l_cColumnIndent := replicate(chr(1),7)
+local l_nMaxTextLength1
+local l_nMaxTextLength2
+local l_nMaxTextLength3
+
+
 ::p_Key = par_iKey
 
 ::Tally          = 0
@@ -2270,6 +2357,8 @@ otherwise
             l_cSQLCommand += [DISTINCT ]
         endif
 
+        l_cSQLCommand += l_cEndOfLine
+
         if empty(l_nNumberOfFieldsToReturn)
             //Only allowed when no joins are done
             if empty(l_nNumberOfJoins)
@@ -2280,12 +2369,23 @@ otherwise
                 AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
             endif
         else
+            //Precompute the max length of the Column Expression
+            l_nMaxTextLength1 := 0
+            for l_nCounter := 1 to l_nNumberOfFieldsToReturn
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1])))
+            endfor
+
             for l_nCounter = 1 to l_nNumberOfFieldsToReturn
                 if l_nCounter > 1
-                    l_cSQLCommand += [,]
+                    l_cSQLCommand += [,]+l_cEndOfLine
                 endif
-                l_cSQLCommand +=  ::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1])
-                
+
+                if l_cSQLCommand == [SELECT ]+l_cEndOfLine
+                    l_cSQLCommand :=  [SELECT ]+padr(::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                else
+                    l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToMYSQL(::p_FieldToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                endif
+
                 if !empty(::p_FieldToReturn[l_nCounter,2])
                     l_cSQLCommand += [ AS `]+::p_FieldToReturn[l_nCounter,2]+[`]
                 else
@@ -2293,68 +2393,97 @@ otherwise
                 endif
                 
             endfor
+            l_cSQLCommand += l_cEndOfLine
         endif
         
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
+
+        l_nMaxTextLength1 := 0
+        l_nMaxTextLength2 := 0
+        l_nMaxTextLength3 := 0
 
         for l_nCounter = 1 to l_nNumberOfJoins
-            
             do case
             case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
-                l_cSQLCommand += [ INNER JOIN]
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ INNER JOIN]))
             case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
-                l_cSQLCommand += [ LEFT OUTER JOIN]
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ LEFT OUTER JOIN]))
             case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
-                l_cSQLCommand += [ RIGHT OUTER JOIN]
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ RIGHT OUTER JOIN]))
             case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
-                l_cSQLCommand += [ FULL OUTER JOIN]
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ FULL OUTER JOIN]))
+            otherwise
+                loop
+            endcase
+
+            l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]) ))
+
+            l_nMaxTextLength3 := max(l_nMaxTextLength3,len( ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])) ))
+
+        endfor
+
+
+        for l_nCounter = 1 to l_nNumberOfJoins
+            do case
+            case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
+                l_cSQLCommand += padr([ INNER JOIN],l_nMaxTextLength1,chr(1))
+            case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
+                l_cSQLCommand += padr([ LEFT OUTER JOIN],l_nMaxTextLength1,chr(1))
+            case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
+                l_cSQLCommand += padr([ RIGHT OUTER JOIN],l_nMaxTextLength1,chr(1))
+            case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
+                l_cSQLCommand += padr([ FULL OUTER JOIN],l_nMaxTextLength1,chr(1))
             otherwise
                 loop
             endcase
             
-            l_cSQLCommand += [ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2])
-            l_cSQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3]))
-            l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_nCounter,4])
+            l_cSQLCommand += padr([ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]),l_nMaxTextLength2,chr(1))
+            l_cSQLCommand += [ AS ] + padr(::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])),l_nMaxTextLength3,chr(1))
+            l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_nCounter,4])+l_cEndOfLine
             
         endfor
         
         if l_nNumberOfWheres == 0
-            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]+l_cEndOfLine
         else
-            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+l_cEndOfLine
             for l_nCounter = 1 to l_nNumberOfWheres
-                l_cSQLCommand += [ AND (]+::ExpressionToMYSQL(::p_Where[l_nCounter])+[)]
+                l_cSQLCommand += l_cEndOfLine+ padl([ AND ],7,chr(1))
+                l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Where[l_nCounter])+[)]
             endfor
-            l_cSQLCommand += [)]
+            l_cSQLCommand += [)]+l_cEndOfLine
         endif
 
         if l_nNumberOfGroupBys > 0
             l_cSQLCommand += [ GROUP BY ]
             for l_nCounter = 1 to l_nNumberOfGroupBys
                 if l_nCounter > 1
-                    l_cSQLCommand += [,]
+                    l_cSQLCommand += [,]+l_cEndOfLine+replicate(chr(1),len([ GROUP BY ]))
                 endif
                 l_cSQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_nCounter])
             endfor
+            l_cSQLCommand += l_cEndOfLine
         endif
 
         do case
         case l_nNumberOfHavings = 1
-            l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])
+            l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])+l_cEndOfLine
         case l_nNumberOfHavings > 1
             l_cSQLCommand += [ HAVING (]
             for l_nCounter = 1 to l_nNumberOfHavings
                 if l_nCounter > 1
-                    l_cSQLCommand += [ AND ]
+                    l_cSQLCommand += l_cEndOfLine+padl([ AND ],8,chr(1))
                 endif
                 l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_nCounter])+[)]
             endfor
-            l_cSQLCommand += [)]
+            l_cSQLCommand += [)]+l_cEndOfLine
         endcase
 
         l_cSQLCommand := strtran(l_cSQLCommand,[->],[.])
-        ::p_LastSQLCommand := l_cSQLCommand
-        
+
+        ::p_LastSQLCommand := strtran(l_cSQLCommand,chr(1)," ")
+        l_cSQLCommand      := strtran(l_cSQLCommand,chr(1),"")
+
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL	
         l_cSQLCommand := [SELECT ]
         
@@ -2365,6 +2494,8 @@ otherwise
             // l_cSQLCommand += [DISTINCT ON ()]   Not Implemented for the :Get()
         endcase
 
+        l_cSQLCommand += l_cEndOfLine
+
         if empty(l_nNumberOfFieldsToReturn)
             //Only allowed when no joins are done
             if empty(l_nNumberOfJoins)
@@ -2375,11 +2506,22 @@ otherwise
                 AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
             endif
         else
+            //Precompute the max length of the Column Expression
+            l_nMaxTextLength1 := 0
+            for l_nCounter := 1 to l_nNumberOfFieldsToReturn
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1])))
+            endfor
+
             for l_nCounter = 1 to l_nNumberOfFieldsToReturn
                 if l_nCounter > 1
-                    l_cSQLCommand += [,]
+                    l_cSQLCommand += [,]+l_cEndOfLine
                 endif
-                l_cSQLCommand +=  ::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1])
+
+                if l_cSQLCommand == [SELECT ]+l_cEndOfLine
+                    l_cSQLCommand :=  [SELECT ]+padr(::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                else
+                    l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToPostgreSQL(::p_FieldToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                endif
                 
                 if !empty(::p_FieldToReturn[l_nCounter,2])
                     l_cSQLCommand += [ AS "]+::p_FieldToReturn[l_nCounter,2]+["]
@@ -2388,67 +2530,95 @@ otherwise
                 endif
                 
             endfor
+            l_cSQLCommand += l_cEndOfLine
         endif
         
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
+
+        l_nMaxTextLength1 := 0
+        l_nMaxTextLength2 := 0
+        l_nMaxTextLength3 := 0
 
         for l_nCounter = 1 to l_nNumberOfJoins
-            
             do case
             case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
-                l_cSQLCommand += [ INNER JOIN]
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ INNER JOIN]))
             case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
-                l_cSQLCommand += [ LEFT OUTER JOIN]
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ LEFT OUTER JOIN]))
             case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
-                l_cSQLCommand += [ RIGHT OUTER JOIN]
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ RIGHT OUTER JOIN]))
             case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
-                l_cSQLCommand += [ FULL OUTER JOIN]
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len([ FULL OUTER JOIN]))
+            otherwise
+                loop
+            endcase
+
+            l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]) ))
+
+            l_nMaxTextLength3 := max(l_nMaxTextLength3,len( ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])) ))
+
+        endfor
+
+        for l_nCounter = 1 to l_nNumberOfJoins
+            do case
+            case left(::p_Join[l_nCounter,1],1) == "I"  //Inner Join
+                l_cSQLCommand += padr([ INNER JOIN],l_nMaxTextLength1,chr(1))
+            case left(::p_Join[l_nCounter,1],1) == "L"  //Left Outer
+                l_cSQLCommand += padr([ LEFT OUTER JOIN],l_nMaxTextLength1,chr(1))
+            case left(::p_Join[l_nCounter,1],1) == "R"  //Right Outer
+                l_cSQLCommand += padr([ RIGHT OUTER JOIN],l_nMaxTextLength1,chr(1))
+            case left(::p_Join[l_nCounter,1],1) == "F"  //Full Outer
+                l_cSQLCommand += padr([ FULL OUTER JOIN],l_nMaxTextLength1,chr(1))
             otherwise
                 loop
             endcase
             
-            l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2])
-            l_cSQLCommand += [ AS ] + ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3]))
-            l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_nCounter,4])
+            l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]),l_nMaxTextLength2,chr(1))
+            l_cSQLCommand += [ AS ] + padr(::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])),l_nMaxTextLength3,chr(1))
+            l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_nCounter,4])+l_cEndOfLine
             
         endfor
 
         if l_nNumberOfWheres == 0
-            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]+l_cEndOfLine
         else
-            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+l_cEndOfLine
             for l_nCounter = 1 to l_nNumberOfWheres
-                l_cSQLCommand += [ AND (]+::ExpressionToPostgreSQL(::p_Where[l_nCounter])+[)]
+                l_cSQLCommand += l_cEndOfLine+ padl([ AND ],7,chr(1))
+                l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Where[l_nCounter])+[)]
             endfor
-            l_cSQLCommand += [)]
+            l_cSQLCommand += [)]+l_cEndOfLine
         endif
 
         if l_nNumberOfGroupBys > 0
             l_cSQLCommand += [ GROUP BY ]
             for l_nCounter = 1 to l_nNumberOfGroupBys
                 if l_nCounter > 1
-                    l_cSQLCommand += [,]
+                    l_cSQLCommand += [,]+l_cEndOfLine+replicate(chr(1),len([ GROUP BY ]))
                 endif
                 l_cSQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_nCounter])
             endfor
+            l_cSQLCommand += l_cEndOfLine
         endif
             
         do case
         case l_nNumberOfHavings = 1
-            l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])
+            l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])+l_cEndOfLine
         case l_nNumberOfHavings > 1
             l_cSQLCommand += [ HAVING (]
             for l_nCounter = 1 to l_nNumberOfHavings
                 if l_nCounter > 1
-                    l_cSQLCommand += [ AND ]
+                    l_cSQLCommand += l_cEndOfLine+padl([ AND ],8,chr(1))
                 endif
                 l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_nCounter])+[)]
             endfor
-            l_cSQLCommand += [)]
+            l_cSQLCommand += [)]+l_cEndOfLine
         endcase
 
         l_cSQLCommand := strtran(l_cSQLCommand,[->],[.])
-        ::p_LastSQLCommand := l_cSQLCommand
+        
+        ::p_LastSQLCommand := strtran(l_cSQLCommand,chr(1)," ")
+        l_cSQLCommand      := strtran(l_cSQLCommand,chr(1),"")
         
     endcase
 
@@ -3176,9 +3346,5 @@ case len(par_CTime) > 8
 endcase
 
 return l_lResult
-
-//-----------------------------------------------------------------------------------------------------------------
-
-//#include "hb_orm_schema.prg"
 
 //-----------------------------------------------------------------------------------------------------------------

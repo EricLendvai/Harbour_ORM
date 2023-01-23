@@ -233,6 +233,10 @@ function hb_orm_SendToDebugView(par_cStep,par_xValue)
         l_cValue := "Null"
     endcase
 
+    l_cValue := strtran(l_cValue,chr(13)+chr(10),[<br>])
+    l_cValue := strtran(l_cValue,chr(10),[<br>])
+    l_cValue := strtran(l_cValue,chr(13),[<br>])
+
     if empty(l_cValue)
         hb_orm_OutputDebugString("[Harbour] ORM "+par_cStep)
     else

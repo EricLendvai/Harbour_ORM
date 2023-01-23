@@ -496,9 +496,9 @@ SELECT pk
             select hb_orm_sqlconnect_schema_fields
 
 // if l_UsingCachedSchema
-//     ExportTableToHtmlFile("hb_orm_sqlconnect_schema_fields","d:\310\SchemaFields_cache.html","Cache",,,.t.)
+//     ExportTableToHtmlFile("hb_orm_sqlconnect_schema_fields","d:\SchemaFields_cache.html","Cache",,,.t.)
 // else
-//     ExportTableToHtmlFile("hb_orm_sqlconnect_schema_fields","d:\310\SchemaFields_live.html","No Cache",,,.t.)
+//     ExportTableToHtmlFile("hb_orm_sqlconnect_schema_fields","d:\SchemaFields_live.html","No Cache",,,.t.)
 // endif
 
 // altd()
@@ -523,8 +523,8 @@ SELECT pk
 //     altd()
 // endif
 
-//"set001"."table003"
-// if upper(l_cSchemaAndTableName) == upper("set001.table003") .and. upper(field->field_Name) == upper("DateTime")
+// "set001"."alltypes"
+// if upper(l_cSchemaAndTableName) == upper("set001.alltypes") .and. upper(field->field_Name) == upper("nvalue")
 //     altd()
 // endif
 
@@ -658,6 +658,11 @@ SELECT pk
 
                 // l_cFieldDefault       := field->field_default
                 // if !hb_IsNIL(l_cFieldDefault)
+
+// if "'1'::numeric" $ nvl(field->field_default,"")
+//     altd()
+// endif
+
                     l_cFieldDefault := ::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,iif(l_lFieldAllowNull,"N","")+iif(l_lFieldAutoIncrement,"+","")+iif(l_lFieldArray,"A",""),field->field_default)
                 // endif
 
@@ -858,7 +863,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
         endif
 
     else
-        // Found the table in the current ::p_Schema, know lets test all the fields are also there and matching
+        // Found the table in the current ::p_Schema, now lets test all the fields are also there and matching
         // Test Every Fields to see if structure must be updated.
 
         l_cSQLScriptFieldChangesCycle1 := ""
@@ -3345,41 +3350,53 @@ case hb_IsNIL(l_cFieldDefault)
 
 case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     do case
-    case "N" $ par_cFieldAttributes   // Nullable field
-        if par_cFieldDefault == "NULL"
-            l_cFieldDefault := NIL
-        endif
-
     case !empty(el_inlist(par_cFieldType,"I","IB","N","Y"))
         if (right(par_cFieldDefault,1) == "0" .and. val(par_cFieldDefault) == 0)
+            l_cFieldDefault := NIL
+        elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
 
     case !empty(el_inlist(par_cFieldType,"C","CV"))
         if par_cFieldDefault == "''"
             l_cFieldDefault := NIL
+        elseif par_cFieldDefault == "NULL"
+            l_cFieldDefault := NIL
         endif
 
     case par_cFieldType == "DTZ"
         if !empty(el_inlist(par_cFieldDefault,"'0000-00-00 00:00:00'","''"))
+            l_cFieldDefault := NIL
+        elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
         
     case par_cFieldType == "D"
         if !empty(el_inlist(par_cFieldDefault,"'0000-00-00'","''"))
             l_cFieldDefault := NIL
+        elseif par_cFieldDefault == "NULL"
+            l_cFieldDefault := NIL
         endif
         
     case par_cFieldType == "UUI"
         if !empty(el_inlist(par_cFieldDefault,"'00000000-0000-0000-0000-000000000000'","''"))
+            l_cFieldDefault := NIL
+        elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
         
     case par_cFieldType == "JS"
         if !empty(el_inlist(par_cFieldDefault,"'{}'","''"))
             l_cFieldDefault := NIL
+        elseif par_cFieldDefault == "NULL"
+            l_cFieldDefault := NIL
         endif
         
+    case "N" $ par_cFieldAttributes   // Any other datatype and Nullable field
+        if par_cFieldDefault == "NULL"
+            l_cFieldDefault := NIL
+        endif
+
     endcase
 
     // if !hb_IsNIL(l_cFieldDefault) .and. left(l_cFieldDefault,1) == "'" .and. right(l_cFieldDefault,1) == "'"
@@ -3389,11 +3406,40 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
 case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     do case
-    case "N" $ par_cFieldAttributes   // Nullable field
-    
-    case !empty(el_inlist(par_cFieldType,"I","IB","N","Y"))
+    case par_cFieldType == "N"
         if par_cFieldDefault == "0"
             l_cFieldDefault := NIL
+        elseif !empty(el_inlist(par_cFieldDefault,"''::numeric","'0'::numeric","''","0"))
+            l_cFieldDefault := NIL
+        elseif right(par_cFieldDefault,len("::numeric")) == "::numeric"
+            l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::numeric"))
+        endif
+
+    case par_cFieldType == "I"
+        if par_cFieldDefault == "0"
+            l_cFieldDefault := NIL
+        elseif !empty(el_inlist(par_cFieldDefault,"''::integer","'0'::integer","''","0"))
+            l_cFieldDefault := NIL
+        elseif right(par_cFieldDefault,len("::integer")) == "::integer"
+            l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::integer"))
+        endif
+
+    case par_cFieldType == "IB"
+        if par_cFieldDefault == "0"
+            l_cFieldDefault := NIL
+        elseif !empty(el_inlist(par_cFieldDefault,"''::bigint","'0'::bigint","''","0"))
+            l_cFieldDefault := NIL
+        elseif right(par_cFieldDefault,len("::bigint")) == "::bigint"
+            l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::bigint"))
+        endif
+
+    case par_cFieldType == "Y"
+        if par_cFieldDefault == "0"
+            l_cFieldDefault := NIL
+        elseif !empty(el_inlist(par_cFieldDefault,"''::money","'0'::money","''","0"))
+            l_cFieldDefault := NIL
+        elseif right(par_cFieldDefault,len("::money")) == "::money"
+            l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::money"))
         endif
 
     case par_cFieldType == "L"
@@ -3452,6 +3498,8 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cFieldDefault := NIL
         endif
         
+    case "N" $ par_cFieldAttributes   // Any other datatype and Nullable field
+
     endcase
 
     if !hb_IsNIL(l_cFieldDefault)
