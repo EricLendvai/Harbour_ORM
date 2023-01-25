@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 01/24/2023 v 3.4
+* New data type "IS" for Small Integer.
+
 ## 01/23/2023 v 3.3
 * Beautify the output of LastSQL() when calling SQL() or Get() methods. Added CR+LF and blank spaces to align SQL() generated code.
 * If a value is used with hb_orm_SendToDebugView function, any carriage return or line feed is converted to the text <br>.

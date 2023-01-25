@@ -178,6 +178,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                         l_nFieldLen           := 0
                         l_nFieldDec           := 0
                         exit
+                    case "smallint"
+                        l_cFieldType          := "IS"
+                        l_nFieldLen           := 0
+                        l_nFieldDec           := 0
+                        exit
                     case "decimal"
                         if l_cFieldCommentType == "Y"
                             l_cFieldType      := "Y"
@@ -554,12 +559,17 @@ SELECT pk
 
                 switch trim(field->field_type)
                 case "integer"
-                    l_cFieldType          := "I"
+                    l_cFieldType          := "I"      //  (4 bytes)
                     l_nFieldLen           := 0
                     l_nFieldDec           := 0
                     exit
                 case "bigint"
-                    l_cFieldType          := "IB"    // Integer Big
+                    l_cFieldType          := "IB"    // Integer Big (8 bytes)
+                    l_nFieldLen           := 0
+                    l_nFieldDec           := 0
+                    exit
+                case "smallint"
+                    l_cFieldType          := "IS"    // Integer Small (2 bytes)
                     l_nFieldLen           := 0
                     l_nFieldDec           := 0
                     exit
@@ -906,7 +916,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
                     if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
                         l_lFieldAutoIncrement := .t.
                     endif
-                    if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB"))  //Only those fields types may be flagged as Auto-Increment
+                    if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
                         l_lFieldAutoIncrement := .f.
                     endif
                     if l_lFieldAutoIncrement .and. l_lFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
@@ -943,7 +953,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
                         l_lCurrentFieldAutoIncrement := ("+" $ l_cCurrentFieldAttributes)
                         l_lCurrentFieldArray         := ("A" $ l_cCurrentFieldAttributes)
 
-                        if l_lCurrentFieldAutoIncrement .and. empty(el_inlist(l_cCurrentFieldType,"I","IB"))  //Only those fields types may be flagged as Auto-Increment
+                        if l_lCurrentFieldAutoIncrement .and. empty(el_inlist(l_cCurrentFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
                             l_lCurrentFieldAutoIncrement := .f.
                         endif
                         if l_lCurrentFieldAutoIncrement .and. l_lCurrentFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
@@ -968,7 +978,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
                             l_lMatchingFieldDefinition := .f.
                         case l_lFieldArray != l_lCurrentFieldArray
                             l_lMatchingFieldDefinition := .t.
-                        case !empty(el_inlist(l_cFieldType,"I","IB","M","R","L","D","Y","UUI","JS"))  //Field type with no length
+                        case !empty(el_inlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS"))  //Field type with no length
                         case empty(el_inlist(l_cFieldType,"TOZ","TO","DTZ","DT")) .and. l_nFieldLen <> l_nCurrentFieldLen   //Ignore Length matching for datetime and time fields
                             l_lMatchingFieldDefinition := .f.
                         case !empty(el_inlist(l_cFieldType,"C","CV","B","BV"))  //Field type with a length but no decimal
@@ -1212,7 +1222,7 @@ for each l_aField in par_hStructure
             if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
                 l_lFieldAutoIncrement := .t.
             endif
-            if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB"))  //Only those fields types may be flagged as Auto-Increment
+            if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
                 l_lFieldAutoIncrement := .f.
             endif
             if l_lFieldAutoIncrement .and. l_lFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
@@ -1233,12 +1243,14 @@ for each l_aField in par_hStructure
             do case
             case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                 do case
-                case !empty(el_inlist(l_cFieldType,"I","IB","N"))
+                case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
                     do case
                     case l_cFieldType == "I"
                         l_cSQLFields += [INT]
                     case l_cFieldType == "IB"
                         l_cSQLFields += [BIGINT]
+                    case l_cFieldType == "IS"
+                        l_cSQLFields += [SMALLINT]
                     case l_cFieldType == "N"
                         l_cSQLFields += [DECIMAL(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]
                         if l_lFieldAutoIncrement
@@ -1350,12 +1362,14 @@ for each l_aField in par_hStructure
                 l_cFieldTypeSuffix := iif(l_lFieldArray,"[]","")
 
                 do case
-                case !empty(el_inlist(l_cFieldType,"I","IB","N"))
+                case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
                     do case
                     case l_cFieldType == "I"
                         l_cSQLFields += [integer]+l_cFieldTypeSuffix
                     case l_cFieldType == "IB"
                         l_cSQLFields += [bigint]+l_cFieldTypeSuffix
+                    case l_cFieldType == "IS"
+                        l_cSQLFields += [smallint]+l_cFieldTypeSuffix
                     case l_cFieldType == "N"
                         l_cSQLFields += [numeric(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]+l_cFieldTypeSuffix
                         if l_lFieldAutoIncrement
@@ -1525,12 +1539,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommandCycle2 += [,CHANGE COLUMN ]+l_cFormattedFieldName+[ ]+l_cFormattedFieldName+[ ]
 
     do case
-    case !empty(el_inlist(l_cFieldType,"I","IB","N"))
+    case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
         do case
         case l_cFieldType == "I"
             l_cSQLCommandCycle2 += [INT]
         case l_cFieldType == "IB"
             l_cSQLCommandCycle2 += [BIGINT]
+        case l_cFieldType == "IS"
+            l_cSQLCommandCycle2 += [SMALLINT]
         case l_cFieldType == "N"
             l_cSQLCommandCycle2 += [DECIMAL(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]
             if l_lFieldAutoIncrement
@@ -1654,12 +1670,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_cFieldTypeSuffix := iif(l_lFieldArray,"[]","")
 
     do case
-    case !empty(el_inlist(l_cFieldType,"I","IB","N"))
+    case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
         do case
         case l_cFieldType == "I"
             l_cSQLCommandCycle1 += [TYPE integer]+l_cFieldTypeSuffix
         case l_cFieldType == "IB"
             l_cSQLCommandCycle1 += [TYPE bigint]+l_cFieldTypeSuffix
+        case l_cFieldType == "IS"
+            l_cSQLCommandCycle1 += [TYPE smallint]+l_cFieldTypeSuffix
         case l_cFieldType == "N"
             l_cSQLCommandCycle1 += [TYPE numeric(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]+l_cFieldTypeSuffix
             if l_lFieldAutoIncrement
@@ -1829,12 +1847,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommand += [,ADD COLUMN ]+l_cFormattedFieldName+[ ]
 
     do case
-    case !empty(el_inlist(l_cFieldType,"I","IB","N"))
+    case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
         do case
         case l_cFieldType == "I"
             l_cSQLCommand += [INT]
         case l_cFieldType == "IB"
             l_cSQLCommand += [BIGINT]
+        case l_cFieldType == "IS"
+            l_cSQLCommand += [SMALLINT]
         case l_cFieldType == "N"
             l_cSQLCommand += [DECIMAL(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]
             if l_lFieldAutoIncrement
@@ -1950,12 +1970,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_cFieldTypeSuffix := iif(l_lFieldArray,"[]","")
 
     do case
-    case !empty(el_inlist(l_cFieldType,"I","IB","N"))
+    case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
         do case
         case l_cFieldType == "I"
             l_cSQLCommand += [integer]+l_cFieldTypeSuffix
         case l_cFieldType == "IB"
             l_cSQLCommand += [bigint]+l_cFieldTypeSuffix
+        case l_cFieldType == "IS"
+            l_cSQLCommand += [smallint]+l_cFieldTypeSuffix
         case l_cFieldType == "N"
             l_cSQLCommand += [numeric(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]+l_cFieldTypeSuffix
             if l_lFieldAutoIncrement
@@ -2177,7 +2199,7 @@ for each l_hTableDefinition in ::p_Schema
         if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
             l_lFieldAutoIncrement := .t.
         endif
-        if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB"))  //Only those fields types may be flagged as Auto-Increment
+        if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
             l_lFieldAutoIncrement := .f.
         endif
         if l_lFieldAutoIncrement .and. l_lFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
@@ -3350,7 +3372,7 @@ case hb_IsNIL(l_cFieldDefault)
 
 case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     do case
-    case !empty(el_inlist(par_cFieldType,"I","IB","N","Y"))
+    case !empty(el_inlist(par_cFieldType,"I","IB","IS","N","Y"))
         if (right(par_cFieldDefault,1) == "0" .and. val(par_cFieldDefault) == 0)
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
@@ -3431,6 +3453,15 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::bigint")) == "::bigint"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::bigint"))
+        endif
+
+    case par_cFieldType == "IS"
+        if par_cFieldDefault == "0"
+            l_cFieldDefault := NIL
+        elseif !empty(el_inlist(par_cFieldDefault,"''::smallint","'0'::smallint","''","0"))
+            l_cFieldDefault := NIL
+        elseif right(par_cFieldDefault,len("::smallint")) == "::smallint"
+            l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::smallint"))
         endif
 
     case par_cFieldType == "Y"

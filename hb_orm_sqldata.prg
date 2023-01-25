@@ -2789,6 +2789,15 @@ else
             l_lResult := .f.
         endif
         exit
+    case "IS" // Small Integer
+        if l_cValueType == "N"
+            // Not Testing if in range
+            l_cValue := hb_ntoc(par_xValue)
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Small Integer',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+        exit
     case  "Y" // Money  (4 decimals)
         if l_cValueType == "N"
             // Not Testing if in range Yet
@@ -2998,6 +3007,15 @@ else
             l_lResult := .f.
         endif
         exit
+    case "IS" // Small Integer
+        if l_cValueType == "N"
+            // Not Testing if in range
+            l_cValue := hb_ntoc(par_xValue)
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Small Integer',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+        exit
     case  "Y" // Money  (4 decimals)
         if l_cValueType == "N"
             // Not Testing if in range Yet
@@ -3195,6 +3213,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cCast := [integer]
     case par_cFieldType == "IB"
         l_cCast := [bigint]
+    case par_cFieldType == "IS"
+        l_cCast := [smallint]
     case par_cFieldType == "N"
         l_cCast := [numeric(]+trans(par_nFieldLen)+[,]+trans(par_nFieldDec)+[)]
     case par_cFieldType == "C"
