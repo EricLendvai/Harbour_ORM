@@ -148,22 +148,36 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 //     altd()
 // endif
 
+                    //Parse the comment field to see if recorded the field type and its length. Since in MySQL there is no need of LENGTH=, the code was simplified.
+                    // l_cFieldCommentType   := ""
+                    // l_nFieldCommentLength := 0
+                    // l_cFieldComment := nvl(field->field_comment,"")
+                    // l_cFieldComment := upper(MemoLine(l_cFieldComment,1000,1))  // Extract first line of comment, max 1000 char length
+                    // if !empty(l_cFieldComment) 
+                    //     l_nPos1 := at("|",l_cFieldComment)
+                    //     l_nPos2 := at("TYPE=",l_cFieldComment)
+                    //     l_nPos3 := at("LENGTH=",l_cFieldComment)
+                    //     if l_nPos1 > 0 .and. l_nPos2 > 0 .and. l_nPos3 > 0
+                    //         l_cFieldCommentType   := Alltrim(substr(l_cFieldComment,l_nPos2+len("TYPE="),l_nPos1-(l_nPos2+len("TYPE="))))
+                    //         l_nFieldCommentLength := Val(substr(l_cFieldComment,l_nPos3+len("LENGTH=")))
+                    //     elseif l_nPos2 > 0
+                    //         l_cFieldCommentType   := Alltrim(substr(l_cFieldComment,l_nPos2+len("TYPE=")))
+                    //         l_nFieldCommentLength := 0
+                    //     endif
+                    // endif
+
+
                     //Parse the comment field to see if recorded the field type and its length
                     l_cFieldCommentType   := ""
-                    l_nFieldCommentLength := 0
                     l_cFieldComment := nvl(field->field_comment,"")
-
                     l_cFieldComment := upper(MemoLine(l_cFieldComment,1000,1))  // Extract first line of comment, max 1000 char length
                     if !empty(l_cFieldComment) 
                         l_nPos1 := at("|",l_cFieldComment)
                         l_nPos2 := at("TYPE=",l_cFieldComment)
-                        l_nPos3 := at("LENGTH=",l_cFieldComment)
-                        if l_nPos1 > 0 .and. l_nPos2 > 0 .and. l_nPos3 > 0
-                            l_cFieldCommentType   := Alltrim(substr(l_cFieldComment,l_nPos2+len("TYPE="),l_nPos1-(l_nPos2+len("TYPE="))))
-                            l_nFieldCommentLength := Val(substr(l_cFieldComment,l_nPos3+len("LENGTH=")))
+                        if l_nPos1 > 0 .and. l_nPos2 > 0
+                            l_cFieldCommentType := Alltrim(substr(l_cFieldComment,l_nPos2+len("TYPE="),l_nPos1-(l_nPos2+len("TYPE="))))
                         elseif l_nPos2 > 0
-                            l_cFieldCommentType   := Alltrim(substr(l_cFieldComment,l_nPos2+len("TYPE=")))
-                            l_nFieldCommentLength := 0
+                            l_cFieldCommentType := Alltrim(substr(l_cFieldComment,l_nPos2+len("TYPE=")))
                         endif
                     endif
 
@@ -174,9 +188,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                         l_nFieldDec           := 0
                         exit
                     case "bigint"
-                        l_cFieldType          := "IB"
-                        l_nFieldLen           := 0
-                        l_nFieldDec           := 0
+                        if l_cFieldCommentType == "OID"
+                            l_cFieldType      := "OID"
+                            l_nFieldLen       := 0
+                            l_nFieldDec       := 0
+                        else
+                            l_cFieldType      := "IB"
+                            l_nFieldLen       := 0
+                            l_nFieldDec       := 0
+                        endif
                         exit
                     case "smallint"
                         l_cFieldType          := "IS"
@@ -300,9 +320,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
                 endscan
 
-// if upper(l_cTableNameLast) == upper("table003")
-//     altd()
-// endif
+
                 ::p_Schema[l_cTableNameLast] := {hb_hClone(l_hSchemaFields),NIL}    //{Table Fields, Table Indexes}
                 hb_HClear(l_hSchemaFields)
 
@@ -315,6 +333,9 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                     scan all
                         l_cTableName := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
 
+// if upper("form001") $ upper(l_cTableName)
+//     altd()
+// endif
                         //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_schema
                         if hb_HHasKey(::p_Schema,l_cTableName)
 
@@ -360,6 +381,18 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         endif
 
     endif
+
+
+
+
+//l_nFieldCommentLength
+
+//hb_orm_RootIndexName
+
+
+
+
+// LENGTH= LENGTH= LENGTH= LENGTH= LENGTH= LENGTH= LENGTH=
 
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
@@ -537,11 +570,6 @@ SELECT pk
                 l_cFieldCommentType   := ""
                 l_nFieldCommentLength := 0
                 l_cFieldComment := nvl(field->field_comment,"")
-
-                // if upper(trim(field->field_Name)) == "BINARY10"
-                //     altd()
-                // endif
-
                 l_cFieldComment := upper(MemoLine(l_cFieldComment,1000,1))  // Extract first line of comment, max 1000 char length.   example:  Type=BV|Length=5  or Type=TOZ
                 if !empty(l_cFieldComment) 
                     l_nPos1 := at("|",l_cFieldComment)
@@ -655,6 +683,11 @@ SELECT pk
                     l_cFieldType      := "JS"
                     l_nFieldLen       := 0
                     l_nFieldDec       := 0
+                    exit
+                case "oid"
+                    l_cFieldType          := "OID"
+                    l_nFieldLen           := 0
+                    l_nFieldDec           := 0
                     exit
                 otherwise
                     l_cFieldType          := "?"
@@ -962,7 +995,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
 
                         l_cCurrentFieldAttributes := iif(l_lCurrentFieldAllowNull,"N","")+iif(l_lCurrentFieldAutoIncrement,"+","")+iif(l_lCurrentFieldArray,"A","")
 
-// if l_cFieldName == "VarChar52"
+// if l_cFieldName == "logical"
 //     altd()
 // endif
 
@@ -978,7 +1011,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
                             l_lMatchingFieldDefinition := .f.
                         case l_lFieldArray != l_lCurrentFieldArray
                             l_lMatchingFieldDefinition := .t.
-                        case !empty(el_inlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS"))  //Field type with no length
+                        case !empty(el_inlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS","OID"))  //Field type with no length
                         case empty(el_inlist(l_cFieldType,"TOZ","TO","DTZ","DT")) .and. l_nFieldLen <> l_nCurrentFieldLen   //Ignore Length matching for datetime and time fields
                             l_lMatchingFieldDefinition := .f.
                         case !empty(el_inlist(l_cFieldType,"C","CV","B","BV"))  //Field type with a length but no decimal
@@ -1053,6 +1086,11 @@ for each l_hTableDefinition in par_hSchemaDefinition
         if !hb_IsNIL(l_hIndexes)
             for each l_hIndexDefinition in l_hIndexes
                 l_cIndexName              := hb_orm_RootIndexName(l_cSchemaAndTableName,l_hIndexDefinition:__enumKey())
+
+// if ("lname" == l_cIndexName) .and. l_cSchemaAndTableName == "set003.form001"
+//     altd()
+// endif
+
                 l_aIndexDefinitions       := l_hIndexDefinition:__enumValue()
 
                 if ValType(l_aIndexDefinitions[1]) == "A"
@@ -1338,6 +1376,10 @@ for each l_aField in par_hStructure
                     l_cSQLFields += [LONGTEXT COMMENT 'Type=JS']
                     l_cDefaultString := "'{}'"
                     
+                case l_cFieldType == "OID"
+                    l_cSQLFields += [BIGINT COMMENT 'Type=OID']
+                    l_cDefaultString := "0"
+
                 otherwise
                     
                 endcase
@@ -1458,6 +1500,11 @@ for each l_aField in par_hStructure
 
                     l_cDefaultString := "'{}'::json"
                     
+                case l_cFieldType == "OID"
+                    l_cSQLFields += [oid]+l_cFieldTypeSuffix
+
+                    l_cDefaultString := ""
+                    
                 otherwise
                     
                 endcase
@@ -1529,7 +1576,7 @@ l_cCurrentFieldAttributes    := par_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_
 l_cCurrentFieldDefault       := iif(len(par_aCurrentFieldDefinition) >= HB_ORM_SCHEMA_FIELD_DEFAULT,hb_DefaultValue(par_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_DEFAULT],""),"")
 l_lCurrentFieldAllowNull     := ("N" $ l_cCurrentFieldAttributes)
 l_lCurrentFieldAutoIncrement := ("+" $ l_cCurrentFieldAttributes)
-l_lCurrentFieldArray         := ("A" $ l_cCurrentFieldAttributes)
+// l_lCurrentFieldArray         := ("A" $ l_cCurrentFieldAttributes)
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -1639,6 +1686,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     case l_cFieldType == "JS"
         l_cSQLCommandCycle2 += [LONGTEXT COMMENT 'Type=JS']
         l_cDefaultString := "'{}'"
+
+    case l_cFieldType == "OID"
+        l_cSQLCommandCycle2 += [BIGINT COMMENT 'Type=OID']
+        l_cDefaultString := "0"
 
     otherwise
     
@@ -1768,7 +1819,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         endcase
         l_cDefaultString := "'-infinity'"
 
-
     case l_cFieldType == "Y"
         l_cSQLCommandCycle1 += [TYPE money]+l_cFieldTypeSuffix
         l_cDefaultString := "0"
@@ -1780,6 +1830,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     case l_cFieldType == "JS"
         l_cSQLCommandCycle1 += [TYPE json]+l_cFieldTypeSuffix
         l_cDefaultString := "'{}'::json"
+
+    case l_cFieldType == "OID"
+        l_cSQLCommandCycle1 += [TYPE oid]+l_cFieldTypeSuffix
+        l_cDefaultString := "0"
 
     otherwise
         
@@ -1842,7 +1896,7 @@ l_cFieldDefault := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault,l
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
+    // l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
     
     l_cSQLCommand += [,ADD COLUMN ]+l_cFormattedFieldName+[ ]
 
@@ -1938,6 +1992,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     case l_cFieldType == "JS"
         l_cSQLCommand += [LONGTEXT COMMENT 'Type=JS']
         l_cDefaultString := "'{}'"
+
+    case l_cFieldType == "OID"
+        l_cSQLCommand += [BIGINT COMMENT 'Type=OID']
+        l_cDefaultString := "0"
 
     otherwise
         
@@ -2058,6 +2116,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     case l_cFieldType == "JS"
         l_cSQLCommand += [json]+l_cFieldTypeSuffix
         l_cDefaultString := "'{}'::json"
+
+    case l_cFieldType == "OID"
+        l_cSQLCommand += [oid]+l_cFieldTypeSuffix
+        l_cDefaultString := "FALSE"
 
     otherwise
         
@@ -3354,7 +3416,7 @@ return l_cTableName
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
 static function hb_orm_RootIndexName(par_cSchemaAndTableName,par_cIndexNameOnFile)
-local l_cIndexName          := lower(par_cIndexNameOnFile)
+local l_cIndexName          := strtran(lower(par_cIndexNameOnFile),".","_")  // Had to also convert the "." to "_" to deal with MySQL lack of schema, and the orm prefixing table name with what the schema name would have been.
 local l_cSchemaAndTableName := strtran(par_cSchemaAndTableName,".","_")
 if (left(l_cIndexName,len(l_cSchemaAndTableName)+1) == lower(l_cSchemaAndTableName)+"_") .and. right(l_cIndexName,4) == "_idx"
     l_cIndexName := substr(l_cIndexName,len(l_cSchemaAndTableName)+2,len(par_cIndexNameOnFile)-len(l_cSchemaAndTableName)-1-4)
@@ -3372,7 +3434,7 @@ case hb_IsNIL(l_cFieldDefault)
 
 case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     do case
-    case !empty(el_inlist(par_cFieldType,"I","IB","IS","N","Y"))
+    case !empty(el_inlist(par_cFieldType,"I","IB","IS","N","Y","L","OID"))
         if (right(par_cFieldDefault,1) == "0" .and. val(par_cFieldDefault) == 0)
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
@@ -3529,6 +3591,15 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cFieldDefault := NIL
         endif
         
+    case par_cFieldType == "OID"
+        if par_cFieldDefault == "0"
+            l_cFieldDefault := NIL
+        elseif !empty(el_inlist(par_cFieldDefault,"''::oid","'0'::oid","''","0"))
+            l_cFieldDefault := NIL
+        elseif right(par_cFieldDefault,len("::oid")) == "::oid"
+            l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::oid"))
+        endif
+
     case "N" $ par_cFieldAttributes   // Any other datatype and Nullable field
 
     endcase

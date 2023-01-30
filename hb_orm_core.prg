@@ -43,7 +43,7 @@ return NIL
 
 
 //=================================================================================================================
-function hb_orm_PostgresqlEncodeUTF8String(par_cString)
+function hb_orm_PostgresqlEncodeUTF8String(par_cString,par_cAdditionalCharactersToEscape)
 //https://www.postgresql.org/docs/current/sql-syntax-lexical.html    4.1.2.2. String Constants with C-Style Escapes
 
 local l_cEncodedText
@@ -51,6 +51,7 @@ local l_cUTFEncoding
 local l_nPos
 local l_nUTF8Value := 0
 local l_nNumberOfBytesOfTheCharacter := 0
+local l_cAdditionalCharactersToEscape := hb_DefaultValue(par_cAdditionalCharactersToEscape,"")
 
 if empty(par_cString)
     l_cEncodedText := []
@@ -66,7 +67,10 @@ else
                 l_nPos++
             endif
 
-            if l_nUTF8Value < 31 .or. l_nUTF8Value > 126 .or. l_nUTF8Value == 92 .or. l_nUTF8Value == 39 .or. l_nUTF8Value == 34 .or. l_nUTF8Value == 63
+            // 92 = \, 39 = ', 34 = ", 63 = ?
+
+            if l_nUTF8Value < 31 .or. l_nUTF8Value > 126 .or. l_nUTF8Value == 92 .or. l_nUTF8Value == 39 .or. l_nUTF8Value == 34 .or. l_nUTF8Value == 63 ;
+               .or. (l_nUTF8Value < 127 .and. !empty(l_cAdditionalCharactersToEscape) .and. (chr(l_nUTF8Value) $ l_cAdditionalCharactersToEscape))
                 l_cUTFEncoding := hb_NumToHex(l_nUTF8Value,8)
                 do case
                 case l_cUTFEncoding == [00000000]

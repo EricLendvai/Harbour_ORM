@@ -1,5 +1,10 @@
 # Harbour ORM - Change Log
 
+## 01/29/2023 v 3.5
+* Additional parameter in function hb_orm_PostgresqlEncodeUTF8String, allowing to add extra ascii characters to be escaped.
+* Support to OID (Object ID in PostgreSQL natively, in MySQL as a BIGINT). This was needed to provide support to Large Objects in PostgreSQL, allowing to store up to 4TB in a single column/record (Max 32TB total in a "database").
+* New hb_orm_SQLData class methods: SaveFile, GetFile, DeleteFile. This enables storing of up to 4TB files inside PostgreSQL database.
+
 ## 01/24/2023 v 3.4
 * New data type "IS" for Small Integer.
 

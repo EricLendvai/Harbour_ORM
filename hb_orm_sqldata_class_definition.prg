@@ -116,7 +116,7 @@ class hb_orm_SQLData
 
         method FieldValue(par_cName,par_xValue)                           //To set a field (par_cName) in the Table() to the a value (non array). The value will be formatted for the engine type.
         method FieldExpression(par_cName,par_cValue)                      //To set a field (par_cName) in the Table() to an expression to be passed to the server. For example "now()"
-        method FieldArray(par_cName,par_aValue)                           //Only for PostgreSQL. To set a field (par_cName) in the Table() to the an array of values
+        method FieldArray(par_cName,par_xValue)                           //Only for PostgreSQL. To set a field (par_cName) in the Table() to the an array of values
 
 
         method ErrorMessage()                                             //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add(), :Update(), :Delete()
@@ -130,37 +130,47 @@ class hb_orm_SQLData
         method Join(par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...)                        // Join Tables
         method ReplaceJoin(par_nJoinNumber,par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...)  // Replace a Join tables definition
 
-        method Where(par_cExpression,...)                                                             // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
+        method Where(par_cExpression,...)                                                              // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
         method ReplaceWhere(par_nWhereNumber,par_cExpression,...)                                      // Replace a Where definition
 
         method Having(par_cExpression,...)                                                             // Adds Having condition. Will return a handle that can be used later by ReplaceHaving()
-        method ReplaceHaving(par_nHavingNumber,par_cExpression,...)                                     // Replace a Having definition
+        method ReplaceHaving(par_nHavingNumber,par_cExpression,...)                                    // Replace a Having definition
 
-        method KeywordCondition(par_cKeywords,par_cFieldToSearchFor,par_cOperand,par_lAsHaving)           // Creates Where or Having conditions as multi text search in fields.
+        method KeywordCondition(par_cKeywords,par_cFieldToSearchFor,par_cOperand,par_lAsHaving)        // Creates Where or Having conditions as multi text search in fields.
         
         method GroupBy(par_cExpression)                                                                // Add a Group By definition
-        method OrderBy(par_cExpression,par_cDirection)                                                  // Add an Order By definition    par_cDirection = "A"scending or "D"escending
-        method DistinctOn(par_cExpression,par_cDirection)                                               // PostgreSQL ONLY. Will use the "distinct on ()" feature and Add an Order By definition    par_cDirection = "A"scending or "D"escending
+        method OrderBy(par_cExpression,par_cDirection)                                                 // Add an Order By definition    par_cDirection = "A"scending or "D"escending
+        method DistinctOn(par_cExpression,par_cDirection)                                              // PostgreSQL ONLY. Will use the "distinct on ()" feature and Add an Order By definition    par_cDirection = "A"scending or "D"escending
 
-        method ResetOrderBy()                                                                         // Delete all OrderBy definitions
+        method ResetOrderBy()                                                                          // Delete all OrderBy definitions
         method ReadWrite(par_lValue)                                                                   // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable
 
-        method AddLeadingBlankRecord()                                                                // If the result cursor should have a leading blank record, used mainly to create the concept of "not-selected" row
+        method AddLeadingBlankRecord()                                                                 // If the result cursor should have a leading blank record, used mainly to create the concept of "not-selected" row
         method AddLeadingRecords(par_cCursorName)                                                      // Specify to add records from par_cCursorName as leading record to the future result cursor
 
         method SetExplainMode(par_nMode)                                                               // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
-        method SQL(par_1)                                                                             // Assemble and Run SQL command
-        method Count()                                                                                // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error. The par_SQLID is optional (used if reporting error info).
+        method SQL(par_1)                                                                              // Assemble and Run SQL command
+        method Count()                                                                                 // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error. The par_SQLID is optional (used if reporting error info).
 
-        method GetLastEventId() INLINE ::p_EventId                                                    // Will return the Last :Table() EventID. Useful to report where a problem occurred. 
-        method LastSQL()        INLINE ::p_LastSQLCommand                                             // Get the last sent SQL command executed
-        method LastRunTime()    INLINE ::p_LastRunTime                                                // Get the last execution time in seconds
+        method GetLastEventId() INLINE ::p_EventId                                                     // Will return the Last :Table() EventID. Useful to report where a problem occurred. 
+        method LastSQL()        INLINE ::p_LastSQLCommand                                              // Get the last sent SQL command executed
+        method LastRunTime()    INLINE ::p_LastRunTime                                                 // Get the last execution time in seconds
 
-        method Get(par_iKey)                                                                          // Returns an Object with properties matching a record referred by primary key 
-                                                                                                      //Either use (<par_cSchemaAndTableName>,<par_iKey>)   or  (<par_iKey>))  as parameters
+        method Get(par_iKey)                                                                           // Returns an Object with properties matching a record referred by primary key 
+                                                                                                       // Either use (<par_cSchemaAndTableName>,<par_iKey>)   or  (<par_iKey>))  as parameters
 
         method FormatDateForSQLUpdate(par_dDate)
         method FormatDateTimeForSQLUpdate(par_tDati,par_nPrecision)
+
+        method SaveFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName)      // Where par_cFieldName must be of type OID. Will store in PostgreSQL a file using Large Objects
+                                                                                                                    // return true of false. If false call ::ErrorMessage() to get more information
+
+        method GetFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName)       // Will create a file at par_cFullPathFileName from the content previously saved
+                                                                                                                    // return true of false. If false call ::ErrorMessage() to get more information
+
+        method DeleteFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName)                          // To remove the file from the table and nullify par_cFieldName
+                                                                                                                    // return true of false. If false call ::ErrorMessage() to get more information
+
 
 
     DESTRUCTOR destroy()

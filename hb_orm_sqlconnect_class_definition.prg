@@ -41,7 +41,7 @@ class hb_orm_SQLConnect
     exported:
         data p_Schema  init {=>}                                         //List of Tables Names. Each element is a 2 cell array ["Hash of Field Definition","Hash of Index Definitions"]. Named it with a leading "p_" to be threaded as internal.
         data Connected init .f.                                          //true if connected to a server
-        data p_hb_orm_version init HB_ORM_BUILDVERSION
+        data p_hb_orm_version init HB_ORM_BUILDVERSION READONLY
         method SetBackendType(par_cName)                                 // For Example, "MariaDB","MySQL","PostgreSQL"
         method GetSQLEngineType()     inline ::p_SQLEngineType           // 1 for"MariaDB" and "MySQL", 2 for "PostgreSQL"
         method SetDriver(par_cName)

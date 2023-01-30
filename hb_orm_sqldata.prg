@@ -175,7 +175,6 @@ local l_xResult := NIL
 local l_cFieldName
 local l_aErrors := {}
 local l_nPos
-local l_aFieldInfo
 
 if !empty(par_cName)
     // Due to handling SchemaName+TableName or only TableName, the simplest is to ignore table names info in par_cName.
@@ -631,10 +630,10 @@ method Update(par_iKey) class hb_orm_SQLData                                  //
 
 local l_nSelect
 local l_cSQLCommand
-local l_cFieldName,l_aFieldInfo
+local l_cFieldName
+local l_aFieldInfo
 local l_aValue
 local l_xValue
-local l_cValues
 local l_cFieldValue
 local l_cArrayValue
 local l_oField
@@ -1268,9 +1267,9 @@ asize(::p_OrderBy,0)
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method ReadWrite(par_iValue) class hb_orm_SQLData            // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable
+method ReadWrite(par_lValue) class hb_orm_SQLData            // Was used in VFP ORM, not the Harbour version, since the result cursors are always ReadWriteable
 
-if pcount() == 0 .or. par_iValue
+if pcount() == 0 .or. par_lValue
     ::p_CursorUpdatable := .t.
 else
     ::p_CursorUpdatable := .f.
@@ -2751,7 +2750,6 @@ return l_cResult
 method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors) class hb_orm_SQLData
 local l_lResult := .t.
 local l_cValue  := NIL
-local l_xValue
 local l_cFieldType := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
 local l_cValueType := Valtype(par_xValue)                       //See https://github.com/Petewg/harbour-core/wiki/V
 local l_nFieldLen,l_nFieldDec
@@ -2954,6 +2952,15 @@ else
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" a string',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+        exit
+    case "OID" // oid
+        if l_cValueType == "N"
+            // Not Testing if in range
+            l_cValue := hb_ntoc(par_xValue)
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an oid',hb_orm_GetApplicationStack()})
             l_lResult := .f.
         endif
         exit
@@ -3194,6 +3201,14 @@ else
         endif
 
         exit
+    case  "OID" // oid
+        if l_cValueType == "N"
+            l_cValue := hb_ntoc(par_xValue)
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+        exit
     otherwise // "?" Unknown
         AAdd(l_aErrors,{par_cTableName,par_nKey,"Skipped "+par_cAction+" unknown value type: "+l_cValueType+' Field "'+par_cFieldName+'" of Unknown type',hb_orm_GetApplicationStack()})
         l_lResult := .f.
@@ -3263,6 +3278,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cCast := [uuid]
     case par_cFieldType == "JS"
         l_cCast := [json]
+    case par_cFieldType == "OID"
+        l_cCast := [oid]
     otherwise
         l_cCast := ""
     endcase
@@ -3367,4 +3384,155 @@ endcase
 
 return l_lResult
 
+//-----------------------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------
+method SaveFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName) class hb_orm_SQLData   // Where par_cFieldName must be of type OID. Will store in PostgreSQL a file using Large Objects
+local l_lResult := .t.                                                                                                        // return true of false. If false call ::ErrorMessage() to get more information
+local l_oData
+local l_cSQLCommand
+local l_iOid
+::p_ErrorMessage := ""
+
+do case
+case pcount() < 5
+    l_lResult := .f.
+    ::p_ErrorMessage := [Missing Parameter.]
+case empty(par_cFullPathFileName)
+    l_lResult := .f.
+    ::p_ErrorMessage := [Empty File Name.]
+case !hb_FileExists(par_cFullPathFileName)
+    l_lResult := .f.
+    ::p_ErrorMessage := [File is not present.]
+otherwise
+    ::Table(par_xEventId,par_cSchemaAndTableName)
+    ::Column(par_cOidFieldName,"oid")
+    l_oData := ::Get(par_iKey)
+    if hb_IsNil(l_oData)
+        //The :Get will already set an error message
+        l_lResult := .f.
+    else
+        if !(hb_IsNil(l_oData:oid) .or. l_oData:oid == 0)  // Delete the previous file
+            l_cSQLCommand := [select lo_unlink(]+trans(l_oData:oid)+[);]
+            if ::p_oSQLConnection:SQLExec(l_cSQLCommand,"TempCursorSaveFile")
+                if TempCursorSaveFile->(reccount()) == 1 .and. TempCursorSaveFile->lo_unlink == 1
+                    ::Table(par_xEventId,par_cSchemaAndTableName)
+                    ::Field(par_cOidFieldName,nil)
+                    if !::Update(par_iKey)
+                        //The :Update will already set an error message
+                        l_lResult := .f.
+                    endif
+                else
+                    ::p_ErrorMessage := [Failed to delete previous version of the file.]
+                    l_lResult := .f.
+                endif
+            else
+                l_lResult := .f.
+            endif
+            CloseAlias("TempCursorSaveFile")
+        endif
+        if l_lResult
+            // Save the file now.
+            ::Table(par_xEventId,par_cSchemaAndTableName)
+            ::FieldExpression(par_cOidFieldName,[lo_import(']+par_cFullPathFileName+[')])
+            if !::Update(par_iKey)
+                //The :Update will already set an error message
+                l_lResult := .f.
+            endif
+        endif
+    endif
+endcase
+
+return l_lResult
+//-----------------------------------------------------------------------------------------------------------------
+method GetFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName) class hb_orm_SQLData    // Will create a file at par_cFullPathFileName from the content previously saved
+local l_lResult := .t.                                                                                                        // return true of false. If false call ::ErrorMessage() to get more information
+local l_oData
+local l_cSQLCommand
+local l_iOid
+::p_ErrorMessage := ""
+
+//Example: select lo_export(178171, 'd:\LastExport_restored1.Zip');
+
+do case
+case pcount() < 5
+    l_lResult := .f.
+    ::p_ErrorMessage := [Missing Parameter.]
+case empty(par_cFullPathFileName)
+    l_lResult := .f.
+    ::p_ErrorMessage := [Empty File Name.]
+case hb_FileExists(par_cFullPathFileName)
+    l_lResult := .f.
+    ::p_ErrorMessage := [File already present. May not overwrite file.]
+otherwise
+    ::Table(par_xEventId,par_cSchemaAndTableName)
+    ::Column(par_cOidFieldName,"oid")
+    l_oData := ::Get(par_iKey)
+    if hb_IsNil(l_oData)
+        //The :Get will already set an error message
+        l_lResult := .f.
+    else
+        if !(hb_IsNil(l_oData:oid) .or. l_oData:oid == 0)
+            l_cSQLCommand := [select lo_export(]+trans(l_oData:oid)+[,']+par_cFullPathFileName+[');]
+            if ::p_oSQLConnection:SQLExec(l_cSQLCommand,"TempCursorSaveFile")
+                if TempCursorSaveFile->(reccount()) == 1 .and. TempCursorSaveFile->lo_export == 1
+                    l_lResult := .t.
+                else
+                    ::p_ErrorMessage := [Failed to get file.]
+                    l_lResult := .f.
+                endif
+            else
+                l_lResult := .f.
+            endif
+            CloseAlias("TempCursorSaveFile")
+        else
+            ::p_ErrorMessage := [No file to get.]
+            l_lResult := .f.
+        endif
+    endif
+endcase
+
+return l_lResult
+//-----------------------------------------------------------------------------------------------------------------
+method DeleteFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName) class hb_orm_SQLData                       // To remove the file from the table and nullify par_cFieldName
+local l_lResult := .t.                                                                                                        // return true of false. If false call ::ErrorMessage() to get more information
+local l_oData
+local l_cSQLCommand
+local l_iOid
+::p_ErrorMessage := ""
+
+do case
+case pcount() < 4
+    l_lResult := .f.
+    ::p_ErrorMessage := [Missing Parameter.]
+otherwise
+    ::Table(par_xEventId,par_cSchemaAndTableName)
+    ::Column(par_cOidFieldName,"oid")
+    l_oData := ::Get(par_iKey)
+    if hb_IsNil(l_oData)
+        //The :Get will already set an error message
+        l_lResult := .f.
+    else
+        if !(hb_IsNil(l_oData:oid) .or. l_oData:oid == 0)  // Delete the file
+            l_cSQLCommand := [select lo_unlink(]+trans(l_oData:oid)+[);]
+            if ::p_oSQLConnection:SQLExec(l_cSQLCommand,"TempCursorSaveFile")
+                if TempCursorSaveFile->(reccount()) == 1 .and. TempCursorSaveFile->lo_unlink == 1
+                    ::Table(par_xEventId,par_cSchemaAndTableName)
+                    ::Field(par_cOidFieldName,nil)
+                    if !::Update(par_iKey)
+                        //The :Update will already set an error message
+                        l_lResult := .f.
+                    endif
+                else
+                    ::p_ErrorMessage := [Failed to delete previous version of the file.]
+                    l_lResult := .f.
+                endif
+            else
+                l_lResult := .f.
+            endif
+            CloseAlias("TempCursorSaveFile")
+        endif
+    endif
+endcase
+
+return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
