@@ -12,6 +12,9 @@
 //=================================================================================================================
 Function Main()
 
+local l_lInDocker := (hb_GetEnv("InDocker","False") == "True") .or. File("/.dockerenv")
+local l_cOutputFolder := iif(l_lInDocker,"Output/","Output\")
+
 local l_oCursor1
 local l_nLoop
 local l_iResult
@@ -27,6 +30,8 @@ hb_orm_SendToDebugView("[Harbour] Main")
 //?"------------------------------------------------------"
 
 hb_cdpSelect("UTF8EX") 
+
+hb_DirCreate(l_cOutputFolder)
 
 //=====================================================================================
 l_oCursor1 := hb_Cursor()
@@ -71,10 +76,10 @@ with object l_oCursor1
     
 
     :SetOrder("upperfname")
-    ExportTableToHtmlFile("table007","Cursor_table007Records_fname","SQLMix",10,20,.t.)
+    ExportTableToHtmlFile("table007",l_cOutputFolder+"Cursor_table007Records_fname","SQLMix",10,20,.t.)
     
     :SetOrder("upperlnameandfname")  //upperlname
-    ExportTableToHtmlFile("table007","Cursor_table007Records_lname","SQLMix",10,20,.t.)
+    ExportTableToHtmlFile("table007",l_cOutputFolder+"Cursor_table007Records_lname","SQLMix",10,20,.t.)
 
     //:Close()
     :RemoveField("Key")
@@ -86,7 +91,7 @@ with object l_oCursor1
     :AppendBlank()
     :InsertRecord({"fname"=>"Toni","lname"=>"Curtis","dob"=>date(),"info"=>"Hero"})
     :InsertRecord({"fname"=>"Albert","lname"=>"Einstein","dob"=>{^ 1879-03-14},"info"=>"Genius"})
-    ExportTableToHtmlFile("table008","Cursor_table008Records","SQLMix",10,20,.t.)
+    ExportTableToHtmlFile("table008",l_cOutputFolder+"Cursor_table008Records","SQLMix",10,20,.t.)
 
     l_tTimeStamp1  := hb_DateTime()
     for l_nLoop :=1 to 1000    //000
@@ -96,7 +101,7 @@ with object l_oCursor1
 
     ?"Reccount in alias "+alias()+" ="+trans(reccount())
     ?"Run Time in alias "+alias()+" = "+alltrim( str((l_tTimeStamp2-l_tTimeStamp1)*(24*3600*1000),10) )+" (ms)"
-    ExportTableToHtmlFile("table008","Cursor_table008ExtraRecords","SQLMix With Extra Records",10,20,.t.)
+    ExportTableToHtmlFile("table008",l_cOutputFolder+"Cursor_table008ExtraRecords","SQLMix With Extra Records",10,20,.t.)
 
 
 endwith

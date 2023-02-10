@@ -1,7 +1,7 @@
 -hbexe
 
 #To enabled progressing recompilation uncomment the following line
-#-inc
+-inc
 
 #used for VSCODE debugger. 
 #Will make the EXE Asynch if called from CMD prompt
@@ -21,6 +21,7 @@
 -lhb_vfp
 #following will force linking of all hb_vfp modules
 ${HB_VFP_ROOT}\build\win64\${HB_COMPILER}\${BuildMode}\hb_vfp_windows.hbx
+hbwin.hbc
 
 
 #To include the hb_orm module, and even alow its debugging
@@ -42,5 +43,7 @@ hbct.hbc
 
 #To also create a list of all the object files linked uncomment the following line
 #-map
+
+hbwin.hbc
 
 SQL_CRUD.hbm

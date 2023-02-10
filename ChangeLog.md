@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 02/10/2023 v 3.6
+* Fixed make files in examples, to handle updated Harbour_VFP.
+
 ## 01/29/2023 v 3.5
 * Additional parameter in function hb_orm_PostgresqlEncodeUTF8String, allowing to add extra ascii characters to be escaped.
 * Support to OID (Object ID in PostgreSQL natively, in MySQL as a BIGINT). This was needed to provide support to Large Objects in PostgreSQL, allowing to store up to 4TB in a single column/record (Max 32TB total in a "database").

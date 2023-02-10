@@ -19,7 +19,8 @@
         "harbour.decorator":true
     }
 
-    ,"mounts": ["source=C:\\Harbour_VFP,target=/src/Harbour_VFP,type=bind,consistency=default",
+    ,"mounts": ["source=${localWorkspaceFolder}\\..\\BuildTools,target=${containerWorkspaceFolder}/../BuildTools,type=bind,consistency=default",
+                "source=C:\\Harbour_VFP,target=/src/Harbour_VFP,type=bind,consistency=default",
                 "source=C:\\Harbour_ORM,target=/src/Harbour_ORM,type=bind,consistency=default"]
 
     // Add the IDs of extensions you want installed when the container is created.

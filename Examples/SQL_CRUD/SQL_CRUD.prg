@@ -8,7 +8,7 @@ REQUEST HB_CODEPAGE_UTF8EX
 //=================================================================================================================
 Function Main()
 
-local l_lInDocker := File("/.dockerenv")
+local l_lInDocker := (hb_GetEnv("InDocker","False") == "True") .or. File("/.dockerenv")
 local l_cOutputFolder := iif(l_lInDocker,"Output/","Output\")
 
 local l_lAccessPostgresql := .t.
@@ -56,6 +56,10 @@ local l_iLiquidWater
 local l_iLiquidOil
 local l_iLiquidMilk
 
+local l_cFileName
+local l_cFullFileName
+
+// local l_iPID := el_GetProcessId()
 
 altd()
 hb_cdpSelect("UTF8EX") 
@@ -108,6 +112,7 @@ if l_lAccessPostgresql
         ?"PostgreSQL - ORM version - "+:p_hb_orm_version
         :PostgreSQLIdentifierCasing := HB_ORM_POSTGRESQL_CASE_SENSITIVE
         :PostgreSQLHBORMSchemaName := "MyDataDic"
+// altd()
         l_iSQLHandle := :Connect()
         do case
         case l_iSQLHandle == 0
@@ -143,7 +148,7 @@ hb_orm_SendToDebugView("Will Initialize l_hSchemaDefinitionA")
 l_hSchemaDefinitionA := ;
 {"dbf001"=>{;   //Field Definition
 {"key"          =>{,  "I",   0,  0,"+"};
-,"customer_name"=>{,  "C",  51,  0,}};
+,"customer_name"=>{,  "C",  50,  0,}};
 ,;   //Index Definition
 NIL};
 ,"dbf002"=>{;   //Field Definition
@@ -226,6 +231,7 @@ NIL};
 ,"json1_without_null" =>{   , "JS",   0,  0,""};
 ,"json2_with_null"    =>{   , "JS",   0,  0,"N"};
 ,"big_integer"        =>{   , "IB",   0,  0,"N"};
+,"small_integer"      =>{   , "IS",   0,  0,"N"};
 ,"money"              =>{   ,  "Y",   0,  0,};
 ,"char10"             =>{   ,  "C",  10,  0,"N"};
 ,"varchar10"          =>{   , "CV",  10,  0,"N"};
@@ -282,14 +288,10 @@ hb_orm_SendToDebugView("Initialized l_hSchemaDefinitionA")
 hb_orm_SendToDebugView("Will Initialize l_hSchemaDefinitionB")
 
 l_hSchemaDefinitionB := ;
-{"dbf001"=>{;   //Field Definition
-{"key"          =>{,  "I",   0,  0,"+"};
-,"customer_name"=>{,  "C",  50,  0,}};
-,;   //Index Definition
-NIL};
-,"dbf002"=>{;   //Field Definition
-{"key"     =>{,  "I",   0,  0,"+"};
-,"p_dbf001"=>{,  "I",   0,  0,}};
+{"set003.ListOfFiles"=>{;   //Field Definition
+{"key"                      =>{   ,  "I",   0,  0,"+"};
+,"file_name"                =>{   ,  "C", 120,  0,"N"};
+,"reference_to_large_object"=>{   ,"OID",   0,  0,"N"}};
 ,;   //Index Definition
 NIL};
 ,"set003.cust001"=>{;   //Field Definition
@@ -335,28 +337,45 @@ if l_lAccessPostgresql
         l_nVersion := l_oSQLConnection2:GetSchemaDefinitionVersion("AllPostgreSQL v1")
         l_oSQLConnection2:SetSchemaDefinitionVersion("AllPostgreSQL v1" ,l_nVersion+1)
     endif
-    hb_orm_SendToDebugView("Initialized l_hSchemaDefinitionB")
 endif
 
 //===========================================================================================================================
 if l_lAccessMariaDB
     if l_oSQLConnection1:Connected
-        hb_orm_SendToDebugView("MariaDB - Will GenerateCurrentSchemaHarbourCode")
-        l_oSQLConnection1:GenerateCurrentSchemaHarbourCode(l_cOutputFolder+"CurrentSchema_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_.txt")
-        hb_orm_SendToDebugView("MariaDB - Done CurrentSchema_PostgreSQL_...text")
+        l_cFullFileName := l_cOutputFolder+"BeforeUpdatesSchema_MariaDB_"+l_oSQLConnection1:GetDatabase()+".txt"
+        hb_orm_SendToDebugView("MariaDB - Will Generate file: "+l_cFullFileName)
+        l_oSQLConnection1:GenerateCurrentSchemaHarbourCode(l_cFullFileName)
+        hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
 
         // altd()
         // l_cSQLScript := l_cLastError := ""
         if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hSchemaDefinitionA),,@l_cSQLScript,@l_cLastError) > 0
-            hb_orm_SendToDebugView("MariaDB - Updated MigrationSqlScript_MariaDB_....txt")
+            hb_orm_SendToDebugView("MariaDB - Updated Schema with Definition A")
         else
             if !empty(l_cLastError)
-                hb_orm_SendToDebugView("MariaDB - Failed Migrate MigrationSqlScript_MariaDB_....txt")
-                hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+".txt",l_cLastError)
+                l_cFullFileName := l_cOutputFolder+"MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+"_A.txt"
+                hb_MemoWrit(l_cFullFileName,l_cLastError)
+                hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
             endif
         endif
-        // altd()
-        hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+".txt",l_cSQLScript)
+        l_cFullFileName := l_cOutputFolder+"MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_A.txt"
+        hb_MemoWrit(l_cFullFileName,l_cSQLScript)
+        hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
+
+
+        l_cSQLScript := ""
+        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hSchemaDefinitionB),,@l_cSQLScript,@l_cLastError) > 0
+            hb_orm_SendToDebugView("MariaDB - Updated Schema with Definition A")
+        else
+            if !empty(l_cLastError)
+                l_cFullFileName := l_cOutputFolder+"MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+"_B.txt"
+                hb_MemoWrit(l_cFullFileName,l_cLastError)
+                hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
+            endif
+        endif
+        l_cFullFileName := l_cOutputFolder+"MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_B.txt"
+        hb_MemoWrit(l_cFullFileName,l_cSQLScript)
+        hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
 
     endif
 endif
@@ -367,12 +386,12 @@ if l_lAccessPostgresql
         l_oSQLConnection2:SetCurrentSchemaName("set001")
 
         hb_orm_SendToDebugView("PostgreSQL - Will GenerateCurrentSchemaHarbourCode")
-        l_oSQLConnection2:GenerateCurrentSchemaHarbourCode(l_cOutputFolder+"CurrentSchema_PostgreSQL_"+l_oSQLConnection2:GetDatabase()+"_.txt")
+        l_oSQLConnection2:GenerateCurrentSchemaHarbourCode(l_cOutputFolder+"CurrentSchema_PostgreSQL_"+l_oSQLConnection2:GetDatabase()+".txt")
         hb_orm_SendToDebugView("PostgreSQL - Done CurrentSchema_PostgreSQL_...text")
 
         l_cSQLScript := ""
         if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hSchemaDefinitionA),,@l_cSQLScript,@l_cLastError) > 0
-            hb_orm_SendToDebugView("PostgreSQL - Updated MigrationSqlScript_PostgreSQL_set001....txt")
+            hb_orm_SendToDebugView("PostgreSQL - Updated MigrationSqlScript_PostgreSQL_set001.txt")
         else
             if !empty(l_cLastError)
                 hb_orm_SendToDebugView("PostgreSQL - Failed Migrate MigrationSqlScript_PostgreSQL_set001_....txt")
@@ -398,6 +417,10 @@ if l_lAccessPostgresql
 
 
 
+
+
+
+
         l_oSQLConnection2:SetCurrentSchemaName(l_cPreviousSchemaName)
         
 
@@ -411,6 +434,7 @@ if l_lAccessPostgresql
     endif
 endif
 //===========================================================================================================================
+
 if l_lAccessMariaDB
     if l_oSQLConnection1:Connected
         l_oDB1 := hb_SQLData(l_oSQLConnection1)
@@ -464,6 +488,7 @@ if l_lAccessMariaDB
             :Column("table003.Boolean"    ,"table003_Boolean")
 
             :SQL("Table003Records")
+            ? :LastSQL()
 
 // altd()
             if hb_orm_isnull("Table003Records","table003_Bigint")
@@ -582,6 +607,68 @@ if l_lAccessPostgresql
         with object l_oDB2
             :UseConnection(l_oSQLConnection2)
 
+
+
+//Temporary code used to test SaveFile() .... methods
+            // :Table("8086c321-f176-4db9-bb25-6cfcf87c58ba","set003.ListOfFiles")
+            // :Field("file_name","LastExport.Zip")
+            // if :Add()
+            //     l_nKey := :Key()
+            //     :SaveFile("f5a83e74-1246-4f91-9db3-7842570a080a","set003.ListOfFiles",l_nKey,"reference_to_large_object","d:\LastExport.Zip")
+            // endif
+
+            // l_nKey := 1
+            // l_cFileName := "build_harbour.sh"
+            // :Table("8086c321-f176-4db9-bb25-6cfcf87c58bb","set003.ListOfFiles")
+            // :Field("file_name",l_cFileName)
+            // if :Update(l_nKey)
+            //     :SaveFile("f5a83e74-1246-4f91-9db3-7842570a080a","set003.ListOfFiles",l_nKey,"reference_to_large_object","d:\"+l_cFileName)
+            // endif
+
+            // l_nKey := 1
+            // if !:DeleteFile("f5a83e74-1246-4f91-9db3-7842570a080c","set003.ListOfFiles",l_nKey,"reference_to_large_object")  //
+            //     ?"1-ERROR "+:ErrorMessage()
+            // endif
+
+            // l_nKey := 2
+            // if !:GetFile("f5a83e74-1246-4f91-9db3-7842570a080d","set003.ListOfFiles",l_nKey,"reference_to_large_object","d:\Bogus2.Zip")
+            //     ?"2-ERROR "+:ErrorMessage()
+            // endif
+
+
+            // // Code to test how index using expression functions and also searching on shorter text
+            // :Table("123456","set003.ListOfFiles","ListOfFiles")
+            // :Column("ListOfFiles.key","key")
+            // :Column("ListOfFiles.file_name","file_name")
+            // :SQL("ListOfFiles")
+            // with object :p_oCursor
+            //     // :Index("tag1","padr(trans(key)+'*'+upper(alltrim(file_name)),240)")
+            //     // :Index("tag1","padr('2'+upper(alltrim(file_name)),240)")
+            //     // :Index("tag1","padr(alltrim(str(key))+upper(alltrim(file_name)),240)")
+                
+            //     :Index("tag1","padr(trans(key)+'*'+upper(alltrim(file_name)),240)")
+            //     :Index("tag2","padr(alltrim(str(key))+'*'+upper(alltrim(file_name)),240)")
+
+            //     // :Index("tag1","padr(alltrim(str(key))+'*'+upper(alltrim(file_name)),240)")
+            //     // :Index("tag2","alltrim(str(key))+'*'+upper(strtran(file_name,' ',''))+'*',240)")
+            //     :CreateIndexes()
+            // endwith
+            // select ListOfFiles
+            // scan all
+            //     ?"Tag1 Index",">"+padr(trans(ListOfFiles->key)+'*'+upper(alltrim(ListOfFiles->file_name)),240)+"<"
+            // endscan
+            // ExportTableToHtmlFile("ListOfFiles",l_cOutputFolder+"Postgresql_ListOfFiles","From Postgresql",,,.t.)
+            // ?"Seek test 001",vfp_seek(upper("LastExport.Zip"),"ListOfFiles","tag1"),ListOfFiles->key
+            // ?"Seek test 002 - tag1",vfp_seek(upper("2*LastExp")       ,"ListOfFiles","tag1"),ListOfFiles->key
+            // ?"Seek test 002 - tag2",vfp_seek(upper("2*LastExp")       ,"ListOfFiles","tag2"),ListOfFiles->key
+            // ?"Seek test 003",vfp_seek(upper("build")         ,"ListOfFiles","tag1"),ListOfFiles->key
+
+
+
+
+
+
+
             :Table("PostgreSQLAddAllTypes","alltypes")
             :Field("integer"            ,123)
             :Field("big_integer"        ,10**15)
@@ -617,8 +704,9 @@ if l_lAccessPostgresql
             endif
 
 ? "Will display :LastSQL()"
-l_cLastSQL := :LastSQL()
-? l_cLastSQL
+? :LastSQL()
+// l_cLastSQL := :LastSQL()
+// ? l_cLastSQL
 
             :Table( "fc20f0e9-fb3e-4094-9df3-591095385a1b","alltypes")
             :Column("alltypes.key"               ,"key")
@@ -761,6 +849,7 @@ endif
             :Join("inner","table002","","table002.p_table001 = table001.key")
             :SQL("AllRecords")
 
+            ? :LastSQL()
             // l_cLastSQL := :LastSQL()
             // altd()
 
@@ -929,7 +1018,7 @@ endif
 
             :SQL("AllItems")
 
-
+            ? :LastSQL()
             // l_cLastSQL := :LastSQL()
             // altd()
 
