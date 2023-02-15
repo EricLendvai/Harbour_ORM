@@ -15,27 +15,13 @@
 
 -obuild/lin64/${HB_COMPILER}/${BuildMode}/${EXEName}.exe
 
-# HB_VFP package
--incpath=${HB_VFP_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
 -L${HB_VFP_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
--lhb_vfp
-#following will force linking of all hb_vfp modules
-${HB_VFP_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}/hb_vfp_linux.hbx
-hbunix.hbc
+hb_vfp.hbc
 
-
-#To include the hb_orm module, and even alow its debugging
--incpath=${HB_ORM_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
 -L${HB_ORM_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
--lhb_orm
-#following will force linking of all hb_orm modules
-${HB_ORM_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}/hb_orm_linux.hbx
+hb_orm.hbc
 
-sddodbc.hbc
 #gtwvg.hbc
-
-#for the export to html file
-hbct.hbc
 
 #for ctot ...
 #xhb.hbc

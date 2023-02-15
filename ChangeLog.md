@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 02/15/2023 v 3.7
+* Simplified distribution of library by generating hb_orm.hbc file.
+
 ## 02/10/2023 v 3.6
 * Fixed make files in examples, to handle updated Harbour_VFP.
 

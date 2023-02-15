@@ -52,7 +52,9 @@ del build\win64\%HB_COMPILER%\%BuildMode%\*.lib 2>nul
 ::  -es2      = process warning as errors
 ::  -p        = Leave generated ppo files
 
-copy *.ch build\win64\%HB_COMPILER%\%BuildMode%\
+copy *.ch  build\win64\%HB_COMPILER%\%BuildMode%\
+copy *.hbc build\win64\%HB_COMPILER%\%BuildMode%\
+
 del build\win64\%HB_COMPILER%\%BuildMode%\*.ppo
 
 :: since this is a library will also fail on warnings.

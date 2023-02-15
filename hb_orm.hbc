@@ -5,3 +5,8 @@ incpaths=.
 headers=${hb_name}.ch
 
 libs=${_HB_DYNPREF}${hb_name}${_HB_DYNSUFF}
+
+libs=sddodbc.hbc
+
+#for the export to html file
+libs=hbct.hbc

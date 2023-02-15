@@ -35,7 +35,9 @@ else
             #  -gc3      = Pure C code with no HVM
             #  -p        = Leave generated ppo files
 
-            cp *.ch build/lin64/${HB_COMPILER}/${BuildMode}/
+            cp *.ch  build/lin64/${HB_COMPILER}/${BuildMode}/
+            cp *.hbc build/lin64/${HB_COMPILER}/${BuildMode}/
+
             rm build/lin64/${HB_COMPILER}/${BuildMode}/*.ppo
             #since this is a library will also fail on warnings.
             if [ "${BuildMode}" == "debug" ] ; then

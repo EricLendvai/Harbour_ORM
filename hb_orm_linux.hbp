@@ -3,18 +3,9 @@
 #To enabled progressing recompilation uncomment the following line
 -inc
 
-#Will not include it here. Should be included in the final EXE
-#sddodbc.hbc
-
-
-#To include the hb_vfp module, and even alow its debugging
--incpath=${HB_VFP_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
-#Update the Path where the HB_VFP package is installed
 -L${HB_VFP_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
--lhb_vfp
-#following will force linking of all hb_vfp modules
-${HB_VFP_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}/hb_vfp_linux.hbx
-
+hb_vfp.hbc
+hb_vfp.hbx
 
 -workdir=build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2/
 
