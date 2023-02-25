@@ -123,5 +123,6 @@ This package can be used to query SQL backends and create the equivalent of read
 - Trigger based replication / cross backend aware.
 
 ## Documentation
+- See article [SQL Server Access with Habour ORM - Early Access](https://harbour.wiki/index.asp?page=PublicArticles&mode=show&id=210209161211&sig=5547899699).
 - View Documentation.md file for user oriented documentation
 - Vew DevelopmentNotes.md file if you are interested in the internal of this orm our would like to contribute.
