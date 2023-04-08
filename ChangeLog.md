@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 04/08/2023 v 3.7
+* Changed Dockerfiles of devcontainers to work around git install failure introduced around April 2023.
+
 ## 02/15/2023 v 3.7
 * Simplified distribution of library by generating hb_orm.hbc file.
 

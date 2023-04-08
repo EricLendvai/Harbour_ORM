@@ -5,7 +5,14 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND noninteractive
 ENV DEBCONF_NONINTERACTIVE_SEEN true
 
+# Used by running apps to detect if inside a docker container. Testing for existence of /.dockerenv may not always work.
+ENV InDocker=True
+
 RUN apt-get update && apt-get install -y apt-utils
+
+# Run update again to work around git install failure introduced around April 2023
+RUN apt-get update
+
 RUN apt-get install -y \
         libfcgi-dev \
         libapache2-mod-fcgid \
