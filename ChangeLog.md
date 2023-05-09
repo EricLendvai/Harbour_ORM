@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 05/08/2023 v 3.8
+* Fix connecting to Postgresql if password includes the "%" character.
+
 ## 04/08/2023 v 3.7
 * Changed Dockerfiles of devcontainers to work around git install failure introduced around April 2023.
 

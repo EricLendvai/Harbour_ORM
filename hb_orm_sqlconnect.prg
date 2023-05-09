@@ -214,7 +214,8 @@ otherwise
         // See: https://dev.mysql.com/doc/connector-odbc/en/connector-odbc-configuration-connection-parameters.html#codbc-dsn-option-flags
         l_cConnectionString := "SERVER="+::p_Server+";Driver={"+::p_Driver+"};USER="+::p_User+";PASSWORD="+::p_Password+";DATABASE="+::p_Database+";PORT="+AllTrim(str(::p_Port)+";OPTION=67108864;")
     case ::p_BackendType == HB_ORM_BACKENDTYPE_POSTGRESQL   // PostgreSQL
-        l_cConnectionString := "Server="+::p_Server+";Port="+AllTrim(str(::p_Port))+";Driver={"+::p_Driver+"};Uid="+::p_User+";Pwd="+::p_Password+";Database="+::p_Database+";BoolsAsChar=0;"
+        // Fix for password that include the "%" character:  https://community.powerbi.com/t5/Desktop/PostgreSQL-ODBC-auth-failed/td-p/1589649
+        l_cConnectionString := "Server="+::p_Server+";Port="+AllTrim(str(::p_Port))+";Driver={"+::p_Driver+"};Uid="+::p_User+";Pwd="+strtran(::p_Password,"%","%25")+";Database="+::p_Database+";BoolsAsChar=0;"
     otherwise
         ::p_ErrorMessage := "Invalid 'Backend Type'"
     endcase
