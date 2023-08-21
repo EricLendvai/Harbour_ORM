@@ -1330,7 +1330,6 @@ if l_lTestCombinedQueries
 
             //----------------------------------
             with object l_oDB2
-
                 :Table("f93a07dd-cd75-48f4-b0bc-5f3e5619e8ed","set001.item_category")
                 :Column("item_category.name"           ,"item_category_name")
                 :Column("item.name"                    ,"item_name")
@@ -1364,7 +1363,6 @@ if l_lTestCombinedQueries
             endwith
             //----------------------------------
             with object l_oDB3
-
                 :Table("f93a07dd-cd75-48f4-b0bc-5f3e5619e8ef","set001.item_category")
                 :Column("item_category.name"           ,"item_category_name")
                 :Column("item.name"                    ,"item_name")
@@ -1397,7 +1395,6 @@ if l_lTestCombinedQueries
             endwith
             //----------------------------------
             with object l_oDB4
-
                 :Table("f93a07dd-cd75-48f4-b0bc-5f3e5619e8ea","set001.item_category")
                 :Column("item_category.name"           ,"item_category_name")
                 :Column("item.name"                    ,"item_name")
@@ -1435,17 +1432,12 @@ if l_lTestCombinedQueries
             with object l_oCompoundQuery1
                 :AnchorAlias("56b5dea5-5efd-4323-842f-1a0963609eda","AllFruitsAndLiquids")
 
-                //Following Makes no sense, only used to test generate of CTE
-                // :AddSQLCTEQuery("Cursor1",l_oDB4)
-                // :AddSQLCTEQuery("Cursor2",l_oDB3)
-
                 :AddSQLDataQuery("AllFruits" ,l_oDB2)
                 :AddSQLDataQuery("AllLiquids",l_oDB3)
                 :AddSQLDataQuery("AllOils",l_oDB4)
 
                 :CombineQueries(COMBINE_ACTION_UNION,"AllFruitsAndLiquids",.t.,"AllFruits","AllLiquids")
                 :CombineQueries(COMBINE_ACTION_EXCEPT,"AllLiquids",.t.,"AllLiquids","AllOils")
-                // :CombineQueries(COMBINE_ACTION_EXCEPT,"AllFruits",.t.,"AllFruits","AllOils")
 
                 :SQL("ListOfFruitsAndLiquids")
                 ? :LastSQL()
@@ -1465,7 +1457,6 @@ if l_lTestCombinedQueries
             //Test out a CTE statement.
             //----------------------------------
             with object l_oDB5
-
                 :Table("f93a07dd-cd75-48f4-b0bc-5f3e5619e8eb","set001.item_category")
                 :Column("item_category.name"           ,"item_category_name")
                 :Column("count(*)"                     ,"number_of_category_items")
@@ -1489,7 +1480,6 @@ if l_lTestCombinedQueries
             //----------------------------------
 
             with object l_oDB6
-
                 :Table("f3da9a7e-0033-40af-8709-2077be896cf7","set001.item_category")
                 :Column("item_category.name"           ,"item_category_name")
                 :Column("item.name"                    ,"item_name")
@@ -1513,8 +1503,7 @@ if l_lTestCombinedQueries
             //----------------------------------
 
             with object l_oDB7
-
-:AddNonTableAliases("AllCategories")
+                :AddNonTableAliases("AllCategories")
                 :Table("f3da9a7e-0033-40af-8709-2077be896cf8","set001.item_category")
 
                 :Column("item_category.name"                     ,"item_category_name")
@@ -1523,7 +1512,6 @@ if l_lTestCombinedQueries
 
                 :Join("inner","set001.item"         ,"","item.fk_item_category = item_category.key")
                 :Join("inner","AllCategories"       ,"","AllCategories.item_category_name = item_category.name")
-//_M_ Will crash since the allcategories is not a real table. Have to allow reference to non tables. Add a method to allow "allcategories" alias
 
                 :OrderBy("item_category_name")
                 :OrderBy("item_name")
@@ -1533,13 +1521,10 @@ if l_lTestCombinedQueries
             l_oCompoundQuery2 := hb_SQLCompoundQuery(l_oSQLConnection2)
             with object l_oCompoundQuery2
                 :AnchorAlias("56b5dea5-5efd-4323-842f-1a0963609edb","AllItemsWithTotals")
-
                 :AddSQLCTEQuery("AllCategories",l_oDB5)
-
                 :AddSQLDataQuery("AllItemsWithTotals" ,l_oDB7)
-
-
                 :SQL("AllItemsWithTotals")
+
                 ? :LastSQL()
                 ?"------------------------------------"
                 ?"Number of records in AllItemsWithTotals "+alltrim(str(:Tally))
