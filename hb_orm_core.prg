@@ -17,6 +17,15 @@ if ValType(par_oConnection) == "O"
 endif
 return l_oResult
 //----------------------------------------
+function hb_SQLCompoundQuery(par_oConnection)
+local l_oResult
+
+l_oResult := hb_orm_SQLCompoundQuery():Init()   //Trick to ensure call a class construtor
+if ValType(par_oConnection) == "O"
+    l_oResult:UseConnection(par_oConnection)
+endif
+return l_oResult
+//----------------------------------------
 function hb_Cursor()
 return hb_orm_Cursor():Init()   //Trick to ensure call a class construtor
 //=================================================================================================================

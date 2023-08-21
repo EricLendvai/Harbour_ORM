@@ -7,8 +7,8 @@ class hb_orm_SQLData
     hidden:
         data p_oSQLConnection             init NIL
         data p_SQLEngineType              init 0
-        data p_SQLConnection              init -1
-        data p_ConnectionNumber           init 0
+        data p_SQLConnection              init -1    // ODBC layer connection number
+        data p_ConnectionNumber           init 0     // Unique number across all instances in current running program. Can be used to help generate some names.
         data p_Database                   init ""
         data p_SchemaName                 init ""
         data p_PrimaryKeyFieldName        init "key"        // Primary Key Field Name
@@ -26,7 +26,7 @@ class hb_orm_SQLData
 
         data p_FieldsAndValues            init {=>}   // p_FieldsAndValues[FieldName] := {nType,xFieldValue}    where nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array
 
-        data p_FieldToReturn              init {}
+        data p_ColumnToReturn             init {}
                // 1 - ""   Expression
                // 2 - ""   Alias
 
@@ -54,8 +54,6 @@ class hb_orm_SQLData
         data p_CursorName      init ""
         data p_CursorUpdatable init .f.
 
-        data p_ArrayHandle     init 0
-
         data p_LastSQLCommand        init ""
         data p_LastRunTime           init 0
 
@@ -65,11 +63,9 @@ class hb_orm_SQLData
         data p_AddLeadingRecordsCursorName   init ""
 
         data p_DistinctMode init 0            // 0 = Distinct of, 1 = Distinct on (classic), 2 = DistinctOn (postgresql)
-        data p_Force        init .f.
-        data p_NoTrack      init .f.
         data p_Limit        init 0
 
-        data p_Mode init 0   // 0 = No MYSQL, 1 = Try to Use MySQL
+        // data p_Mode init 0   // 0 = No MYSQL, 1 = Try to Use MySQL
 
         data p_NumberOfFetchedFields init 0          // Used on Select *
         data p_FetchedFieldsNames     init {}        // Used on Select *
@@ -77,18 +73,15 @@ class hb_orm_SQLData
 
         data p_MaxTimeForSlowWarning init 2.000  // number of seconds  _M_
 
-        data p_ReferenceForSQLDataStrings init NIL
-        data p_NumberOfSQLDataStrings init 0
-        data p_SQLDataStrings init {}
-               // 1 - ""
         data p_ExplainMode init 0     // 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
+
+        data p_NonTableAliases init {=>}       //List of CTE and Temp Alias to exclude from table/column auto format and validate
 
         method IsConnected()                                                    //Return .t. if has a connection
         method PrepExpression(par_cExpression,...)                               //Used to "Freeze" parameters as values in "^" places
         method ExpressionToMYSQL(par_cExpression)                                //_M_  to generalize UDF translation to backend
         method ExpressionToPostgreSQL(par_cExpression)                           //_M_  to generalize UDF translation to backend
         method FixAliasAndFieldNameCasingInExpression(par_cExpression)           // to handle the casing of tables and fields, by using the connection's :p_schema Since it is more of alias.field for now will assume alias same as table name and will use ::p_SchemaName
-        method BuildSQL(par_cAction)                                            //  par_cAction can be "Count" "Fetch"
         method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method SetEventId(par_xId)                                              // Called by Table() and Delete(). Used to identify SQL(), Add(), Update(), Delete() query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
@@ -102,11 +95,8 @@ class hb_orm_SQLData
         method UseConnection(par_oSQLConnection)
         method Echo(par_cText)
         method Table(par_xEventId,par_cSchemaAndTableName,par_cAlias)     // par_EventId can be a numeric or string. Will help in case of errors and should be unique across an application. par_cAlias is optional
-        method UsedInUnion(par_o_dl)
         method Distinct(par_lMode)
         method Limit(par_Limit)
-        method Force(par_lMode)                                           //Used for VFP ORM, to disabled rushmore optimizer
-        method NoTrack()
         method Key(par_iKey)                                              //Set the key or retrieve the last used key
 
 
@@ -127,7 +117,7 @@ class hb_orm_SQLData
         
         method Column(par_cExpression,par_cColumnsAlias,...)              //Used with the .SQL() or .Get() to specify the fields/expressions to retrieve
 
-        method Join(par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...)                        // Join Tables
+        method Join(par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...)                         // Join Tables
         method ReplaceJoin(par_nJoinNumber,par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...)  // Replace a Join tables definition
 
         method Where(par_cExpression,...)                                                              // Adds Where condition. Will return a handle that can be used later by ReplaceWhere()
@@ -171,7 +161,10 @@ class hb_orm_SQLData
         method DeleteFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName)                          // To remove the file from the table and nullify par_cFieldName
                                                                                                                     // return true of false. If false call ::ErrorMessage() to get more information
 
+        method BuildSQL(par_cAction) //  par_cAction can be "Count" "Fetch"
 
+        method AddNonTableAliases(par_aAliases)  // Used to add an alias to :p_NonTableAliases to prevent casing the aliases and columns.
+        method ClearNonTableAliases()            // Used clear :p_NonTableAliases since calling :Table() will not do so, since its own source table might be a CTE alias.
 
     DESTRUCTOR destroy()
 

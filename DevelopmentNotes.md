@@ -1,11 +1,11 @@
 # Ideas and Todos for hb_orm_Cursor
-- Check every areas marked with _M_
-- UTF8 support already exists, what about Code Pages
-- For Field assignments add auto conversion maybe?
-- Check memory use, or memory use limitation.
-- Method to push cursor to server?
-- Option to dump to DBF?
-- Fix SQLMix support to descending orders and use that support in Index() and CreateIndexes() methods
+- Check every areas marked with _M_   
+- UTF8 support already exists, what about Code Pages   
+- For Field assignments add auto conversion maybe?   
+- Check memory use, or memory use limitation.   
+- Method to push cursor to server?   
+- Option to dump to DBF?   
+- Fix SQLMix support to descending orders and use that support in Index() and CreateIndexes() methods   
 
 
 # Ideas and Todos for hb_orm_sqldata
@@ -15,6 +15,11 @@
 - Add optional Field Flags attribute to Field() method
 - Initialize the related hb_orm_cursor object's p_AutoIncrementLastValue property so newly added records will also have their auto-increment field properly set
 - Default setting of "Trimmed" field Flag attribute for related hb_orm_cursor object character fields
+- Allow MySQL Having options in PostgreSQL. In MySQL/MariaDB a "having" clause can refer to the "AS" in columns. Emulate this if the backend is PostgreSQL.   
+
+
+# Ideas and Todos for hb_orm_SQLCompoundQuery
+- Complete "List of future enhancements" in hb_orm_sqlCompoundQuery.prg.   
 
 
 # Ideas and Todos for ExportTableToHtmlFile
@@ -25,7 +30,9 @@
 # Other Ideas and Todos
 - Create an hb_orm_isnull() function that is more like the hb_isnil()
 - Add support to SQLite
-- Use in-memory SQLite for post local SQL commands.
+- Use in-memory SQLite for post local SQL commands. Or use in memory database in a PostgreSQL server in Docker Container.
+- For PostgreSQL use UNLOGGED tables for temp tables.
+- Add a feature flag to log all SQL() calls to a table in the ORM schema (NameSpace).   
 
 
 # Miscellaneous

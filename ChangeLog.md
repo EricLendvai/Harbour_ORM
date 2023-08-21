@@ -1,5 +1,13 @@
 # Harbour ORM - Change Log
 
+## 08/20/2023 V 3.9
+* Initial Support for CTE and Combined Selects via the use of a new class "hb_orm_SQLCompoundQuery" and hb_SQLCompoundQuery() constructor function. See SQL_CRUD.prg for sample use. 
+Currently only 2 selects can be combined at one time and Count() method is not supported yet (Not the the SQL count(*) function.).   
+* New methods AddNonTableAliases(par_aAliases) and ClearNonTableAliases() in hb_orm_SQLData class to register CTE aliases.   
+* CTE Alias names are case sensitive.   
+* For CTE explanations: https://www.postgresql.org/docs/current/queries-with.html   
+* For Combined SQL unions: https://www.postgresql.org/docs/current/queries-union.html   
+
 ## 05/08/2023 v 3.8
 * Fix connecting to Postgresql if password includes the "%" character.
 

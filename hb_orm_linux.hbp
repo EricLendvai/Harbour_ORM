@@ -21,12 +21,5 @@ hb_vfp.hbx
 -hbx=hb_orm_linux.hbx
 
 
-hb_orm_core.prg
-hb_orm_c.c
+hb_orm.hbm
 
-hb_orm_sqldata.prg
-hb_orm_sqlconnect.prg
-hb_orm_cursor.prg
-hb_orm_cursor_c.c
-
-ExportTableToHtmlFile.prg

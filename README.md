@@ -115,7 +115,6 @@ This package can be used to query SQL backends and create the equivalent of read
 
 ## Roadmap
 - Backup / Restore across backends. This would allow you to backup a MySQL and restore into PostgreSQL for example.
-- Add support to CTE  Common Table Expression
 - Add support to MSSQL
 - Add support to SQLite
 - PostgreSQL server side support for native Harbour language.
@@ -125,4 +124,4 @@ This package can be used to query SQL backends and create the equivalent of read
 ## Documentation
 - See article [SQL Server Access with Habour ORM - Early Access](https://harbour.wiki/index.asp?page=PublicArticles&mode=show&id=210209161211&sig=5547899699).
 - View Documentation.md file for user oriented documentation
-- Vew DevelopmentNotes.md file if you are interested in the internal of this orm our would like to contribute.
+- Vew DevelopmentNotes.md file if you are interested in the internal of this orm or would like to contribute.

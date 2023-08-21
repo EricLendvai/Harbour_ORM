@@ -20,15 +20,4 @@ hb_vfp.hbx
 #To generate an hbx file that could be consumed by client exes and other libs
 -hbx=hb_orm_windows.hbx
 
-
-hb_orm_core.prg
-hb_orm_c.c
-
-hb_orm_sqldata.prg
-hb_orm_sqlconnect.prg
-hb_orm_cursor.prg
-hb_orm_cursor_c.c
-
-ExportTableToHtmlFile.prg
-
-#bcrypt.c  Under integration
+hb_orm.hbm

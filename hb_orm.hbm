@@ -1,0 +1,13 @@
+
+hb_orm_core.prg
+hb_orm_c.c
+
+hb_orm_sqldata.prg
+hb_orm_sqlconnect.prg
+hb_orm_cursor.prg
+hb_orm_cursor_c.c
+hb_orm_SQLCompoundQuery.prg
+
+ExportTableToHtmlFile.prg
+
+#bcrypt.c  Under integration

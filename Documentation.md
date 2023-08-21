@@ -1,8 +1,6 @@
 # Harbour_ORM Documentation
 
-
 The following is the list of the 4 classes / 3 constructors defined in this ORM.
-
 
 |Class Name | Constructor Function | Use|
 |:--- | :--- | :--- |
