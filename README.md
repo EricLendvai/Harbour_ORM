@@ -57,10 +57,11 @@ The following is the list of the 4 classes / 3 constructors defined in this ORM.
 
 |Class Name | Constructor Function | Use|
 |:--- | :--- | :--- |
-|hb_orm_SQLConnect | hb_SQLConnect | Objects are used to setup a connection to a backend server.<br>One object/connection can be used by multiple hb_orm_SQLData objects. |
+|hb_orm_SQLConnect | hb_SQLConnect | Objects are used to setup a connection to a backend server.<br>One object/connection can be used by multiple hb_orm_SQLData objects.|
 |hb_orm_SQLData | hb_SQLData | Query backend and return either a hb_orm_Data or hb_orm_Cursor object.<br>Add, update or delete a record in backend server.|
 |hb_orm_Cursor | hb_Cursor | Created when calling the SQL(\<CursorName>) method of an hb_orm_SQLData object.<br>Create a local in-memory table (Cursor)|
 |hb_orm_Data |  | Created when calling the Get(...) method of a hb_orm_SQLData object.<br>Will have property names matching the requested field names.|
+|hb_orm_SQLCompoundQuery | hb_SQLCompoundQuery | CTE and Combined (union/except/intersect) Selects queries.|
 
  
 Please review the file .\Examples\SQL_CRUD\SQL_CRUD.prg file to see examples for accessing and update SQL backend data.
@@ -116,7 +117,7 @@ This package can be used to query SQL backends and create the equivalent of read
 ## Roadmap
 - Backup / Restore across backends. This would allow you to backup a MySQL and restore into PostgreSQL for example.
 - Add support to MSSQL
-- Add support to SQLite
+- Add support to sending server side query results in a Docker PostgreSQL in-memory database, enabling post backend queries.
 - PostgreSQL server side support for native Harbour language.
 - Stored functions/procedure management
 - Trigger based replication / cross backend aware.
