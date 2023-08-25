@@ -806,7 +806,7 @@ local l_aCurrentIndexDefinition
 local l_cFieldType,       l_lFieldArray,       l_nFieldLen,       l_nFieldDec,       l_cFieldAttributes,       l_lFieldAllowNull,       l_lFieldAutoIncrement,       l_cFieldDefault
 local l_cCurrentFieldType,l_lCurrentFieldArray,l_nCurrentFieldLen,l_nCurrentFieldDec,l_cCurrentFieldAttributes,l_lCurrentFieldAllowNull,l_lCurrentFieldAutoIncrement,l_cCurrentFieldDefault
 local l_lMatchingFieldDefinition
-local l_cCurrentSchemaName,l_cSchemaName
+local l_cInFocusSchemaName,l_cSchemaName
 local l_cSQLScriptPreUpdate := ""
 local l_cSQLScript := ""
 local l_cSQLScriptPostUpdate := ""
@@ -816,15 +816,22 @@ local l_cFormattedTableName
 local l_cBackendType := ""
 local l_nPos
 local l_hListOfSchemaName := {=>}
-local l_hSchemaName
-local l_cSQLScriptCreateSchemaName := ""
+local l_cSQLScriptCreateOrUpdateSchemaName := ""
+
+local l_cCurrentSchemaAndTableName
+local l_cCurrentSchemaName
+local l_cCurrentTableName
+local l_cCurrentFieldName
+
+hb_HCaseMatch(l_hListOfSchemaName,.f.)
+hb_HClear(l_hListOfSchemaName)
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cCurrentSchemaName := ""
+    l_cInFocusSchemaName := ""
     l_cBackendType        := "M"
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cCurrentSchemaName := ::GetCurrentSchemaName()
+    l_cInFocusSchemaName := ::GetCurrentSchemaName()
     l_cBackendType        := "P"
 endcase
 
@@ -851,11 +858,18 @@ for each l_hTableDefinition in par_hSchemaDefinition
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSchemaName := ""
+
+        //Will ignore "public" as NameSpace
+        if left(l_cSchemaAndTableName,len("public.")) == "public."
+            l_cSchemaAndTableName := substr(l_cSchemaAndTableName,len("public.")+1)
+        endif
+
         l_cTableName  := l_cSchemaAndTableName
+
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_nPos := at(".",l_cSchemaAndTableName)
         if empty(l_nPos)
-            l_cSchemaName         := l_cCurrentSchemaName
+            l_cSchemaName         := l_cInFocusSchemaName
             l_cTableName          := l_cSchemaAndTableName
             l_cSchemaAndTableName := l_cSchemaName+"."+l_cTableName
         else
@@ -871,6 +885,9 @@ for each l_hTableDefinition in par_hSchemaDefinition
     l_hIndexes := l_aTableDefinition[HB_ORM_SCHEMA_INDEX]
 
     if hb_IsNIL(l_aCurrentTableDefinition)
+
+// VFP_StrToFile(hb_jsonEncode(::p_Schema,.t.) ,"d:\p_Schema.txt")
+
         // Table does not exist in the current catalog
         hb_orm_SendToDebugView("Add Table: "+l_cSchemaAndTableName)
         l_cSQLScript += ::AddTable(l_cSchemaName,l_cTableName,l_hFields,.f. /*par_lAlsoRemoveFields*/)
@@ -908,6 +925,39 @@ for each l_hTableDefinition in par_hSchemaDefinition
     else
         // Found the table in the current ::p_Schema, now lets test all the fields are also there and matching
         // Test Every Fields to see if structure must be updated.
+
+//12345
+    //Test if the table name casing changed.
+    // Code under development
+        l_cCurrentSchemaAndTableName := hb_HKeyAt(::p_Schema,hb_HPos(::p_Schema,l_cSchemaAndTableName))
+        if !(l_cCurrentSchemaAndTableName == l_cSchemaAndTableName)
+            //Case Mismatch. Could be the SchemaName and/or TableName
+            do case
+            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+                l_cCurrentSchemaName := ""
+                l_cCurrentTableName  := l_cCurrentSchemaAndTableName
+
+                if !(l_cCurrentTableName == l_cTableName)
+                    l_cSQLScriptPreUpdate += ::UpdateTableName(l_cSchemaName,l_cTableName,l_cCurrentSchemaName,l_cCurrentTableName)
+                endif
+
+            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+                l_nPos := at(".",l_cCurrentSchemaAndTableName)
+                l_cCurrentSchemaName := left(l_cCurrentSchemaAndTableName,l_nPos-1)
+                l_cCurrentTableName  := substr(l_cCurrentSchemaAndTableName,l_nPos+1)
+
+                //Schema Name to be already fixed before Table compare occurs
+                if !(l_cCurrentSchemaName == l_cSchemaName)
+                    l_hListOfSchemaName[l_cSchemaName] := l_cCurrentSchemaName  // To help detect if a schema name changed.
+                endif
+
+                if !(l_cCurrentTableName == l_cTableName)
+                    l_cSQLScriptPreUpdate += ::UpdateTableName(l_cSchemaName,l_cTableName,l_cCurrentSchemaName,l_cCurrentTableName)
+                endif
+
+            endcase
+        endif
+
 
         l_cSQLScriptFieldChangesCycle1 := ""
         l_cSQLScriptFieldChangesCycle2 := ""
@@ -976,6 +1026,16 @@ for each l_hTableDefinition in par_hSchemaDefinition
 
                     else
                         //Compare the field definition using arrays l_aCurrentFieldDefinition and l_aFieldDefinition
+
+                        //123456
+                        //Test if the field Name Casing Changed
+                        l_cCurrentFieldName := hb_HKeyAt(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],hb_HPos(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName))
+                        if !(l_cCurrentFieldName == l_cFieldName)
+// hb_orm_SendToDebugView("l_cSchemaName ---->"+l_cSchemaName+"<----")
+// hb_orm_SendToDebugView("l_cTableName ---->"+l_cTableName+"<----")
+// hb_orm_SendToDebugView("l_cFieldName ---->"+l_cFieldName+"<----")
+                            l_cSQLScriptPreUpdate += ::UpdateFieldName(l_cSchemaName,l_cTableName,l_cFieldName,l_cCurrentFieldName)
+                        endif
 
                         l_cCurrentFieldType          := iif(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE] == "T","DT",l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
                         l_nCurrentFieldLen           := iif(len(l_aCurrentFieldDefinition) < 2, 0 ,hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 ))
@@ -1133,7 +1193,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
     endif
 endfor
 
-if !empty(l_cSQLScript)
+if !empty(l_cSQLScript) .or. !empty(l_cSQLScriptPreUpdate) .or. !empty(l_cSQLScriptPostUpdate) .or. !empty(l_hListOfSchemaName)
     if !empty(l_cSQLScriptPreUpdate)
         l_cSQLScript := l_cSQLScriptPreUpdate+CRLF+l_cSQLScript
     endif
@@ -1148,12 +1208,18 @@ if !empty(l_cSQLScript)
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         //When you get a connection to PostgreSQL it is always to a particular database. To access a different database, you must get a new connection.
 
-        for each l_hSchemaName in l_hListOfSchemaName
-            l_cSQLScriptCreateSchemaName += [CREATE SCHEMA IF NOT EXISTS ]+::FormatIdentifier(l_hSchemaName:__enumKey())+[;]+CRLF
+        for each l_cCurrentSchemaName in l_hListOfSchemaName
+            l_cSchemaName := l_cCurrentSchemaName:__enumKey()
+            if !hb_IsNil(l_cCurrentSchemaName)
+                if !(l_cSchemaName == l_cCurrentSchemaName)
+                    l_cSQLScriptCreateOrUpdateSchemaName += ::UpdateSchemaName(l_cSchemaName,l_cCurrentSchemaName)+CRLF
+                endif
+            endif
+            l_cSQLScriptCreateOrUpdateSchemaName += [CREATE SCHEMA IF NOT EXISTS ]+::FormatIdentifier(l_cSchemaName)+[;]+CRLF
         endfor
 
-        if !empty(l_cSQLScriptCreateSchemaName)
-            l_cSQLScript := l_cSQLScriptCreateSchemaName+l_cSQLScript
+        if !empty(l_cSQLScriptCreateOrUpdateSchemaName)
+            l_cSQLScript := l_cSQLScriptCreateOrUpdateSchemaName+l_cSQLScript
         endif
     endcase
 endif
@@ -1549,6 +1615,73 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 endcase
 
 return l_cSQLCommand+l_cAdditionalSQLCommand
+//-----------------------------------------------------------------------------------------------------------------
+method UpdateSchemaName(par_cSchemaName,par_cCurrentSchemaName) class hb_orm_SQLConnect
+local l_cSQLCommand := ""
+
+do case
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    // Schemas don't exists in MySQL Engine. If a schema name changed, the UpdateTableName will be impacted instead.
+
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    l_cSQLCommand += [ALTER SCHEMA ]+::FormatIdentifier(par_cCurrentSchemaName)+[ RENAME TO ]+::FormatIdentifier(par_cSchemaName)+[;]
+
+endcase
+
+return l_cSQLCommand
+//-----------------------------------------------------------------------------------------------------------------
+method UpdateTableName(par_cSchemaName,par_cTableName,par_cCurrentSchemaName,par_cCurrentTableName) class hb_orm_SQLConnect
+// Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
+local l_cSQLCommand := ""
+local l_cTableNameFrom
+local l_cTableNameTo
+
+do case
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    if empty(par_cCurrentSchemaName)
+        l_cTableNameFrom := par_cCurrentTableName
+    else
+        l_cTableNameFrom := par_cCurrentSchemaName+"."+par_cCurrentTableName
+    endif
+
+    if empty(par_cSchemaName)
+        l_cTableNameTo   := par_cTableName
+    else
+        l_cTableNameTo   := par_cSchemaName+"."+par_cTableName
+    endif
+
+    l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(l_cTableNameFrom)+[ RENAME TO ]+::FormatIdentifier(l_cTableNameTo)+[;]
+
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    l_cTableNameFrom := par_cSchemaName+"."+par_cCurrentTableName   // In Postgresql the Schema name would have already be renamed if needed.
+    l_cTableNameTo   := par_cTableName
+    l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(l_cTableNameFrom)+[ RENAME TO ]+::FormatIdentifier(l_cTableNameTo)+[;]
+
+endcase
+
+return l_cSQLCommand
+//-----------------------------------------------------------------------------------------------------------------
+method UpdateFieldName(par_cSchemaName,par_cTableName,par_cFieldName,par_cCurrentFieldName) class hb_orm_SQLConnect
+// Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
+local l_cSQLCommand := ""
+
+do case
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    //_M_
+    // l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
+    if empty(par_cSchemaName)
+        l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(par_cTableName)+[ RENAME COLUMN ]+::FormatIdentifier(par_cCurrentFieldName)+[ TO ]+::FormatIdentifier(par_cFieldName)+[;]
+    else
+        l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(par_cSchemaName+"."+par_cTableName)+[ RENAME COLUMN ]+::FormatIdentifier(par_cCurrentFieldName)+[ TO ]+::FormatIdentifier(par_cFieldName)+[;]
+    endif
+
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    //ALTER TABLE table_name RENAME COLUMN column_name TO new_column_name;
+    l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(par_cSchemaName+"."+par_cTableName)+[ RENAME COLUMN ]+::FormatIdentifier(par_cCurrentFieldName)+[ TO ]+::FormatIdentifier(par_cFieldName)+[;]
+
+endcase
+
+return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
 method UpdateField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition,par_aCurrentFieldDefinition) class hb_orm_SQLConnect
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
@@ -3209,7 +3342,7 @@ local l_cSQLCommand
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     TEXT TO VAR l_cSQLCommand
-INSERT INTO schematablenumber (tablename)
+INSERT INTO `SchemaTableNumber` (tablename)
 WITH
 ListOfTables AS (
     SELECT DISTINCT
@@ -3220,9 +3353,13 @@ ListOfTables AS (
 )
 SELECT AllTables.tablename
  FROM ListOfTables AS AllTables
- LEFT OUTER JOIN schematablenumber AS TablesOnFile ON AllTables.tablename = TablesOnFile.tablename
+ LEFT OUTER JOIN `SchemaTableNumber` AS TablesOnFile ON AllTables.tablename = TablesOnFile.tablename
  WHERE TablesOnFile.tablename IS NULL
     ENDTEXT
+
+    if ::MySQLEngineConvertIdentifierToLowerCase == .t.
+        l_cSQLCommand := strtran(l_cSQLCommand,"SchemaTableNumber","schematablenumber")
+    endif
 
     l_cSQLCommand := strtran(l_cSQLCommand,"-DataBase-",::GetDatabase())
 

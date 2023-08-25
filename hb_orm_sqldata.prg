@@ -734,11 +734,9 @@ if empty(::p_ErrorMessage)
                 switch l_aValue[1]
                 case 1  // Value
                     l_cFieldValue := ""
-// hb_orm_SendToDebugView("Update Step Value 1 - a")
                     if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
-// hb_orm_SendToDebugView("Update Step Value 1 - b")
                     exit
                 case 2  // Expression
                     l_cFieldValue := l_aValue[2]

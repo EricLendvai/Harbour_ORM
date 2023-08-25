@@ -141,7 +141,7 @@ case pcount() == 1
     case valtype(par_1) == "C"
         ::p_TableFullPath := ""
         ::p_CursorName    := par_1
-        l_nOutputType      := 1
+        l_nOutputType     := 1
         ::p_oCursor       := NIL
         CloseAlias(::p_CursorName)
 

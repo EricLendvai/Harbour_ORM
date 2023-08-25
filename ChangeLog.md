@@ -1,5 +1,9 @@
 # Harbour ORM - Change Log
 
+## 08/25/2023 V 3.10
+* Fix issue when changing the case of NameSpaces (Postgres Schema), Tables and Columns names. This fix will make it easy to change the case of names, while still keeping the ORM to be case-insensitive. This will handle PostgreSQL on Windows and Linux, and MySQL/MariaDB on Linux (since always lower case on Windows).   
+* On MySQL/MariaDB if the Namespace is "public", it will not be included in the file name. For example: "public.Clients" will be a "Clients" table in the "public" schema in PostgreSQL, while simply being "Clients" in MariaDB/MySQL (or "clients" if conversion to lower case occurs).   
+
 ## 08/20/2023 V 3.9
 * Initial Support for CTE and Combined Selects via the use of a new class "hb_orm_SQLCompoundQuery" and hb_SQLCompoundQuery() constructor function. See SQL_CRUD.prg for sample use. 
 Currently only 2 selects can be combined at one time and Count() method is not supported yet (Not the the SQL count(*) function.).   

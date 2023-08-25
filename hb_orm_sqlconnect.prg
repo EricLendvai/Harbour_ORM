@@ -220,6 +220,7 @@ otherwise
         ::p_ErrorMessage := "Invalid 'Backend Type'"
     endcase
     if !empty(l_cConnectionString)
+        //The following can take up to 10 seconds when accessing a VMWare Ubuntu machine to test out MySQL.
         l_SQLHandle := hb_RDDInfo( RDDI_CONNECT, { "ODBC", l_cConnectionString })
 
         if l_SQLHandle == 0
