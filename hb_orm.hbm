@@ -6,7 +6,7 @@ hb_orm_sqldata.prg
 hb_orm_sqlconnect.prg
 hb_orm_cursor.prg
 hb_orm_cursor_c.c
-hb_orm_SQLCompoundQuery.prg
+hb_orm_sqlCompoundQuery.prg
 
 ExportTableToHtmlFile.prg
 
