@@ -12,7 +12,7 @@
 //    Add support to ::p_AddLeadingBlankRecord    Also to be done in hb_orm_sqldata.prg
 
 //=================================================================================================================
-#include "hb_orm_SQLCompoundQuery_class_definition.prg"
+#include "hb_orm_sqlCompoundQuery_class_definition.prg"
 
 //-----------------------------------------------------------------------------------------------------------------
 method Init() class hb_orm_SQLCompoundQuery
