@@ -1178,6 +1178,8 @@ if !empty(par_cKeywords)
         //The following is the "VFP" way
         // l_cCondi += l_cCondiOperand + "["+l_cWord+"] $ g_upper("+par_cFieldToSearchFor+")"
 
+        l_cWord := strtran(l_cWord,"_","\_")
+
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             //_M_  Needs testing

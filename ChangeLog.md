@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 09/24/2023 V 3.12
+* Update hb_orm to allow to search on "_" characters in method KeywordCondition(), instead of being a wildcard character.
+
 ## 09/09/2023 V 3.11
 * Fix casing issue during linux build.
 
