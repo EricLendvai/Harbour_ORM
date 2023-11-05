@@ -722,13 +722,16 @@ SELECT pk
             hb_HClear(l_hSchemaFields)
 
             //Since Indexes could only exists for an existing table we simply assign to a ::p_Schema[][HB_ORM_SCHEMA_INDEX] cell
+            //Stopped added the schema name to the index names, to help fit objects length to 63 characters and in any case "Two indexes in the same schema cannot have the same name.", meaning can be the same in two different schema_name.
             select hb_orm_sqlconnect_schema_indexes
             if Reccount() > 0
                 l_cSchemaAndTableNameLast := Trim(hb_orm_sqlconnect_schema_indexes->schema_name)+"."+Trim(hb_orm_sqlconnect_schema_indexes->table_name)
+                // l_cTableNameLast := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
                 hb_HClear(l_hSchemaIndexes)
 
                 scan all
                     l_cSchemaAndTableName := Trim(hb_orm_sqlconnect_schema_indexes->schema_name)+"."+Trim(hb_orm_sqlconnect_schema_indexes->table_name)
+                    l_cTableName          := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
 
                     //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_schema
                     if hb_HHasKey(::p_Schema,l_cSchemaAndTableName)
@@ -744,8 +747,10 @@ SELECT pk
                         endif
 
                         l_cIndexName := lower(trim(field->index_name))
-                        if left(l_cIndexName,len(l_cSchemaAndTableName)+1) == lower(strtran(l_cSchemaAndTableName,".","_"))+"_" .and. right(l_cIndexName,4) == "_idx"
-                            l_cIndexName      := hb_orm_RootIndexName(l_cSchemaAndTableName,l_cIndexName)
+                        // if left(l_cIndexName,len(l_cSchemaAndTableName)+1) == lower(strtran(l_cSchemaAndTableName,".","_"))+"_" .and. right(l_cIndexName,4) == "_idx"
+                        if left(l_cIndexName,len(l_cTableName)+1) == lower(l_cTableName)+"_" .and. right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
+                            // l_cIndexName      := hb_orm_RootIndexName(l_cSchemaAndTableName,l_cIndexName)
+                            l_cIndexName      := hb_orm_RootIndexName(l_cTableName,l_cIndexName)
                             
                             l_cIndexDefinition := field->index_definition
                             l_nPos1 := hb_ati(" USING ",l_cIndexDefinition)
@@ -806,6 +811,7 @@ local l_aCurrentIndexDefinition
 local l_cFieldType,       l_lFieldArray,       l_nFieldLen,       l_nFieldDec,       l_cFieldAttributes,       l_lFieldAllowNull,       l_lFieldAutoIncrement,       l_cFieldDefault
 local l_cCurrentFieldType,l_lCurrentFieldArray,l_nCurrentFieldLen,l_nCurrentFieldDec,l_cCurrentFieldAttributes,l_lCurrentFieldAllowNull,l_lCurrentFieldAutoIncrement,l_cCurrentFieldDefault
 local l_lMatchingFieldDefinition
+local l_cMismatchType
 local l_cInFocusSchemaName,l_cSchemaName
 local l_cSQLScriptPreUpdate := ""
 local l_cSQLScript := ""
@@ -1055,28 +1061,28 @@ for each l_hTableDefinition in par_hSchemaDefinition
 
                         l_cCurrentFieldAttributes := iif(l_lCurrentFieldAllowNull,"N","")+iif(l_lCurrentFieldAutoIncrement,"+","")+iif(l_lCurrentFieldArray,"A","")
 
-// if l_cFieldName == "logical"
-//     altd()
-// endif
+                        // l_cFieldDefault        := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault       ,l_cFieldType       ,l_nFieldDec)
 
-// if upper(l_cFieldName) == upper("json1_without_null") //.and. upper(l_cTableName) == upper("table003")
-//     altd()
-// endif
-
-                        l_cFieldDefault := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault,l_cFieldType,l_nFieldDec)
+                        //Also using the nvl() below since doing the same when getting l_cCurrentFieldDefault above
+                        l_cFieldDefault := nvl(::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,l_cFieldAttributes,l_cFieldDefault),"")
 
                         l_lMatchingFieldDefinition := .t.
+                        l_cMismatchType := ""
                         do case
                         case !(l_cFieldType == l_cCurrentFieldType)   // Field Type is always defined.  !(==) is a method to deal with SET EXACT being OFF by default.
                             l_lMatchingFieldDefinition := .f.
+                            l_cMismatchType := "Field Type"
                         case l_lFieldArray != l_lCurrentFieldArray
-                            l_lMatchingFieldDefinition := .t.
+                            l_lMatchingFieldDefinition := .f.
+                            l_cMismatchType := "Field Array"
                         case !empty(el_inlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS","OID"))  //Field type with no length
                         case empty(el_inlist(l_cFieldType,"TOZ","TO","DTZ","DT")) .and. l_nFieldLen <> l_nCurrentFieldLen   //Ignore Length matching for datetime and time fields
                             l_lMatchingFieldDefinition := .f.
+                            l_cMismatchType := "Field Length"
                         case !empty(el_inlist(l_cFieldType,"C","CV","B","BV"))  //Field type with a length but no decimal
                         case l_nFieldDec  <> l_nCurrentFieldDec
                             l_lMatchingFieldDefinition := .f.
+                            l_cMismatchType := "Field Decimal"
                         endcase
 
                         if l_lMatchingFieldDefinition  // Should still test on nullable and incremental
@@ -1094,8 +1100,10 @@ for each l_hTableDefinition in par_hSchemaDefinition
                             do case
                             case !(l_cFieldAttributes == l_cCurrentFieldAttributes)
                                 l_lMatchingFieldDefinition := .f.
+                                l_cMismatchType := "Field Attribute"
                             case !(l_cFieldDefault == l_cCurrentFieldDefault)
                                 l_lMatchingFieldDefinition := .f.
+                                l_cMismatchType := "Field Default Value"
                             endcase
                         endif
 
@@ -1105,7 +1113,7 @@ for each l_hTableDefinition in par_hSchemaDefinition
 // endif
 
                         if !l_lMatchingFieldDefinition
-                            hb_orm_SendToDebugView("Table: "+l_cSchemaAndTableName+" Field: "+l_cFieldName+"  Mismatch")
+                            hb_orm_SendToDebugView("Table: "+l_cSchemaAndTableName+" Field: "+l_cFieldName+"  Mismatch: "+l_cMismatchType)
                             l_cSQLScriptFieldChanges := ::UpdateField(l_cSchemaName,;
                                                                     l_cTableName,;
                                                                     l_cFieldName,;
@@ -1145,7 +1153,8 @@ for each l_hTableDefinition in par_hSchemaDefinition
 
         if !hb_IsNIL(l_hIndexes)
             for each l_hIndexDefinition in l_hIndexes
-                l_cIndexName              := hb_orm_RootIndexName(l_cSchemaAndTableName,l_hIndexDefinition:__enumKey())
+                // l_cIndexName              := hb_orm_RootIndexName(l_cSchemaAndTableName,l_hIndexDefinition:__enumKey())
+                l_cIndexName              := hb_orm_RootIndexName(l_cTableName,l_hIndexDefinition:__enumKey())
 
 // if ("lname" == l_cIndexName) .and. l_cSchemaAndTableName == "set003.form001"
 //     altd()
@@ -1208,15 +1217,17 @@ if !empty(l_cSQLScript) .or. !empty(l_cSQLScriptPreUpdate) .or. !empty(l_cSQLScr
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         //When you get a connection to PostgreSQL it is always to a particular database. To access a different database, you must get a new connection.
 
-        for each l_cCurrentSchemaName in l_hListOfSchemaName
-            l_cSchemaName := l_cCurrentSchemaName:__enumKey()
-            if !hb_IsNil(l_cCurrentSchemaName)
-                if !(l_cSchemaName == l_cCurrentSchemaName)
-                    l_cSQLScriptCreateOrUpdateSchemaName += ::UpdateSchemaName(l_cSchemaName,l_cCurrentSchemaName)+CRLF
+        if !empty(l_cSQLScript)  // No need to create schemas unless anything else should also be done
+            for each l_cCurrentSchemaName in l_hListOfSchemaName
+                l_cSchemaName := l_cCurrentSchemaName:__enumKey()
+                if !hb_IsNil(l_cCurrentSchemaName)
+                    if !(l_cSchemaName == l_cCurrentSchemaName)
+                        l_cSQLScriptCreateOrUpdateSchemaName += ::UpdateSchemaName(l_cSchemaName,l_cCurrentSchemaName)+CRLF
+                    endif
                 endif
-            endif
-            l_cSQLScriptCreateOrUpdateSchemaName += [CREATE SCHEMA IF NOT EXISTS ]+::FormatIdentifier(l_cSchemaName)+[;]+CRLF
-        endfor
+                l_cSQLScriptCreateOrUpdateSchemaName += [CREATE SCHEMA IF NOT EXISTS ]+::FormatIdentifier(l_cSchemaName)+[;]+CRLF
+            endfor
+        endif
 
         if !empty(l_cSQLScriptCreateOrUpdateSchemaName)
             l_cSQLScript := l_cSQLScriptCreateOrUpdateSchemaName+l_cSQLScript
@@ -2291,7 +2302,9 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cIndexNameOnFile   := lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
     l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cIndexNameOnFile   := lower(par_cSchemaName)+"_"+lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
+    // Since "Two indexes in the same schema cannot have the same name."
+    // l_cIndexNameOnFile   := lower(par_cSchemaName)+"_"+lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
+    l_cIndexNameOnFile   := lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
     l_cFormattedTableName := ::FormatIdentifier(par_cSchemaName+"."+par_cTableName)
 endcase
 
@@ -3552,13 +3565,18 @@ endif
 return l_cTableName
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-static function hb_orm_RootIndexName(par_cSchemaAndTableName,par_cIndexNameOnFile)
-local l_cIndexName          := strtran(lower(par_cIndexNameOnFile),".","_")  // Had to also convert the "." to "_" to deal with MySQL lack of schema, and the orm prefixing table name with what the schema name would have been.
-local l_cSchemaAndTableName := strtran(par_cSchemaAndTableName,".","_")
-if (left(l_cIndexName,len(l_cSchemaAndTableName)+1) == lower(l_cSchemaAndTableName)+"_") .and. right(l_cIndexName,4) == "_idx"
-    l_cIndexName := substr(l_cIndexName,len(l_cSchemaAndTableName)+2,len(par_cIndexNameOnFile)-len(l_cSchemaAndTableName)-1-4)
+static function hb_orm_RootIndexName(par_cTableName,par_cIndexNameOnFile)
+// local l_cIndexName := strtran(lower(par_cIndexNameOnFile),".","_")  // Had to also convert the "." to "_" to deal with MySQL lack of schema, and the orm prefixing table name with what the schema name would have been.
+// local l_cTableName := strtran(par_cTableName,".","_")
+
+local l_cIndexName := lower(par_cIndexNameOnFile)
+local l_cTableName := par_cTableName
+
+if (left(l_cIndexName,len(l_cTableName)+1) == lower(l_cTableName)+"_") .and. right(l_cIndexName,4) == "_idx"
+    l_cIndexName := substr(l_cIndexName,len(l_cTableName)+2,len(par_cIndexNameOnFile)-len(l_cTableName)-1-4)
 endif
 return l_cIndexName
+//SchemaAndTable
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
 method SanitizeFieldDefaultFromDefaultBehavior(par_cSQLEngineType,par_cFieldType,par_cFieldAttributes,par_cFieldDefault) class hb_orm_SQLConnect

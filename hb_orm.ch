@@ -1,7 +1,7 @@
 //Copyright (c) 2023 Eric Lendvai MIT License
 
 #ifndef HB_ORM_BUILDVERSION
-#define HB_ORM_BUILDVERSION "3.12"
+#define HB_ORM_BUILDVERSION "3.13"
 
 #define HB_ORM_TRIGGERVERSION 2
 

@@ -1,5 +1,9 @@
 # Harbour ORM - Change Log
 
+## 11/05/2023 V 3.13
+* In PostgreSQL, stopped adding the Schema Name in index name. Since the restriction for index names is "Two indexes in the same schema cannot have the same name", across schema (Name Spaces) they can be the same. This will make it easier to move table to other schemas, and help reduce the change of hitting the 63 character object name length.
+* Fix minor bug on field definition compare on default values. Reduces the number of migration code being generated.
+
 ## 09/24/2023 V 3.12
 * Update hb_orm to allow to search on "_" characters in method KeywordCondition(), instead of being a wildcard character.
 
