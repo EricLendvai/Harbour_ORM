@@ -19,25 +19,20 @@ method destroy() class hb_orm_SQLConnect
 ::Disconnect()
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
-method SQLExec(par_cCommand,par_cCursorName) class hb_orm_SQLConnect   //Returns .t. if succeeded
+method SQLExec(par_xEventId,par_cCommand,par_cCursorName) class hb_orm_SQLConnect   //Returns .t. if succeeded
 local l_cPreviousDefaultRDD := RDDSETDEFAULT("SQLMIX")
 local l_lSQLExecResult := .f.
 local l_oError
 local l_nSelect := iif(used(),select(),0)
-local cErrorInfo
-
-// if "SchemaVersion" $ par_cCommand .and. "TABLE" $ par_cCommand
-// altd()
-// //     // par_cCommand := "CREATE TABLE `SchemaVersion` (`pk` INT NOT NULL AUTO_INCREMENT,`name` VARCHAR NOT NULL DEFAULT '',`version` INT NOT NULL DEFAULT 0,PRIMARY KEY (`pk`) USING BTREE) ENGINE=InnoDB COLLATE='utf8_general_ci';"
-//     par_cCommand := strtran(par_cCommand,"CREATE TABLE","CREASDASDATE TABASDASDLE ")
-// endif
+local l_cErrorInfo
 
 if !::p_DoNotReportErrors
     ::p_SQLExecErrorMessage := ""
 endif
+
 if ::p_SQLConnection > 0
     try
-        if pcount() == 2
+        if pcount() == 3
             CloseAlias(par_cCursorName)
             select 0  //Ensure we don't overwrite any other work area
             l_lSQLExecResult := DBUseArea(.t.,"SQLMIX",par_cCommand,par_cCursorName,.t.,.t.,"UTF8EX",::p_SQLConnection)
@@ -49,8 +44,6 @@ if ::p_SQLConnection > 0
         else
             l_lSQLExecResult := hb_RDDInfo(RDDI_EXECUTE,par_cCommand,"SQLMIX",::p_SQLConnection)
         endif
-// altd()
-// cErrorInfo := hb_RDDInfo(RDDI_ERROR)
 
         if !::p_DoNotReportErrors
             if !l_lSQLExecResult
@@ -65,12 +58,11 @@ if ::p_SQLConnection > 0
         // Idea for later  ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_SQLExecErrorMessage)  _M_
     endtry
 
-
     if !::p_DoNotReportErrors
         if !empty(::p_SQLExecErrorMessage)
-            cErrorInfo := hb_StrReplace(::p_SQLExecErrorMessage+" - Command: "+par_cCommand+iif(pcount() < 2,""," - Cursor Name: "+par_cCursorName),{chr(13)=>" ",chr(10)=>""})
-            hb_orm_SendToDebugView(cErrorInfo)
-            ::LogErrorEvent(,{{,,cErrorInfo,hb_orm_GetApplicationStack()}})   // par_cEventId,par_aErrors
+            l_cErrorInfo := hb_StrReplace(::p_SQLExecErrorMessage+" - Command: "+par_cCommand+iif(pcount() < 3,""," - Cursor Name: "+par_cCursorName),{chr(13)=>" ",chr(10)=>""})
+            hb_orm_SendToDebugView(l_cErrorInfo)
+            ::LogErrorEvent(par_xEventId,{{,,l_cErrorInfo,hb_orm_GetApplicationStack()}})   // par_xEventId,par_aErrors
         endif
     endif
 
@@ -235,7 +227,7 @@ otherwise
 endcase
 
 RDDSETDEFAULT(l_cPreviousDefaultRDD)
-// ?hb_DateTime()
+
 if l_SQLHandle > 0
     ::Connected := .t.
 
@@ -328,7 +320,7 @@ otherwise
             //Do the actual locking
             l_cCursorTempName = "c_DB_Temp"
             l_cSQLCommand    = [SELECT GET_LOCK(']+l_LockName+[',]+Trans(::p_LockTimeout)+[) as result]
-            if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+            if ::SQLExec("Lock",l_cSQLCommand,l_cCursorTempName)
                 // if (l_cCursorTempName)->(FieldGet(1)) == 1  //Since there is one 1 field, retrieving its value.
                 if c_DB_Temp->result == 1  //Since there is one 1 field, retrieving its value.
                     AAdd(::p_Locks,l_LockName)
@@ -364,7 +356,7 @@ otherwise
         l_cSQLCommand += [ AND   tablename = ']+l_cTableName+[']
 
         l_cCursorTempName = "c_DB_Temp"
-        if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+        if ::SQLExec("Lock",l_cSQLCommand,l_cCursorTempName)
             // l_iTableNumber := (l_cCursorTempName)->(pk)
             l_iTableNumber := (l_cCursorTempName)->(FieldGet(FieldPos("pk")))
             CloseAlias(l_cCursorTempName)
@@ -383,7 +375,7 @@ otherwise
 
                     //Do the actual locking
                     l_cSQLCommand    = [SELECT pg_advisory_lock(']+l_LockName+[') as result]
-                    if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+                    if ::SQLExec("Lock",l_cSQLCommand,l_cCursorTempName)
                         //No know method to find out if lock failed.
                         // if (l_cCursorTempName)->(result) == 1
                             AAdd(::p_Locks,l_LockName)
@@ -451,7 +443,7 @@ otherwise
             //Do the actual locking
             l_cCursorTempName = "c_DB_Temp"
             l_cSQLCommand    = [SELECT RELEASE_LOCK(']+l_LockName+[') as result]
-            if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+            if ::SQLExec("Unlock",l_cSQLCommand,l_cCursorTempName)
                 hb_ADel(::p_Locks,l_nArrayRow,.t.)
                 l_lResult := .t.
             else
@@ -480,7 +472,7 @@ otherwise
         l_cSQLCommand += [ AND   tablename = ']+l_cTableName+[']
 
         l_cCursorTempName = "c_DB_Temp"
-        if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+        if ::SQLExec("Unlock",l_cSQLCommand,l_cCursorTempName)
             // l_iTableNumber := (l_cCursorTempName)->(pk)
             l_iTableNumber := (l_cCursorTempName)->(FieldGet(FieldPos("pk")))
             CloseAlias(l_cCursorTempName)
@@ -500,7 +492,7 @@ otherwise
                     //Do the actual locking
                     l_cCursorTempName = "c_DB_Temp"
                     l_cSQLCommand    = [SELECT pg_advisory_unlock(']+l_LockName+[') as result]
-                    if ::SQLExec(l_cSQLCommand,l_cCursorTempName)
+                    if ::SQLExec("Unlock",l_cSQLCommand,l_cCursorTempName)
                         hb_ADel(::p_Locks,l_nArrayRow,.t.)
                         l_lResult := .t.
                     else
@@ -530,7 +522,7 @@ endcase
 return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-method LogAutoTrimEvent(par_cEventId,par_cSchemaAndTableName,par_nKey,par_aAutoTrimmedFields) class hb_orm_SQLConnect
+method LogAutoTrimEvent(par_xEventId,par_cSchemaAndTableName,par_nKey,par_aAutoTrimmedFields) class hb_orm_SQLConnect
 local l_cSQLCommand
 local l_cLastErrorMessage
 local l_iAutoTrimmedInfo
@@ -542,7 +534,7 @@ do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier("SchemaAutoTrimLog")+[ (]
     
-    if !hb_IsNIL(par_cEventId)
+    if !hb_IsNIL(par_xEventId)
         l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
     l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
@@ -573,8 +565,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         endif
         l_cSQLCommand +=  [(]
 
-        if !hb_IsNIL(par_cEventId)
-            l_cSQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
+        if !hb_IsNIL(par_xEventId)
+            l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
         endif
         l_cSQLCommand += [now(),]
         l_cSQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
@@ -599,7 +591,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
     l_cSQLCommand += [;]
 
-    if !::SQLExec(l_cSQLCommand)
+    if !::SQLExec("LogAutoTrimEvent",l_cSQLCommand)
         l_cLastErrorMessage := ::GetSQLExecErrorMessage()
         hb_orm_SendToDebugView("Error on Auto Trim: "+l_cLastErrorMessage)
     endif
@@ -616,7 +608,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName+".SchemaAutoTrimLog")+[ (]
     
-    if !hb_IsNIL(par_cEventId)
+    if !hb_IsNIL(par_xEventId)
         l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
     l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
@@ -648,8 +640,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         endif
         l_cSQLCommand +=  [(]
 
-        if !hb_IsNIL(par_cEventId)
-            l_cSQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
+        if !hb_IsNIL(par_xEventId)
+            l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
         endif
         l_cSQLCommand += [current_timestamp,]
         l_cSQLCommand += [inet_client_addr(),]
@@ -678,18 +670,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     l_cSQLCommand += [;]
 
-    if !::SQLExec(l_cSQLCommand)
+    if !::SQLExec("LogAutoTrimEvent",l_cSQLCommand)
         l_cLastErrorMessage := ::GetSQLExecErrorMessage()
         hb_orm_SendToDebugView("Error on Auto Trim: "+l_cLastErrorMessage)
     endif
 
 endcase
 return NIL
-
-//par_cTableName  par_cSchemaAndTableName
-
 //-----------------------------------------------------------------------------------------------------------------
-method LogErrorEvent(par_cEventId,par_aErrors) class hb_orm_SQLConnect
+method LogErrorEvent(par_xEventId,par_aErrors) class hb_orm_SQLConnect
 local l_cSQLCommand
 local l_cLastErrorMessage
 local l_iErrors
@@ -700,13 +689,11 @@ local l_cAppStack
 
 ::p_DoNotReportErrors := .t.  // To avoid cycling reporting of errors
 
-// altd()
-
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier("SchemaAndDataErrorLog")+[ (]
     
-    if !hb_IsNIL(par_cEventId)
+    if !hb_IsNIL(par_xEventId)
         l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
 
@@ -735,8 +722,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         endif
         l_cSQLCommand +=  [(]
 
-        if !hb_IsNIL(par_cEventId)
-            l_cSQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
+        if !hb_IsNIL(par_xEventId)
+            l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
         endif
         if hb_IsNIL(l_cAppStack)
             l_cSQLCommand += [NULL,]
@@ -754,7 +741,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
     l_cSQLCommand += [;]
 
-    if !::SQLExec(l_cSQLCommand)
+    if !::SQLExec("LogErrorEvent",l_cSQLCommand)
         l_cLastErrorMessage := ::GetSQLExecErrorMessage()
         hb_orm_SendToDebugView("Error on Auto Trim: "+l_cLastErrorMessage)
     endif
@@ -762,7 +749,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName+".SchemaAndDataErrorLog")+[ (]
     
-    if !hb_IsNIL(par_cEventId)
+    if !hb_IsNIL(par_xEventId)
         l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
 
@@ -807,8 +794,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         endif
         l_cSQLCommand +=  [(]
 
-        if !hb_IsNIL(par_cEventId)
-            l_cSQLCommand += [']+left(par_cEventId,HB_ORM_MAX_EVENTID_SIZE)+[',]
+        if !hb_IsNIL(par_xEventId)
+            l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
         endif
         if hb_IsNIL(l_cAppStack)
             l_cSQLCommand += [NULL,]
@@ -829,7 +816,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     l_cSQLCommand += [;]
 
-    if !::SQLExec(l_cSQLCommand)
+    if !::SQLExec("LogErrorEvent",l_cSQLCommand)
         l_cLastErrorMessage := ::GetSQLExecErrorMessage()
         hb_orm_SendToDebugView("Error on Error Log: "+l_cLastErrorMessage)
     endif
@@ -847,11 +834,11 @@ local l_lResult := .f.  // By default assume not connected
 if ::Connected
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        if ::SQLExec([select current_time;])
+        if ::SQLExec("CheckIfStillConnected",[select current_time;])
             l_lResult := .t.
         endif
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        if ::SQLExec([select current_time;])
+        if ::SQLExec("CheckIfStillConnected",[select current_time;])
             l_lResult := .t.
         endif
     endcase
@@ -880,7 +867,7 @@ if ::Connected
             l_cSQLCommand += [ ORDER BY pk DESC]
             l_cSQLCommand += [ LIMIT 1]
 
-            if ::SQLExec(l_cSQLCommand,"SchemaCacheLogLast")
+            if ::SQLExec("CheckIfSchemaCacheShouldBeUpdated",l_cSQLCommand,"SchemaCacheLogLast")
                 if SchemaCacheLogLast->(reccount()) == 1
                     if SchemaCacheLogLast->pk == ::p_SchemaCacheLogLastPk
                         l_lResult := .f.
@@ -907,11 +894,11 @@ local l_lResult := .f.
 if ::Connected
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        if ::SQLExec([select cast(UUID() AS char(36)) AS cuuid],"c_DB_Result_UUID")
+        if ::SQLExec("GetUUIDString",[select cast(UUID() AS char(36)) AS cuuid],"c_DB_Result_UUID")
             l_lResult := .t.
         endif
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        if ::SQLExec([select gen_random_uuid()::char(36) as cuuid],"c_DB_Result_UUID")
+        if ::SQLExec("GetUUIDString",[select gen_random_uuid()::char(36) as cuuid],"c_DB_Result_UUID")
             l_lResult := .t.
         endif
     endcase

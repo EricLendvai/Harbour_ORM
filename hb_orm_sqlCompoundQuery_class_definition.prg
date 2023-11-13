@@ -18,7 +18,7 @@ class hb_orm_SQLCompoundQuery
         data p_CreationTimeFieldName       init "sysc"       // Creation Time Field Name
         data p_ModificationTimeFieldName   init "sysm"       // Modification Time Field Name
 
-        data p_EventId                     init ""
+        data p_cEventId                     init ""
 
         data p_ErrorMessage                init ""
 
@@ -68,7 +68,7 @@ class hb_orm_SQLCompoundQuery
         method SQL(par_1)                                                                              // Assemble and Run SQL command
         // method Count()                                                                                 // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error. The par_SQLID is optional (used if reporting error info).
 
-        method GetLastEventId() INLINE ::p_EventId                                                     // Will return the Last :Table() EventID. Useful to report where a problem occurred. 
+        method GetLastEventId() INLINE ::p_cEventId                                                     // Will return the Last :Table() EventID. Useful to report where a problem occurred. 
         method LastSQL()        INLINE ::p_LastSQLCommand                                              // Get the last sent SQL command executed
         method LastRunTime()    INLINE ::p_LastRunTime                                                 // Get the last execution time in seconds
 

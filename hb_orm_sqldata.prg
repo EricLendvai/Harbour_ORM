@@ -125,7 +125,7 @@ if pcount() > 0
         endif
         if empty(::p_SchemaAndTableName)
             AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
-            ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+            ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
         else
         ::p_AliasToSchemaAndTableNames[::p_TableAlias] := ::p_SchemaAndTableName
         endif
@@ -139,9 +139,9 @@ return ::p_SchemaAndTableName
 //-----------------------------------------------------------------------------------------------------------------
 method SetEventId(par_xId) class hb_orm_SQLData
 if ValType(par_xId) == "N"
-    ::p_EventId := trans(par_xId)
+    ::p_cEventId := trans(par_xId)
 else
-    ::p_EventId := left(AllTrim(par_xId),HB_ORM_MAX_EVENTID_SIZE)
+    ::p_cEventId := left(AllTrim(par_xId),HB_ORM_MAX_EVENTID_SIZE)
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
@@ -179,7 +179,7 @@ if !empty(par_cName)
     l_cFieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_cFieldName)
     if empty(l_cFieldName)
         AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
-        ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+        ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
     else
         if pcount() == 3
             ::p_FieldsAndValues[l_cFieldName] := {par_nType,par_xValue}
@@ -236,7 +236,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_aFieldInfo := ::p_oSQLConnection:GetFieldInfo(::p_SchemaAndTableName,par_cName)
         if empty(l_aFieldInfo)
             AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
-            ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+            ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
             l_cValue := ""
         else
             l_nFieldDec := l_aFieldInfo[HB_ORM_GETFIELDINFO_FIELDDECIMALS]
@@ -390,14 +390,14 @@ if empty(::p_ErrorMessage)
 
             ::p_LastSQLCommand = l_cSQLCommand
 
-            if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
+            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
                 do case
                 case pcount() == 1
                     ::p_Key = par_iKey
                     
                 otherwise
                     // LastInsertedID := hb_RDDInfo(RDDI_INSERTID,,"SQLMIX",::p_oSQLConnection:GetHandle())
-                    if ::p_oSQLConnection:SQLExec([SELECT LAST_INSERT_ID() as result],"c_DB_Result")
+                    if ::p_oSQLConnection:SQLExec(::p_cEventId,[SELECT LAST_INSERT_ID() as result],"c_DB_Result")
                         ::Tally := 1
                         if Valtype(c_DB_Result->result) == "C"
                             ::p_Key := val(c_DB_Result->result)
@@ -505,7 +505,7 @@ if empty(::p_ErrorMessage)
             // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
             ::p_LastSQLCommand = l_cSQLCommand
-            if ::p_oSQLConnection:SQLExec(l_cSQLCommand,"c_DB_Result")
+            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,"c_DB_Result")
                 do case
                 case pcount() == 1
                     ::p_Key = par_iKey
@@ -538,7 +538,7 @@ endif
 
 if empty(::p_ErrorMessage)
     if len(l_aAutoTrimmedFields) > 0
-        ::p_oSQLConnection:LogAutoTrimEvent(::p_EventId,::p_SchemaAndTableName,::p_KEY,l_aAutoTrimmedFields)
+        ::p_oSQLConnection:LogAutoTrimEvent(::p_cEventId,::p_SchemaAndTableName,::p_KEY,l_aAutoTrimmedFields)
     endif
 else
     ::p_Key = -1
@@ -547,7 +547,7 @@ endif
 
 if len(l_aErrors) > 0
     ::p_ErrorMessage := l_aErrors
-    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+    ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
 endif
 
 return (::p_Key > 0)
@@ -556,14 +556,14 @@ method Delete(par_xEventId,par_cSchemaAndTableName,par_iKey) class hb_orm_SQLDat
 
 local l_nSelect
 local l_cSQLCommand
+local l_cNonTableAlias
+local l_cSchemaAndTableName
+local l_nPos
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
 
-if pcount() == 3
-    ::Table(par_xEventId,par_cSchemaAndTableName)
-    ::p_KEY := par_iKey
-else
+if pcount() != 3
     ::p_ErrorMessage := [Invalid number of parameters when calling :Delete()]
 endif
 
@@ -574,11 +574,35 @@ if empty(::p_ErrorMessage)
 endif
 
 if empty(::p_ErrorMessage)
+
+    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cSchemaAndTableName),"")
+    if !empty(l_cNonTableAlias)
+        l_cSchemaAndTableName := l_cNonTableAlias   // Will have the correct casing
+    else
+        if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
+            l_cSchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
+        else
+            l_nPos = at(".",par_cSchemaAndTableName)
+            if empty(l_nPos)
+                l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
+                l_nPos = at(".",l_cSchemaAndTableName)
+            else
+                l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
+            endif
+        endif
+        if empty(l_cSchemaAndTableName)
+            ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".]
+        else
+            // ::p_AliasToSchemaAndTableNames[::p_TableAlias] := l_cSchemaAndTableName
+        endif
+    endif
+
     do case
-    case empty(::p_SchemaAndTableName)
+    case !empty(::p_ErrorMessage)
+    case empty(l_cSchemaAndTableName)
         ::p_ErrorMessage := [Missing Table]
         
-    case empty(::p_KEY)
+    case empty(par_iKey)
         ::p_ErrorMessage := [Missing ]+upper(::p_PrimaryKeyFieldName)
         
     otherwise
@@ -587,18 +611,18 @@ if empty(::p_ErrorMessage)
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             
-            l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(::p_KEY)
+            l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(l_cSchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(par_iKey)
             ::p_LastSQLCommand = l_cSQLCommand
             
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             
-            l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(::p_KEY)
+            l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(l_cSchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(par_iKey)
             ::p_LastSQLCommand = l_cSQLCommand
             
         endcase
 
         if empty(::p_ErrorMessage)
-            if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
+            if ::p_oSQLConnection:SQLExec(par_xEventId,l_cSQLCommand)
                 // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
                 ::Tally = 1
             else
@@ -701,7 +725,7 @@ if empty(::p_ErrorMessage)
             l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
             ::p_LastSQLCommand = l_cSQLCommand
             
-            if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
+            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
                 ::Tally = 1
                 // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
                 ::p_LastUpdateChangedData := .t.   // _M_ For now I am assuming the record changed. Later on create a generic Store Procedure that will do these data changes.
@@ -777,7 +801,7 @@ if empty(::p_ErrorMessage)
 
             ::p_LastSQLCommand = l_cSQLCommand
             
-            if ::p_oSQLConnection:SQLExec(l_cSQLCommand)
+            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
                 ::Tally = 1
                 // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
                 ::p_LastUpdateChangedData := .t.   // _M_ For now I am assuming the record changed. Later on create a generic Store Procedure that will do these data changes.
@@ -795,7 +819,7 @@ endif
 
 if empty(::p_ErrorMessage)
     if len(l_aAutoTrimmedFields) > 0
-        ::p_oSQLConnection:LogAutoTrimEvent(::p_EventId,::p_SchemaAndTableName,::p_KEY,l_aAutoTrimmedFields)
+        ::p_oSQLConnection:LogAutoTrimEvent(::p_cEventId,::p_SchemaAndTableName,::p_KEY,l_aAutoTrimmedFields)
     endif
 else
     ::Tally = -1
@@ -803,7 +827,7 @@ endif
 
 if len(l_aErrors) > 0
     ::p_ErrorMessage := l_aErrors
-    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+    ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
 endif
 
 return empty(::p_ErrorMessage)
@@ -869,7 +893,7 @@ if pcount() > 1 .and. "^" $ par_cExpression
                 // case "S"  // Symbolic name (*)
                 otherwise
                     AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Wrong Parameter Type in PrepExpression()],hb_orm_GetApplicationStack()})
-                    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+                    ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
                 endswitch
             else
                 l_cResult += l_cChar
@@ -923,7 +947,7 @@ if pcount() > 1 .and. "^" $ par_cExpression
                 // case "S"  // Symbolic name (*)
                 otherwise
                     AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Wrong Parameter Type in PrepExpression()],hb_orm_GetApplicationStack()})
-                    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+                    ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
                     
                 endswitch
             else
@@ -997,7 +1021,7 @@ else
         endif
         if empty(l_cSchemaAndTableName)
             AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
-            ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+            ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
         else
             ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
         endif
@@ -1051,7 +1075,7 @@ else
         endif
         if empty(l_cSchemaAndTableName)
             AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
-            ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+            ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
         else
             ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
         endif
@@ -1668,7 +1692,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             endfor
 
             if empty(l_cOrderByColumn)
-                ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
+                ::p_oSQLConnection:LogErrorEvent(::p_cEventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
             else
                 if l_lFirstOrderBy
                     l_cSQLCommand += [ ORDER BY ]
@@ -1729,7 +1753,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                     endfor
 
                     if empty(l_cOrderByColumn)
-                        ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match Distinct On Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
+                        ::p_oSQLConnection:LogErrorEvent(::p_cEventId,{{,,"Failed to match Distinct On Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
                     else
                         if l_lFirstOrderBy
                             l_lFirstOrderBy := .f.
@@ -1897,7 +1921,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             endfor
 
             if empty(l_cOrderByColumn)
-                ::p_oSQLConnection:LogErrorEvent(::p_EventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
+                ::p_oSQLConnection:LogErrorEvent(::p_cEventId,{{,,"Failed to match OrderBy Column - "+::p_OrderBy[l_nCounter,1],hb_orm_GetApplicationStack()}})
             else
                 if l_lFirstOrderBy
                     l_cSQLCommand += [ ORDER BY ]
@@ -1989,7 +2013,7 @@ case pcount() == 1
     case valtype(par_1) == "C"
         ::p_TableFullPath := ""
         ::p_CursorName    := par_1
-        l_nOutputType      := 1
+        l_nOutputType     := 1
         ::p_oCursor       := NIL
         CloseAlias(::p_CursorName)
 
@@ -2043,7 +2067,7 @@ else
         endcase
 
         l_nTimeStart := seconds()
-        l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
         l_nTimeEnd := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -2104,7 +2128,7 @@ else
         l_cCursorTempName := "c_DB_Temp"
         
         l_nTimeStart := seconds()
-        l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
         l_nTimeEnd := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -2113,7 +2137,7 @@ else
         else
             //  _M_
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
+                // ::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             l_lErrorOccurred := .f.
@@ -2125,7 +2149,7 @@ else
     case l_nOutputType == 1 // cursor
         
         l_nTimeStart := seconds()
-        l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,::p_CursorName)
+        l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,::p_CursorName)
         l_nTimeEnd := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -2135,7 +2159,7 @@ else
             select (::p_CursorName)
             //_M_
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
+                // ::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             l_lErrorOccurred := .f.
@@ -2158,7 +2182,7 @@ else
         l_cCursorTempName := "c_DB_Temp"
                     
         l_nTimeStart := seconds()
-        l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
         l_nTimeEnd := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -2166,7 +2190,7 @@ else
             AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
         else
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-            // 	// ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
+            // 	// ::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             l_lErrorOccurred := .f.
@@ -2195,7 +2219,7 @@ else
         l_cCursorTempName := "c_DB_Temp"
         
         l_nTimeStart = seconds()
-        l_lSQLResult = ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        l_lSQLResult = ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
         l_nTimeEnd = seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -2205,7 +2229,7 @@ else
             select (l_cCursorTempName)
 
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-            // 	::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
+            // 	::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             ::Tally          := reccount()
@@ -2254,7 +2278,7 @@ else
             select (l_nSelect)
         endif
         
-        // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
+        // ::SQLSendToLogFileAndMonitoringSystem(::p_cEventId,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
         
     else
         if l_nOutputType == 1   //Into Cursor
@@ -2263,13 +2287,13 @@ else
             select (l_nSelect)
         endif
         
-        // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,0,l_cSQLCommand+[ -> Reccount = ]+trans(::Tally))
+        // ::SQLSendToLogFileAndMonitoringSystem(::p_cEventId,0,l_cSQLCommand+[ -> Reccount = ]+trans(::Tally))
     endif
 endif
 
 if len(l_aErrors) > 0
     ::p_ErrorMessage := l_aErrors
-    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+    ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
 endif
 
 return l_xResult
@@ -2292,7 +2316,7 @@ l_cSQLCommand := ::BuildSQL("Count")
 l_cCursorTempName := "c_DB_Temp"
 
 l_nTimeStart := seconds()
-l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
 l_nTimeEnd := seconds()
 ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
 
@@ -2312,7 +2336,7 @@ select (l_nSelect)
 
 if len(l_aErrors) > 0
     ::p_ErrorMessage := l_aErrors
-    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+    ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
 endif
 
 return ::Tally
@@ -2636,7 +2660,7 @@ otherwise
         
         l_cCursorTempName := "c_DB_Temp"
 
-        if ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
             select (l_cCursorTempName)
             ::Tally        := reccount()
             l_lErrorOccurred := .f.
@@ -2676,7 +2700,7 @@ endcase
 
 if len(l_aErrors) > 0
     ::p_ErrorMessage := l_aErrors
-    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+    ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
 endif
 
 return l_oResult
@@ -3423,7 +3447,7 @@ otherwise
     else
         if !(hb_IsNil(l_oData:oid) .or. l_oData:oid == 0)  // Delete the previous file
             l_cSQLCommand := [select lo_unlink(]+trans(l_oData:oid)+[);]
-            if ::p_oSQLConnection:SQLExec(l_cSQLCommand,"TempCursorSaveFile")
+            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,"TempCursorSaveFile")
                 if TempCursorSaveFile->(reccount()) == 1 .and. TempCursorSaveFile->lo_unlink == 1
                     ::Table(par_xEventId,par_cSchemaAndTableName)
                     ::Field(par_cOidFieldName,nil)
@@ -3483,7 +3507,7 @@ otherwise
     else
         if !(hb_IsNil(l_oData:oid) .or. l_oData:oid == 0)
             l_cSQLCommand := [select lo_export(]+trans(l_oData:oid)+[,']+par_cFullPathFileName+[');]
-            if ::p_oSQLConnection:SQLExec(l_cSQLCommand,"TempCursorSaveFile")
+            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,"TempCursorSaveFile")
                 if TempCursorSaveFile->(reccount()) == 1 .and. TempCursorSaveFile->lo_export == 1
                     l_lResult := .t.
                 else
@@ -3524,7 +3548,7 @@ otherwise
     else
         if !(hb_IsNil(l_oData:oid) .or. l_oData:oid == 0)  // Delete the file
             l_cSQLCommand := [select lo_unlink(]+trans(l_oData:oid)+[);]
-            if ::p_oSQLConnection:SQLExec(l_cSQLCommand,"TempCursorSaveFile")
+            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,"TempCursorSaveFile")
                 if TempCursorSaveFile->(reccount()) == 1 .and. TempCursorSaveFile->lo_unlink == 1
                     ::Table(par_xEventId,par_cSchemaAndTableName)
                     ::Field(par_cOidFieldName,nil)

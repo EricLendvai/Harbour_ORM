@@ -1,7 +1,7 @@
 //Copyright (c) 2023 Eric Lendvai MIT License
 
 #ifndef HB_ORM_BUILDVERSION
-#define HB_ORM_BUILDVERSION "3.13"
+#define HB_ORM_BUILDVERSION "3.14"
 
 #define HB_ORM_TRIGGERVERSION 2
 
@@ -24,8 +24,10 @@
 #define HB_ORM_POSTGRESQL_CASE_SENSITIVE       1
 #define HB_ORM_POSTGRESQL_CASE_ALL_LOWER       2
 
-#define HB_ORM_SCHEMA_FIELD 1
-#define HB_ORM_SCHEMA_INDEX 2
+// #define HB_ORM_SCHEMA_FIELD 1
+// #define HB_ORM_SCHEMA_INDEX 2
+#define HB_ORM_SCHEMA_FIELD "Fields"
+#define HB_ORM_SCHEMA_INDEX "Indexes"
 
 #define HB_ORM_SCHEMA_FIELD_BACKEND_TYPES  1
 #define HB_ORM_SCHEMA_FIELD_TYPE           2

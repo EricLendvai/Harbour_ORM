@@ -31,7 +31,7 @@ class hb_orm_SQLConnect
         classdata ReservedWordsMySQL      init {"ACCESSIBLE","ADD","ALL","ALTER","ANALYZE","AND","AS","ASC","ASENSITIVE","BEFORE","BETWEEN","BIGINT","BINARY","BLOB","BOTH","BY","CALL","CASCADE","CASE","CHANGE","CHAR","CHARACTER","CHECK","COLLATE","COLUMN","CONDITION","CONSTRAINT","CONTINUE","CONVERT","CREATE","CROSS","CUBE","CUME_DIST","CURRENT_DATE","CURRENT_TIME","CURRENT_TIMESTAMP","CURRENT_USER","CURSOR","DATABASE","DATABASES","DAY_HOUR","DAY_MICROSECOND","DAY_MINUTE","DAY_SECOND","DEC","DECIMAL","DECLARE","DEFAULT","DELAYED","DELETE","DENSE_RANK","DESC","DESCRIBE","DETERMINISTIC","DISTINCT","DISTINCTROW","DIV","DOUBLE","DROP","DUAL","EACH","ELSE","ELSEIF","EMPTY","ENCLOSED","ESCAPED","EXCEPT","EXISTS","EXIT","EXPLAIN","FALSE","FETCH","FIRST_VALUE","FLOAT","FLOAT4","FLOAT8","FOR","FORCE","FOREIGN","FROM","FULLTEXT","FUNCTION","GENERATED","GET","GRANT","GROUP","GROUPING","GROUPS","HAVING","HIGH_PRIORITY","HOUR_MICROSECOND","HOUR_MINUTE","HOUR_SECOND","IF","IGNORE","IN","INDEX","INFILE","INNER","INOUT","INSENSITIVE","INSERT","INT","INT1","INT2","INT3","INT4","INT8","INTEGER","INTERVAL","INTO","IO_AFTER_GTIDS","IO_BEFORE_GTIDS","IS","ITERATE","JOIN","JSON_TABLE","KEY","KEYS","KILL","LAG","LAST_VALUE","LATERAL","LEAD","LEADING","LEAVE","LEFT","LIKE","LIMIT","LINEAR","LINES","LOAD","LOCALTIME","LOCALTIMESTAMP","LOCK","LONG","LONGBLOB","LONGTEXT","LOOP","LOW_PRIORITY","MASTER_BIND","MASTER_SSL_VERIFY_SERVER_CERT","MATCH","MAXVALUE","MEDIUMBLOB","MEDIUMINT","MEDIUMTEXT","MIDDLEINT","MINUTE_MICROSECOND","MINUTE_SECOND","MOD","MODIFIES","NATURAL","NOT","NO_WRITE_TO_BINLOG","NTH_VALUE","NTILE","NULL","NUMERIC","OF","ON","OPTIMIZE","OPTIMIZER_COSTS","OPTION","OPTIONALLY","OR","ORDER","OUT","OUTER","OUTFILE","OVER","PARTITION","PERCENT_RANK","PRECISION","PRIMARY","PROCEDURE","PURGE","RANGE","RANK","READ","READS","READ_WRITE","REAL","RECURSIVE","REFERENCES","REGEXP","RELEASE","RENAME","REPEAT","REPLACE","REQUIRE","RESIGNAL","RESTRICT","RETURN","REVOKE","RIGHT","RLIKE","ROW","ROWS","ROW_NUMBER","SCHEMA","SCHEMAS","SECOND_MICROSECOND","SELECT","SENSITIVE","SEPARATOR","SET","SHOW","SIGNAL","SMALLINT","SPATIAL","SPECIFIC","SQL","SQLEXCEPTION","SQLSTATE","SQLWARNING","SQL_BIG_RESULT","SQL_CALC_FOUND_ROWS","SQL_SMALL_RESULT","SSL","STARTING","STORED","STRAIGHT_JOIN","SYSTEM","TABLE","TERMINATED","THEN","TINYBLOB","TINYINT","TINYTEXT","TO","TRAILING","TRIGGER","TRUE","UNDO","UNION","UNIQUE","UNLOCK","UNSIGNED","UPDATE","USAGE","USE","USING","UTC_DATE","UTC_TIME","UTC_TIMESTAMP","VALUES","VARBINARY","VARCHAR","VARCHARACTER","VARYING","VIRTUAL","WHEN","WHERE","WHILE","WINDOW","WITH","WRITE","XOR","YEAR_MONTH","ZEROFILL"}
         classdata ReservedWordsPostgreSQL init {"ALL","ANALYSE","ANALYZE","AND","ANY","ARRAY","AS","ASC","ASYMMETRIC","BINARY","BOTH","CASE","CAST","CHECK","COLLATE","COLLATION","COLUMN","CONCURRENTLY","CONSTRAINT","CREATE","CROSS","CURRENT_CATALOG","CURRENT_DATE","CURRENT_ROLE","CURRENT_SCHEMA","CURRENT_TIME","CURRENT_TIMESTAMP","CURRENT_USER","DEFAULT","DEFERRABLE","DESC","DISTINCT","DO","ELSE","END","EXCEPT","FALSE","FETCH","FOR","FOREIGN","FREEZE","FROM","FULL","GRANT","GROUP","HAVING","ILIKE","IN","INITIALLY","INNER","INTERSECT","INTO","IS","ISNULL","JOIN","LATERAL","LEADING","LEFT","LIKE","LIMIT","LOCALTIME","LOCALTIMESTAMP","NATURAL","NOT","NOTNULL","NULL","OFFSET","ON","ONLY","OR","ORDER","OUTER","OVERLAPS","PLACING","PRIMARY","REFERENCES","RETURNING","RIGHT","SELECT","SESSION_USER","SIMILAR","SOME","SYMMETRIC","TABLE","TABLESAMPLE","THEN","TO","TRAILING","TRUE","UNION","UNIQUE","USER","USING","VARIADIC","VERBOSE","WHEN","WHERE","WINDOW","WITH"}
 
-        method AddTable(par_cSchemaName,par_cTableName,par_hStructure)
+        method AddTable(par_cSchemaName,par_cTableName,par_hStructure,par_lUnlogged)
         method AddField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition)
         method AddIndex(par_cSchemaName,par_cTableName,par_hFields,par_cIndexName,par_aIndexDefinition)
         method UpdateSchemaName(par_cSchemaName,par_cCurrentSchemaName)
@@ -42,7 +42,7 @@ class hb_orm_SQLConnect
         method NormalizeFieldDefaultForCurrentEngineType(par_cFieldDefault,par_cFieldType,par_nFieldDec)
 
     exported:
-        data p_Schema  init {=>}                                         //List of Tables Names. Each element is a 2 cell array ["Hash of Field Definition","Hash of Index Definitions"]. Named it with a leading "p_" to be threaded as internal.
+        data p_Schema  init {=>}                                         //List of Tables Names. Each element is a hash with "Fields" and "Indexes" array elements ["Hash of Field Definition","Hash of Index Definitions"]. Named it with a leading "p_" to be threaded as internal.
         data Connected init .f.                                          //true if connected to a server
         data p_hb_orm_version init HB_ORM_BUILDVERSION READONLY
         method SetBackendType(par_cName)                                 // For Example, "MariaDB","MySQL","PostgreSQL"
@@ -72,7 +72,7 @@ class hb_orm_SQLConnect
         method Lock(par_cSchemaAndTableName,par_iKey)
         method Unlock(par_cSchemaAndTableName,par_iKey)
         
-        method SQLExec(par_cCommand,par_cCursorName)   //Used by the Locking system
+        method SQLExec(par_xEventId,par_cCommand,par_cCursorName)   //Used by the Locking system
         method GetSQLExecErrorMessage() inline ::p_SQLExecErrorMessage
         method GetConnectionNumber()    inline ::p_ConnectionNumber
         method GetCurrentSchemaName()   inline iif(::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL,::p_SchemaName,"")
@@ -124,8 +124,8 @@ class hb_orm_SQLConnect
         method GetSchemaDefinitionVersion(par_cSchemaDefinitionName)                                    // Since calling ::MigrateSchema() is cumulative with different hSchemaDefinition, each can be named and have a different version.
         method SetSchemaDefinitionVersion(par_cSchemaDefinitionName,par_iVersion)                       // Since calling ::MigrateSchema() is cumulative with different hSchemaDefinition, each can be named and have a different version.
 
-        method LogAutoTrimEvent(par_cEventId,par_cSchemaAndTableName,par_nKey,par_aAutoTrimmedFields)
-        method LogErrorEvent(par_cEventId,par_aErrors)                                                  // The par_aErrors is an array of arrays like {<cSchemaAndTableName>,<nKey>,<cErrorMessage>,<cAppStack>}
+        method LogAutoTrimEvent(par_xEventId,par_cSchemaAndTableName,par_nKey,par_aAutoTrimmedFields)
+        method LogErrorEvent(par_xEventId,par_aErrors)                                                  // The par_aErrors is an array of arrays like {<cSchemaAndTableName>,<nKey>,<cErrorMessage>,<cAppStack>}
 
         method SanitizeFieldDefaultFromDefaultBehavior(par_cSQLEngineType,par_cFieldType,par_cFieldAttributes,par_cFieldDefault)
         

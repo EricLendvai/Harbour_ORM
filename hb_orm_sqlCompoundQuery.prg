@@ -40,12 +40,8 @@ method destroy() class hb_orm_SQLCompoundQuery
 ::p_oSQLConnection := NIL
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
-method SetEventId(par_xId) class hb_orm_SQLCompoundQuery
-if ValType(par_xId) == "N"
-    ::p_EventId := trans(par_xId)
-else
-    ::p_EventId := left(AllTrim(par_xId),HB_ORM_MAX_EVENTID_SIZE)
-endif
+method SetEventId(par_xEventId) class hb_orm_SQLCompoundQuery
+::p_cEventId := iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method ErrorMessage() class hb_orm_SQLCompoundQuery                                   //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add() :Update()  :Delete()
@@ -256,7 +252,7 @@ else
         endcase
 
         l_nTimeStart := seconds()
-        l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
         l_nTimeEnd := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -317,7 +313,7 @@ else
         l_cCursorTempName := "c_DB_Temp"
         
         l_nTimeStart := seconds()
-        l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
         l_nTimeEnd := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -326,7 +322,7 @@ else
         else
             //  _M_
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
+                // ::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             l_lErrorOccurred := .f.
@@ -338,7 +334,7 @@ else
     case l_nOutputType == 1 // cursor
         
         l_nTimeStart := seconds()
-        l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,::p_CursorName)
+        l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,::p_CursorName)
         l_nTimeEnd := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -348,7 +344,7 @@ else
             select (::p_CursorName)
             //_M_
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-                // ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
+                // ::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             l_lErrorOccurred := .f.
@@ -371,7 +367,7 @@ else
         l_cCursorTempName := "c_DB_Temp"
                     
         l_nTimeStart := seconds()
-        l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
         l_nTimeEnd := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -379,7 +375,7 @@ else
             AAdd(l_aErrors,{::p_cAnchorAlias,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
         else
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-            // 	// ::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
+            // 	// ::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             l_lErrorOccurred := .f.
@@ -408,7 +404,7 @@ else
         l_cCursorTempName := "c_DB_Temp"
         
         l_nTimeStart = seconds()
-        l_lSQLResult = ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+        l_lSQLResult = ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
         l_nTimeEnd = seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
@@ -418,7 +414,7 @@ else
             select (l_cCursorTempName)
 
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
-            // 	::SQLSendPerformanceIssueToMonitoringSystem(::p_EventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
+            // 	::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             ::Tally          := reccount()
@@ -467,7 +463,7 @@ else
             select (l_nSelect)
         endif
         
-        // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
+        // ::SQLSendToLogFileAndMonitoringSystem(::p_cEventId,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
         
     else
         if l_nOutputType == 1   //Into Cursor
@@ -476,14 +472,14 @@ else
             select (l_nSelect)
         endif
         
-        // ::SQLSendToLogFileAndMonitoringSystem(::p_EventId,0,l_cSQLCommand+[ -> Reccount = ]+trans(::Tally))
+        // ::SQLSendToLogFileAndMonitoringSystem(::p_cEventId,0,l_cSQLCommand+[ -> Reccount = ]+trans(::Tally))
     endif
         
 endif
 
 if len(l_aErrors) > 0
     ::p_ErrorMessage := l_aErrors
-    ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+    ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
 endif
 
 return l_xResult
@@ -506,7 +502,7 @@ return l_xResult
 // l_cCursorTempName := "c_DB_Temp"
 
 // l_nTimeStart := seconds()
-// l_lSQLResult := ::p_oSQLConnection:SQLExec(l_cSQLCommand,l_cCursorTempName)
+// l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
 // l_nTimeEnd := seconds()
 // ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
 
@@ -526,7 +522,7 @@ return l_xResult
 
 // if len(l_aErrors) > 0
 //     ::p_ErrorMessage := l_aErrors
-//     ::p_oSQLConnection:LogErrorEvent(::p_EventId,l_aErrors)
+//     ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
 // endif
 
 // return ::Tally

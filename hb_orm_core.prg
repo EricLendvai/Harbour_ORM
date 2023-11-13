@@ -280,3 +280,28 @@ function hb_orm_buildinfo()
 #include "BuildInfo.txt"
 return l_cBuildInfo
 //=================================================================================================================
+function hb_orm_UsedWorkAreas()
+local l_hWorkAreas := {=>}
+local l_nWorkAreaNumber
+local l_nMaxWorkAreaNumber := 1000
+local l_cWorkAreaName
+local l_nReccount
+local l_nRecno
+
+//Current Workarea Number: select()
+//Current Workarea Name: alias(select())
+
+//    cErrorLog += CRLF + "DataBases in use" + CRLF + "================" + CRLF
+//    cErrorLog += CRLF + "Selected Area: " + alltrim(str(select()))+ "  "+ alias() + CRLF
+for l_nWorkAreaNumber := 1 to l_nMaxWorkAreaNumber
+    l_cWorkAreaName := alias(l_nWorkAreaNumber)
+    if !empty(l_cWorkAreaName)
+        l_nReccount := (l_cWorkAreaName)->(LastRec())
+        l_nRecno    := (l_cWorkAreaName)->(RecNo())
+        l_hWorkAreas[l_cWorkAreaName] := {l_nRecno,l_nReccount}
+    endif
+endfor
+
+return l_hWorkAreas
+//Example to return info to a text file: hb_jsonEncode(hb_orm_UsedWorkAreas(),.t.)
+//=================================================================================================================

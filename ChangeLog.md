@@ -1,5 +1,13 @@
 # Harbour ORM - Change Log
 
+## 11/12/2023 V 3.14   IMPORTANT COMPATIBILITY NOTE
+* The SQLExec method now requires the first parameter to be an EventId (Spring or Numeric). Highly recommend use uuid to generate a string!   
+* The Delete method will not affect any previous call to Table method, meaning you can safely call :Delete(...) from within a scan/endscan without loosing cursor being traversed.   
+    The following properties are still being affected: p_ErrorMessage,Tally.   
+* New Function "hb_ORM_UsedWorkAreas()" to return a hash array listing all open work areas with the recno() and reccount().   
+* Change is structure of p_Schema connection property. Each Table has now a hash array instead of a 2 dimension array. {"Field"=>  ,"Indexes"=>  }   
+* Added support for PostgreSQL UNLOGGED table setting.   
+
 ## 11/05/2023 V 3.13
 * In PostgreSQL, stopped adding the Schema Name in index name. Since the restriction for index names is "Two indexes in the same schema cannot have the same name", across schema (Name Spaces) they can be the same. This will make it easier to move table to other schemas, and help reduce the change of hitting the 63 character object name length.
 * Fix minor bug on field definition compare on default values. Reduces the number of migration code being generated.
