@@ -1,4 +1,4 @@
-//Copyright (c) 2023 Eric Lendvai MIT License
+//Copyright (c) 2024 Eric Lendvai MIT License
 
 #include "hb_orm.ch"
 
@@ -28,7 +28,7 @@ method UseConnection(par_oSQLConnection) class hb_orm_SQLCompoundQuery
 ::p_SQLEngineType             := ::p_oSQLConnection:GetSQLEngineType()
 ::p_ConnectionNumber          := ::p_oSQLConnection:GetConnectionNumber()
 ::p_Database                  := ::p_oSQLConnection:GetDatabase()
-::p_SchemaName                := ::p_oSQLConnection:GetCurrentSchemaName()   // Will "Freeze" the current connection p_SchemaName
+::p_NamespaceName                := ::p_oSQLConnection:GetCurrentNamespaceName()   // Will "Freeze" the current connection p_NamespaceName
 ::p_PrimaryKeyFieldName       := ::p_oSQLConnection:GetPrimaryKeyFieldName()
 ::p_CreationTimeFieldName     := ::p_oSQLConnection:GetCreationTimeFieldName()
 ::p_ModificationTimeFieldName := ::p_oSQLConnection:GetModificationTimeFieldName()
@@ -40,8 +40,8 @@ method destroy() class hb_orm_SQLCompoundQuery
 ::p_oSQLConnection := NIL
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
-method SetEventId(par_xEventId) class hb_orm_SQLCompoundQuery
-::p_cEventId := iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))
+method SetEventId(par_xId) class hb_orm_SQLCompoundQuery
+::p_cEventId := iif(ValType(par_xId) == "N",trans(par_xId),left(AllTrim(par_xId),HB_ORM_MAX_EVENTID_SIZE))
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method ErrorMessage() class hb_orm_SQLCompoundQuery                                   //Retrieve the error text of the last call to :SQL(), :Get(), :Count(), :Add() :Update()  :Delete()
@@ -81,6 +81,84 @@ method SetExplainMode(par_nMode) class hb_orm_SQLCompoundQuery                  
 ::p_ExplainMode := par_nMode
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
+method BuildSQL(par_cAction) class hb_orm_SQLCompoundQuery       // Assemble SQL command. par_cAction is not used but needed since SQLData:BuildSQL would not know it is calling a Compound Class.
+local l_cSQLCommand
+local l_cSQLCTQuery
+local l_cEndOfLine    := CRLF
+local l_aCombineQuery
+local l_lFoundAQueryReference
+local l_aCombine
+local l_nReplaceCounter := 0
+local l_cSubstituteString
+local l_oSQLData
+local l_cAlias
+
+
+if len(::p_aSQLCTQueries) > 0
+    l_cSQLCommand := "WITH "
+    for each l_cSQLCTQuery in ::p_aSQLCTQueries
+        if l_cSQLCTQuery:__enumindex > 1
+            l_cSQLCommand += ", "
+        endif
+
+        l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(l_cSQLCTQuery)+" AS ("+l_cEndOfLine
+        l_cSQLCommand += "~"+lower(l_cSQLCTQuery)+"~"
+        l_cSQLCommand += [)]
+    endfor
+    l_cSQLCommand += l_cEndOfLine
+else
+    l_cSQLCommand := ""
+endif
+
+l_cSQLCommand += "~"+lower(::p_cAnchorAlias)+"~"
+
+l_aCombineQuery := AClone(::p_aCombineQuery)
+l_lFoundAQueryReference := .t.
+
+do while l_lFoundAQueryReference .and. len(l_aCombineQuery) > 0
+    l_lFoundAQueryReference := .f.
+    for each l_aCombine in l_aCombineQuery
+        if "~"+lower(l_aCombine[2])+"~" $ l_cSQLCommand
+            l_lFoundAQueryReference := .t.
+            l_nReplaceCounter++
+
+            do case
+            case l_aCombine[1] == COMBINE_ACTION_UNION
+                l_cSubstituteString := "~"+lower(l_aCombine[4])+"~ "+"UNION "    +iif(l_aCombine[3],"ALL ","")+l_cEndOfLine+"~"+lower(l_aCombine[5])+"~"
+            case l_aCombine[1] == COMBINE_ACTION_EXCEPT
+                l_cSubstituteString := "~"+lower(l_aCombine[4])+"~ "+"EXCEPT "   +iif(l_aCombine[3],"ALL ","")+l_cEndOfLine+"~"+lower(l_aCombine[5])+"~"
+            case l_aCombine[1] == COMBINE_ACTION_INTERSECT
+                l_cSubstituteString := "~"+lower(l_aCombine[4])+"~ "+"INTERSECT "+iif(l_aCombine[3],"ALL ","")+l_cEndOfLine+"~"+lower(l_aCombine[5])+"~"
+            otherwise
+                l_cSubstituteString := ""
+            endcase
+
+            if l_nReplaceCounter > 1
+                l_cSQLCommand := strtran(l_cSQLCommand,"~"+lower(l_aCombine[2])+"~","("+l_cEndOfLine+l_cSubstituteString+")")
+            else
+                l_cSQLCommand := strtran(l_cSQLCommand,"~"+lower(l_aCombine[2])+"~",l_cSubstituteString)
+            endif
+
+            hb_Adel(l_aCombineQuery,l_aCombine:__enumindex,.t.)
+
+            loop
+        endif
+    endfor
+enddo
+
+//Replace the alias references with the actual query
+for each l_oSQLData in ::p_hSQLDataQueries
+    l_cAlias := lower(l_oSQLData:__enumkey)
+
+    if hb_HGetDef(::p_hAliasWithoutOrderBy,l_cAlias,.f.)
+        l_cSQLCommand := strtran(l_cSQLCommand,"~"+l_cAlias+"~",l_oSQLData:BuildSQL("Fetch KeepLeadingSpaces NoOrderBy"))
+    else
+        l_cSQLCommand := strtran(l_cSQLCommand,"~"+l_cAlias+"~",l_oSQLData:BuildSQL("Fetch KeepLeadingSpaces"))
+    endif
+endfor
+
+return l_cSQLCommand
+//-----------------------------------------------------------------------------------------------------------------
 method SQL(par_1) class hb_orm_SQLCompoundQuery                                          // Assemble and Run SQL command
 
 local l_cCursorTempName
@@ -102,17 +180,6 @@ local l_lErrorOccurred
 local l_nNumberOfFields
 local l_aRecordFieldValues := {}
 local l_aErrors := {}
-
-local l_aCombineQuery
-local l_aCombine
-local l_lFoundAQueryReference
-local l_nReplaceCounter := 0
-local l_cSubstituteString
-local l_cSQLCTQuery
-local l_oSQLData
-local l_cAlias
-
-local l_cEndOfLine    := CRLF
 
 l_xResult := NIL
 
@@ -161,68 +228,8 @@ if !empty(::p_ErrorMessage)
     ::Tally := -1
     
 else
-    if len(::p_aSQLCTQueries) > 0
-        l_cSQLCommand := "WITH "
-        for each l_cSQLCTQuery in ::p_aSQLCTQueries
-            if l_cSQLCTQuery:__enumindex > 1
-                l_cSQLCommand += ", "
-            endif
 
-            l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(l_cSQLCTQuery)+" AS ("+l_cEndOfLine
-            l_cSQLCommand += "~"+lower(l_cSQLCTQuery)+"~"
-            l_cSQLCommand += [)]
-        endfor
-        l_cSQLCommand += l_cEndOfLine
-    else
-        l_cSQLCommand := ""
-    endif
-
-    l_cSQLCommand += "~"+lower(::p_cAnchorAlias)+"~"
-
-    l_aCombineQuery := AClone(::p_aCombineQuery)
-    l_lFoundAQueryReference := .t.
-
-    do while l_lFoundAQueryReference .and. len(l_aCombineQuery) > 0
-        l_lFoundAQueryReference := .f.
-        for each l_aCombine in l_aCombineQuery
-            if "~"+lower(l_aCombine[2])+"~" $ l_cSQLCommand
-                l_lFoundAQueryReference := .t.
-                l_nReplaceCounter++
-
-                do case
-                case l_aCombine[1] == COMBINE_ACTION_UNION
-                    l_cSubstituteString := "~"+lower(l_aCombine[4])+"~ "+"UNION "    +iif(l_aCombine[3],"ALL ","")+l_cEndOfLine+"~"+lower(l_aCombine[5])+"~"
-                case l_aCombine[1] == COMBINE_ACTION_EXCEPT
-                    l_cSubstituteString := "~"+lower(l_aCombine[4])+"~ "+"EXCEPT "   +iif(l_aCombine[3],"ALL ","")+l_cEndOfLine+"~"+lower(l_aCombine[5])+"~"
-                case l_aCombine[1] == COMBINE_ACTION_INTERSECT
-                    l_cSubstituteString := "~"+lower(l_aCombine[4])+"~ "+"INTERSECT "+iif(l_aCombine[3],"ALL ","")+l_cEndOfLine+"~"+lower(l_aCombine[5])+"~"
-                otherwise
-                    l_cSubstituteString := ""
-                endcase
-
-                if l_nReplaceCounter > 1
-                    l_cSQLCommand := strtran(l_cSQLCommand,"~"+lower(l_aCombine[2])+"~","("+l_cEndOfLine+l_cSubstituteString+")")
-                else
-                    l_cSQLCommand := strtran(l_cSQLCommand,"~"+lower(l_aCombine[2])+"~",l_cSubstituteString)
-                endif
-
-                hb_Adel(l_aCombineQuery,l_aCombine:__enumindex,.t.)
-
-                loop
-            endif
-        endfor
-    enddo
-
-    //Replace the alias references with the actual query
-    for each l_oSQLData in ::p_hSQLDataQueries
-        l_cAlias := lower(l_oSQLData:__enumkey)
-
-        if hb_HGetDef(::p_hAliasWithoutOrderBy,l_cAlias,.f.)
-            l_cSQLCommand := strtran(l_cSQLCommand,"~"+l_cAlias+"~",l_oSQLData:BuildSQL("Fetch KeepLeadingSpaces NoOrderBy"))
-        else
-            l_cSQLCommand := strtran(l_cSQLCommand,"~"+l_cAlias+"~",l_oSQLData:BuildSQL("Fetch KeepLeadingSpaces"))
-        endif
-    endfor
+    l_cSQLCommand := ::BuildSQL()
 
     ::p_LastSQLCommand := l_cSQLCommand
 
@@ -571,4 +578,12 @@ AAdd(::p_aCombineQuery,{par_nCombineAction,par_cGeneratedAlias,par_lAll,par_cAli
 ::p_hAliasWithoutOrderBy[lower(par_cAlias1)] := .t.    //The OrderBy should only be used on the last alias in combined SQL
                                                        //_M_ to be enhanced if more than 2 par_cAlias
 return nil
+//-----------------------------------------------------------------------------------------------------------------
+//_M_ Not certain if this works
+// method CombineQueriesAsCTE(par_nCombineAction,par_cGeneratedAlias,par_lAll,par_cAlias1,par_cAlias2,...) class hb_orm_SQLCompoundQuery //par_nCombineAction can be one of COMBINE_ACTION_*
+// AAdd(::p_aCombineQuery,{par_nCombineAction,par_cGeneratedAlias,par_lAll,par_cAlias1,par_cAlias2,...})
+// ::p_hAliasWithoutOrderBy[lower(par_cAlias1)] := .t.    //The OrderBy should only be used on the last alias in combined SQL
+//                                                        //_M_ to be enhanced if more than 2 par_cAlias
+// AAdd(::p_aSQLCTQueries,par_cGeneratedAlias) 
+// return nil
 //-----------------------------------------------------------------------------------------------------------------

@@ -19,7 +19,7 @@ Hash of table names, the value is a 2 dimension array.
 
 The Hash on field names is using the field name as the key and the value is an array as follow:
 {
- BackendTypes,FieldType,FieldLength,FieldDecimals,AllowNulls,IsAutoIncrement
+ BackendTypes,FieldType,FieldLength,FieldDecimal,Nullable,IsAutoIncrement
 }
 
 SQLEngines is a string. If blank or null, the field will exist in all backends.

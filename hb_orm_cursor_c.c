@@ -5,7 +5,7 @@
 // #include "hbvm.h"
 // #include "hbset.h"
 
-HB_FUNC( FIELDPUTALLOWNULL )
+HB_FUNC( FIELDPUTNULLABLE )
 {
     AREAP pArea = ( AREAP ) hb_rddGetCurrentWorkAreaPointer();
 

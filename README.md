@@ -78,7 +78,7 @@ You may create any other indexes that is not named with a leading "&lt;tablename
 - Varchar types must have a max length. Zero is not allowed due to MySQL specification.
 
 ## MySQL Peculiarities
-- No support for multiple PostgreSQL equivalent to "Schema Namespaces"
+- No support for multiple PostgreSQL equivalent to "Namespace" (PostgreSQL Schema)
 - Very fast at retrieving its schema column definition
 - While retrieving schema information, buggy to list columns if also joining on table schema information. MySQL keeps version of schema definitions it seems.
 - Case sensitivity See https://www.informit.com/articles/article.aspx?p=2036581&seqNum=3
@@ -96,7 +96,7 @@ You may create any other indexes that is not named with a leading "&lt;tablename
 
 
 ## PostgreSQL Peculiarities
-- Has a table namespacing concept called "Schemas". This name makes it a little confusing since "Schema" mean the definition of entities (tables), not a namespace. To avoid confusion in the source code we are using SchemaName for referring the the Schema Namespace. The method LoadSchema() will "load in" the definition for all tables in all SchemaNames.
+- Has a table namespacing concept called "Schemas". This name makes it a little confusing since "Schema" mean the definition of entities (tables), not a namespace. To avoid confusion in the source code we are using Namespace for referring the the Postgres Schema. The method LoadSchema() will "load in" the definition for all tables in all SchemaNames.
 - Extremely slow when retrieving schema definition for database with several hundred tables. For this reason this orm create a "cache" of the schema definition, and maintains a log of schema changes.
 - PostgreSQL does not allow you to specify the order of column. Any new column is always at the end of the current list of columns.
 - PostgreSQL does not accept column alias names in HAVING clauses. You need to repeat the entire original column expression in HAVING clause.

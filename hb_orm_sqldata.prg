@@ -1,8 +1,10 @@
-//Copyright (c) 2023 Eric Lendvai MIT License
+//Copyright (c) 2024 Eric Lendvai MIT License
 
 #include "hb_orm.ch"
 
-#define INVALUEWITCH chr(1)
+#define INVALUEWITCH              chr(1)
+#define INPOSSIBLEZERONULLEQUAL   chr(2)
+#define INPOSSIBLEZERONULLGREATER chr(3)
 
 //=================================================================================================================
 #include "hb_orm_sqldata_class_definition.prg"
@@ -17,10 +19,11 @@ return (::p_oSQLConnection != NIL .and.  ::p_oSQLConnection:GetHandle() > 0)
 //-----------------------------------------------------------------------------------------------------------------
 method UseConnection(par_oSQLConnection) class hb_orm_SQLData
 ::p_oSQLConnection            := par_oSQLConnection
+::p_BackendType               := ::p_oSQLConnection:GetBackendType()
 ::p_SQLEngineType             := ::p_oSQLConnection:GetSQLEngineType()
 ::p_ConnectionNumber          := ::p_oSQLConnection:GetConnectionNumber()
 ::p_Database                  := ::p_oSQLConnection:GetDatabase()
-::p_SchemaName                := ::p_oSQLConnection:GetCurrentSchemaName()   // Will "Freeze" the current connection p_SchemaName
+::p_NamespaceName             := ::p_oSQLConnection:GetCurrentNamespaceName()   // Will "Freeze" the current connection p_NamespaceName
 ::p_PrimaryKeyFieldName       := ::p_oSQLConnection:GetPrimaryKeyFieldName()
 ::p_CreationTimeFieldName     := ::p_oSQLConnection:GetCreationTimeFieldName()
 ::p_ModificationTimeFieldName := ::p_oSQLConnection:GetModificationTimeFieldName()
@@ -49,17 +52,17 @@ method destroy() class hb_orm_SQLData
 ::p_oSQLConnection := NIL
 return .t.
 //-----------------------------------------------------------------------------------------------------------------
-method Table(par_xEventId,par_cSchemaAndTableName,par_cAlias) class hb_orm_SQLData
+method Table(par_xEventId,par_cNamespaceAndTableName,par_cAlias) class hb_orm_SQLData
 local l_nPos
 local l_aErrors := {}
 local l_cNonTableAlias
-
+local l_cNamespaceAndTableName
 
 if pcount() > 0
     ::SetEventId(par_xEventId)
 
-    // hb_HCaseMatch(::p_AliasToSchemaAndTableNames,.f.)     No Need to make it case insensitive since Aliases are always converted to lower case
-    hb_HClear(::p_AliasToSchemaAndTableNames)
+    // hb_HCaseMatch(::p_AliasToNamespaceAndTableNames,.f.)     No Need to make it case insensitive since Aliases are always converted to lower case
+    hb_HClear(::p_AliasToNamespaceAndTableNames)
 
     hb_HClear(::p_FieldsAndValues)
     
@@ -70,21 +73,19 @@ if pcount() > 0
     asize(::p_Having,0)
     asize(::p_OrderBy,0)
     
-    
     ::Tally             := 0
     
-    ::p_TableFullPath   := ""
-    ::p_CursorName      := ""
-    ::p_CursorUpdatable := .f.
-    ::p_LastSQLCommand  := ""
-    ::p_LastRunTime     := 0
-    ::p_LastUpdateChangedData := .f.
+    ::p_TableFullPath                 := ""
+    ::p_CursorName                    := ""
+    ::p_CursorUpdatable               := .f.
+    ::p_LastSQLCommand                := ""
+    ::p_LastRunTime                   := 0
+    ::p_LastUpdateChangedData         := .f.
     ::p_LastDateTimeOfChangeFieldName := ""
-    ::p_AddLeadingBlankRecord := .f.
-    ::p_AddLeadingRecordsCursorName := ""
-    
-    ::p_DistinctMode    := 0
-    ::p_Limit           := 0
+    ::p_AddLeadingBlankRecord         := .f.
+    ::p_AddLeadingRecordsCursorName   := ""
+    ::p_DistinctMode                  := 0
+    ::p_Limit                         := 0
     
     ::p_NumberOfFetchedFields := 0          //  Used on Select *
     asize(::p_FetchedFieldsNames,0)
@@ -93,41 +94,54 @@ if pcount() > 0
     
     ::p_ExplainMode := 0
 
-    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cSchemaAndTableName),"")
+    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cNamespaceAndTableName),"")
     if !empty(l_cNonTableAlias)
-        ::p_SchemaAndTableName := l_cNonTableAlias   // Will have the correct casing
+        ::p_NamespaceAndTableName := l_cNonTableAlias   // Will have the correct casing
         if pcount() >= 3 .and. !empty(par_cAlias)
             ::p_TableAlias := lower(par_cAlias)
         else
             ::p_TableAlias := l_cNonTableAlias
         endif
     else
-        if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
-            ::p_SchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-            if pcount() >= 3 .and. !empty(par_cAlias)
-                ::p_TableAlias := lower(par_cAlias)
-            else
-                ::p_TableAlias := lower(::p_SchemaAndTableName)
-            endif
-        else
-            l_nPos = at(".",par_cSchemaAndTableName)
-            if empty(l_nPos)
-                ::p_SchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
-                l_nPos = at(".",::p_SchemaAndTableName)
-            else
-                ::p_SchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-            endif
-            if pcount() >= 3 .and. !empty(par_cAlias)
-                ::p_TableAlias := lower(par_cAlias)
-            else
-                ::p_TableAlias := lower(substr(::p_SchemaAndTableName,l_nPos+1))
-            endif
-        endif
-        if empty(::p_SchemaAndTableName)
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
+        // if ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL   //empty(::p_NamespaceName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
+        //     ::p_NamespaceAndTableName = ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
+        //     if pcount() >= 3 .and. !empty(par_cAlias)
+        //         ::p_TableAlias := lower(par_cAlias)
+        //     else
+        //         ::p_TableAlias := lower(::p_NamespaceAndTableName)
+        //     endif
+        // else
+        //     l_nPos = at(".",par_cNamespaceAndTableName)
+        //     if empty(l_nPos)
+        //         ::p_NamespaceAndTableName := ::p_oSQLConnection:CaseTableName(::p_NamespaceName+"."+par_cNamespaceAndTableName)
+        //         l_nPos = at(".",::p_NamespaceAndTableName)
+        //     else
+        //         ::p_NamespaceAndTableName := ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
+        //     endif
+        //     if pcount() >= 3 .and. !empty(par_cAlias)
+        //         ::p_TableAlias := lower(par_cAlias)
+        //     else
+        //         ::p_TableAlias := lower(substr(::p_NamespaceAndTableName,l_nPos+1))
+        //     endif
+        // endif
+
+        l_cNamespaceAndTableName  := ::p_oSQLConnection:NormalizeTableNameInternal(par_cNamespaceAndTableName)
+        ::p_NamespaceAndTableName := ::p_oSQLConnection:CaseTableName(l_cNamespaceAndTableName)
+
+        if empty(::p_NamespaceAndTableName)
+            AAdd(l_aErrors,{par_cNamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".],hb_orm_GetApplicationStack()})
             ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
+            ::p_TableAlias := ""   // To ensure will crash later on.
         else
-        ::p_AliasToSchemaAndTableNames[::p_TableAlias] := ::p_SchemaAndTableName
+            if pcount() >= 3 .and. !empty(par_cAlias)
+                ::p_TableAlias := lower(par_cAlias)
+            else
+                l_nPos = at(".",::p_NamespaceAndTableName)
+                ::p_TableAlias := lower(substr(::p_NamespaceAndTableName,l_nPos+1))
+            endif
+
+            ::p_AliasToNamespaceAndTableNames[::p_TableAlias] := ::p_NamespaceAndTableName
+            
         endif
     endif
     
@@ -135,7 +149,7 @@ if pcount() > 0
 
 endif
 
-return ::p_SchemaAndTableName
+return ::p_NamespaceAndTableName
 //-----------------------------------------------------------------------------------------------------------------
 method SetEventId(par_xId) class hb_orm_SQLData
 if ValType(par_xId) == "N"
@@ -167,25 +181,36 @@ local l_xResult := NIL
 local l_cFieldName
 local l_aErrors := {}
 local l_nPos
+local l_hColumnDefinition
 
 if !empty(par_cName)
-    // Due to handling SchemaName+TableName or only TableName, the simplest is to ignore table names info in par_cName.
+    // Due to handling NamespaceName+TableName or only TableName, the simplest is to ignore table names info in par_cName.
     l_cFieldName := Strtran(allt(par_cName),"->",".")  // in case Harbour field notification was used instead of SQL notification.
     l_nPos := rat(".",l_cFieldName)
     if l_nPos > 0
         l_cFieldName := substr(l_cFieldName,l_nPos+1)
     endif
 
-    l_cFieldName := ::p_oSQLConnection:CaseFieldName(::p_SchemaAndTableName,l_cFieldName)
+    l_cFieldName := ::p_oSQLConnection:CaseFieldName(::p_NamespaceAndTableName,l_cFieldName)
     if empty(l_cFieldName)
-        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
+        AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
         ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
     else
+        l_hColumnDefinition := ::p_oSQLConnection:GetColumnConfiguration(::p_NamespaceAndTableName,l_cFieldName)
+
         if pcount() == 3
-            ::p_FieldsAndValues[l_cFieldName] := {par_nType,par_xValue}
+           if l_hColumnDefinition["NullZeroEquivalent"] .and. (ValType(par_xValue) == "N") .and. (par_xValue == 0)
+                ::p_FieldsAndValues[l_cFieldName] := {par_nType,nil}
+            else
+                ::p_FieldsAndValues[l_cFieldName] := {par_nType,par_xValue}
+            endif
         else
             l_xResult := hb_HGetDef(::p_FieldsAndValues, l_cFieldName, NIL)
             l_xResult := l_xResult[2]
+
+            if hb_IsNil(l_xResult) .and. l_hColumnDefinition["NullZeroEquivalent"]
+                l_xResult := 0
+            endif
         endif
     endif
 
@@ -219,7 +244,7 @@ return l_xResult
 method FieldExpression(par_cName,par_cValue) class hb_orm_SQLData                        //To set a field (par_cName) in the Table() to the value (par_xValue). If par_xValue is not provided, will return the value from previous set field value
 local l_xResult := NIL
 local l_cValue := par_cValue
-local l_aFieldInfo
+local l_hFieldInfo
 local l_nFieldDec
 local l_aErrors := {}
 
@@ -233,13 +258,13 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     case !empty(el_inlist(upper(par_cValue),"NOW()","NOW"))
         // Auto-determine the precision parameter of current_timestamp()
 
-        l_aFieldInfo := ::p_oSQLConnection:GetFieldInfo(::p_SchemaAndTableName,par_cName)
-        if empty(l_aFieldInfo)
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
+        l_hFieldInfo := ::p_oSQLConnection:GetFieldInfo(::p_NamespaceAndTableName,par_cName)
+        if empty(l_hFieldInfo)
+            AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
             ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
             l_cValue := ""
         else
-            l_nFieldDec := l_aFieldInfo[HB_ORM_GETFIELDINFO_FIELDDECIMALS]
+            l_nFieldDec := hb_HGetDef(l_hFieldInfo,HB_ORM_GETFIELDINFO_FIELDDECIMALS,0)
             if l_nFieldDec > 0
                 l_cValue := "current_timestamp("+alltrim(str(l_nFieldDec))+")"
             else
@@ -295,7 +320,7 @@ method Add(par_iKey) class hb_orm_SQLData                                     //
 local l_cFields
 local l_nSelect
 local l_cSQLCommand
-local l_cFieldName,l_aFieldInfo
+local l_cFieldName,l_hFieldInfo
 local l_aValue
 local l_xValue
 local l_cValues
@@ -320,7 +345,7 @@ if empty(::p_ErrorMessage)
     case len(::p_FieldsAndValues) == 0
         ::p_ErrorMessage = [Missing Fields]
         
-    case empty(::p_SchemaAndTableName)
+    case empty(::p_NamespaceAndTableName)
         ::p_ErrorMessage = [Missing Table]
         
     otherwise
@@ -338,7 +363,7 @@ if empty(::p_ErrorMessage)
             endif
             
             //Check if a CreationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
+            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
                 if !empty(l_cFields)
                     l_cFields += ","
                     l_cValues += ","
@@ -348,7 +373,7 @@ if empty(::p_ErrorMessage)
             endif
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
                 if !empty(l_cFields)
                     l_cFields += ","
                     l_cValues += ","
@@ -359,13 +384,13 @@ if empty(::p_ErrorMessage)
             
             for each l_oField in ::p_FieldsAndValues
                 l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_aFieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_hFieldInfo := ::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
                 l_aValue     := l_oField:__enumValue()
 
                 switch l_aValue[1]
                 case 1  // Value
                     l_cFieldValue := ""
-                    if !el_AUnpack(::PrepValueForMySQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
+                    if !el_AUnpack(::PrepValueForMySQL("adding",l_aValue[2],::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
                     exit
@@ -384,7 +409,7 @@ if empty(::p_ErrorMessage)
                 l_cValues += l_cFieldValue
 
             endfor
-            l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_cFields+[) VALUES (]+l_cValues+[)]
+            l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ (]+l_cFields+[) VALUES (]+l_cValues+[)]
             
             // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
@@ -432,7 +457,7 @@ if empty(::p_ErrorMessage)
             endif
             
             //Check if a CreationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
+            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
                 if !empty(l_cFields)
                     l_cFields += ","
                     l_cValues += ","
@@ -442,7 +467,7 @@ if empty(::p_ErrorMessage)
             endif
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
                 if !empty(l_cFields)
                     l_cFields += ","
                     l_cValues += ","
@@ -453,13 +478,13 @@ if empty(::p_ErrorMessage)
 
             for each l_oField in ::p_FieldsAndValues
                 l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_aFieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_hFieldInfo := ::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
                 l_aValue     := l_oField:__enumValue()
 
                 switch l_aValue[1]
                 case 1  // Value
                     l_cFieldValue := ""
-                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
+                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
                     exit
@@ -471,7 +496,7 @@ if empty(::p_ErrorMessage)
                     l_cFieldValue := "array["
                     for each l_xValue in l_aValue[2]
                         l_cArrayValue := ""
-                        if el_AUnpack(::PrepValueForPostgreSQL("adding",l_xValue,::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cArrayValue)
+                        if el_AUnpack(::PrepValueForPostgreSQL("adding",l_xValue,::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cArrayValue)
                             if l_xValue:__enumindex > 1
                                 l_cFieldValue += ","
                             endif
@@ -485,7 +510,9 @@ if empty(::p_ErrorMessage)
                             loop
                         endif
                     endfor
-                    l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],l_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH],l_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS])+"[]"
+                    l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],;
+                                                                           hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0),;
+                                                                           hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0))+"[]"
                     exit
                 otherwise
                     loop
@@ -500,7 +527,7 @@ if empty(::p_ErrorMessage)
 
             endfor
 
-            l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ (]+l_cFields+[) VALUES (]+l_cValues+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
+            l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ (]+l_cFields+[) VALUES (]+l_cValues+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
             
             // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
@@ -538,7 +565,7 @@ endif
 
 if empty(::p_ErrorMessage)
     if len(l_aAutoTrimmedFields) > 0
-        ::p_oSQLConnection:LogAutoTrimEvent(::p_cEventId,::p_SchemaAndTableName,::p_KEY,l_aAutoTrimmedFields)
+        ::p_oSQLConnection:LogAutoTrimEvent(::p_cEventId,::p_NamespaceAndTableName,::p_KEY,l_aAutoTrimmedFields)
     endif
 else
     ::p_Key = -1
@@ -552,13 +579,12 @@ endif
 
 return (::p_Key > 0)
 //-----------------------------------------------------------------------------------------------------------------
-method Delete(par_xEventId,par_cSchemaAndTableName,par_iKey) class hb_orm_SQLData                              //Delete record. Should be called as .Delete(Key) or .Delete(TableName,Key). The first form require a previous call to .Table(TableName)
+method Delete(par_xEventId,par_cNamespaceAndTableName,par_iKey) class hb_orm_SQLData                              //Delete record. Should be called as .Delete(Key) or .Delete(TableName,Key). The first form require a previous call to .Table(TableName)
 
 local l_nSelect
 local l_cSQLCommand
 local l_cNonTableAlias
-local l_cSchemaAndTableName
-local l_nPos
+local l_cNamespaceAndTableName
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
@@ -575,31 +601,39 @@ endif
 
 if empty(::p_ErrorMessage)
 
-    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cSchemaAndTableName),"")
+    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cNamespaceAndTableName),"")
     if !empty(l_cNonTableAlias)
-        l_cSchemaAndTableName := l_cNonTableAlias   // Will have the correct casing
+        l_cNamespaceAndTableName := l_cNonTableAlias   // Will have the correct casing
     else
-        if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
-            l_cSchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-        else
-            l_nPos = at(".",par_cSchemaAndTableName)
-            if empty(l_nPos)
-                l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
-                l_nPos = at(".",l_cSchemaAndTableName)
-            else
-                l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-            endif
+        // if ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL   //empty(::p_NamespaceName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
+        //     l_cNamespaceAndTableName = ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
+        // else
+        //     l_nPos = at(".",par_cNamespaceAndTableName)
+        //     if empty(l_nPos)
+        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(::p_NamespaceName+"."+par_cNamespaceAndTableName)
+        //         // l_nPos = at(".",l_cNamespaceAndTableName)
+        //     else
+        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
+        //     endif
+        // endif
+        // if empty(l_cNamespaceAndTableName)
+        //     ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".]
+        // else
+        //     // ::p_AliasToNamespaceAndTableNames[::p_TableAlias] := l_cNamespaceAndTableName
+        // endif
+
+        l_cNamespaceAndTableName  := ::p_oSQLConnection:NormalizeTableNameInternal(par_cNamespaceAndTableName)
+        l_cNamespaceAndTableName  := ::p_oSQLConnection:CaseTableName(l_cNamespaceAndTableName)
+
+        if empty(l_cNamespaceAndTableName)
+            ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".]
         endif
-        if empty(l_cSchemaAndTableName)
-            ::p_ErrorMessage := [Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".]
-        else
-            // ::p_AliasToSchemaAndTableNames[::p_TableAlias] := l_cSchemaAndTableName
-        endif
+
     endif
 
     do case
     case !empty(::p_ErrorMessage)
-    case empty(l_cSchemaAndTableName)
+    case empty(l_cNamespaceAndTableName)
         ::p_ErrorMessage := [Missing Table]
         
     case empty(par_iKey)
@@ -608,18 +642,8 @@ if empty(::p_ErrorMessage)
     otherwise
         l_nSelect := iif(used(),select(),0)
         
-        do case
-        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-            
-            l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(l_cSchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(par_iKey)
-            ::p_LastSQLCommand = l_cSQLCommand
-            
-        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-            
-            l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(l_cSchemaAndTableName)+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(par_iKey)
-            ::p_LastSQLCommand = l_cSQLCommand
-            
-        endcase
+        l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(l_cNamespaceAndTableName))+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(par_iKey)
+        ::p_LastSQLCommand = l_cSQLCommand
 
         if empty(::p_ErrorMessage)
             if ::p_oSQLConnection:SQLExec(par_xEventId,l_cSQLCommand)
@@ -647,7 +671,7 @@ method Update(par_iKey) class hb_orm_SQLData                                  //
 local l_nSelect
 local l_cSQLCommand
 local l_cFieldName
-local l_aFieldInfo
+local l_hFieldInfo
 local l_aValue
 local l_xValue
 local l_cFieldValue
@@ -675,7 +699,7 @@ if empty(::p_ErrorMessage)
     case len(::p_FieldsAndValues) == 0
         ::p_ErrorMessage = [Missing Fields]
         
-    case empty(::p_SchemaAndTableName)
+    case empty(::p_NamespaceAndTableName)
         ::p_ErrorMessage = [Missing Table]
         
     case empty(::p_KEY)
@@ -689,7 +713,7 @@ if empty(::p_ErrorMessage)
             l_cSQLCommand := ""
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
                 if !empty(l_cSQLCommand)
                     l_cSQLCommand += ","
                 endif
@@ -698,13 +722,13 @@ if empty(::p_ErrorMessage)
             
             for each l_oField in ::p_FieldsAndValues
                 l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_aFieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_hFieldInfo := ::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
                 l_aValue     := l_oField:__enumValue()
 
                 switch l_aValue[1]
                 case 1  // Value
                     l_cFieldValue := ""
-                    if !el_AUnpack(::PrepValueForMySQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
+                    if !el_AUnpack(::PrepValueForMySQL("adding",l_aValue[2],::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
                     exit
@@ -722,7 +746,7 @@ if empty(::p_ErrorMessage)
 
             endfor
 
-            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
             ::p_LastSQLCommand = l_cSQLCommand
             
             if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
@@ -737,13 +761,13 @@ if empty(::p_ErrorMessage)
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             // M_ find a way to integrate the same concept as the code below. Should the update be a stored Procedure ?
             *if !empty(::p_LastDateTimeOfChangeFieldName)
-            *	replace (::p_SchemaAndTableName+"->"+::p_LastDateTimeOfChangeFieldName) with v_LocalTime
+            *	replace (::p_NamespaceAndTableName+"->"+::p_LastDateTimeOfChangeFieldName) with v_LocalTime
             *endif
                         
             l_cSQLCommand := ""
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
                 if !empty(l_cSQLCommand)
                     l_cSQLCommand += ","
                 endif
@@ -752,13 +776,13 @@ if empty(::p_ErrorMessage)
             
             for each l_oField in ::p_FieldsAndValues
                 l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_aFieldInfo := ::p_oSQLConnection:p_Schema[::p_SchemaAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_hFieldInfo := ::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
                 l_aValue     := l_oField:__enumValue()
 
                 switch l_aValue[1]
                 case 1  // Value
                     l_cFieldValue := ""
-                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
+                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                         loop
                     endif
                     exit
@@ -770,7 +794,7 @@ if empty(::p_ErrorMessage)
                     l_cFieldValue := "array["
                     for each l_xValue in l_aValue[2]
                         l_cArrayValue := ""
-                        if el_AUnpack(::PrepValueForPostgreSQL("adding",l_xValue,::p_SchemaAndTableName,0,l_cFieldName,l_aFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cArrayValue)
+                        if el_AUnpack(::PrepValueForPostgreSQL("adding",l_xValue,::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cArrayValue)
                             if l_xValue:__enumindex > 1
                                 l_cFieldValue += ","
                             endif
@@ -784,7 +808,9 @@ if empty(::p_ErrorMessage)
                             loop
                         endif
                     endfor
-                    l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],l_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH],l_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS])+"[]"
+                    l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],;
+                                                                           hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0),;
+                                                                           hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0))+"[]"
                     exit
                 otherwise
                     loop
@@ -797,7 +823,7 @@ if empty(::p_ErrorMessage)
 
             endfor
 
-            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
 
             ::p_LastSQLCommand = l_cSQLCommand
             
@@ -819,7 +845,7 @@ endif
 
 if empty(::p_ErrorMessage)
     if len(l_aAutoTrimmedFields) > 0
-        ::p_oSQLConnection:LogAutoTrimEvent(::p_cEventId,::p_SchemaAndTableName,::p_KEY,l_aAutoTrimmedFields)
+        ::p_oSQLConnection:LogAutoTrimEvent(::p_cEventId,::p_NamespaceAndTableName,::p_KEY,l_aAutoTrimmedFields)
     endif
 else
     ::Tally = -1
@@ -892,7 +918,7 @@ if pcount() > 1 .and. "^" $ par_cExpression
                 // case "P"  // Pointer to function, procedure or method (*)
                 // case "S"  // Symbolic name (*)
                 otherwise
-                    AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Wrong Parameter Type in PrepExpression()],hb_orm_GetApplicationStack()})
+                    AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Wrong Parameter Type in PrepExpression()],hb_orm_GetApplicationStack()})
                     ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
                 endswitch
             else
@@ -946,9 +972,8 @@ if pcount() > 1 .and. "^" $ par_cExpression
                 // case "P"  // Pointer to function, procedure or method (*)
                 // case "S"  // Symbolic name (*)
                 otherwise
-                    AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Wrong Parameter Type in PrepExpression()],hb_orm_GetApplicationStack()})
+                    AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Wrong Parameter Type in PrepExpression()],hb_orm_GetApplicationStack()})
                     ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
-                    
                 endswitch
             else
                 l_cResult += l_cChar
@@ -977,8 +1002,8 @@ endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method Join(par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...) class hb_orm_SQLData    // Join Tables. Will return a handle that can be used later by ReplaceJoin()
-local l_cSchemaAndTableName
+method Join(par_cType,par_cNamespaceAndTableName,par_cAlias,par_cExpression,...) class hb_orm_SQLData    // Join Tables. Will return a handle that can be used later by ReplaceJoin()
+local l_cNamespaceAndTableName
 local l_cAlias
 local l_nPos
 local l_aErrors := {}
@@ -988,52 +1013,80 @@ if empty(par_cType)
     //Used to reserve a Join Position
     AAdd(::p_Join,{})
 else
-    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cSchemaAndTableName),"")
+    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cNamespaceAndTableName),"")
     if !empty(l_cNonTableAlias)
-        l_cSchemaAndTableName := l_cNonTableAlias
+        l_cNamespaceAndTableName := l_cNonTableAlias
         if pcount() >= 3 .and. !empty(par_cAlias)
             l_cAlias := lower(par_cAlias)
         else
-            l_cAlias := l_cSchemaAndTableName
+            l_cAlias := l_cNamespaceAndTableName
         endif
-        ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
+        ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
     else
-        if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
-            l_cSchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-            if pcount() >= 3 .and. !empty(par_cAlias)
-                l_cAlias := lower(par_cAlias)
-            else
-                l_cAlias := lower(l_cSchemaAndTableName)
-            endif
-        else
-            l_nPos = at(".",par_cSchemaAndTableName)
-            if empty(l_nPos)
-                l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
-                l_nPos = at(".",l_cSchemaAndTableName)
-            else
-                l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-            endif
-            if pcount() >= 3 .and. !empty(par_cAlias)
-                l_cAlias := lower(par_cAlias)
-            else
-                l_cAlias := lower(substr(l_cSchemaAndTableName,l_nPos+1))
-            endif
-        endif
-        if empty(l_cSchemaAndTableName)
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
+        // l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
+
+        // if ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL   //empty(::p_NamespaceName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
+        //     l_cNamespaceAndTableName = ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
+        //     if pcount() >= 3 .and. !empty(par_cAlias)
+        //         l_cAlias := lower(par_cAlias)
+        //     else
+        //         l_cAlias := lower(l_cNamespaceAndTableName)
+        //     endif
+        // else
+        //     l_nPos = at(".",par_cNamespaceAndTableName)
+        //     if empty(l_nPos)
+        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(::p_NamespaceName+"."+par_cNamespaceAndTableName)
+        //         l_nPos = at(".",l_cNamespaceAndTableName)
+        //     else
+        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
+        //     endif
+        //     if pcount() >= 3 .and. !empty(par_cAlias)
+        //         l_cAlias := lower(par_cAlias)
+        //     else
+        //         l_cAlias := lower(substr(l_cNamespaceAndTableName,l_nPos+1))
+        //     endif
+        // endif
+        // if empty(l_cNamespaceAndTableName)
+        //     AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".],hb_orm_GetApplicationStack()})
+        //     ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
+        // else
+        //     ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
+        // endif
+
+
+// altd()
+        l_cNamespaceAndTableName := ::p_oSQLConnection:NormalizeTableNameInternal(par_cNamespaceAndTableName)
+        l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(l_cNamespaceAndTableName)
+
+        if empty(l_cNamespaceAndTableName)
+            AAdd(l_aErrors,{par_cNamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".],hb_orm_GetApplicationStack()})
             ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
+            l_cAlias := ""   // To ensure will crash later on.
         else
-            ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
+            if pcount() >= 3 .and. !empty(par_cAlias)
+                l_cAlias := lower(par_cAlias)
+            else
+                l_nPos = at(".",l_cNamespaceAndTableName)
+                l_cAlias := lower(substr(l_cNamespaceAndTableName,l_nPos+1))
+            endif
+
+            ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
+            
         endif
+
+
+
+
+
     endif
 
-    AAdd(::p_Join,{upper(allt(par_cType)),l_cSchemaAndTableName,l_cAlias,allt(::PrepExpression(par_cExpression,...))})
+    AAdd(::p_Join,{upper(allt(par_cType)),l_cNamespaceAndTableName,l_cAlias,allt(::PrepExpression(par_cExpression,...))})
 endif
 
 return len(::p_Join)
 //-----------------------------------------------------------------------------------------------------------------
-method ReplaceJoin(par_nJoinNumber,par_cType,par_cSchemaAndTableName,par_cAlias,par_cExpression,...) class hb_orm_SQLData      // Replace a Join tables definition
-local l_cSchemaAndTableName
+method ReplaceJoin(par_nJoinNumber,par_cType,par_cNamespaceAndTableName,par_cAlias,par_cExpression,...) class hb_orm_SQLData      // Replace a Join tables definition
+local l_cNamespaceAndTableName
 local l_cAlias
 local l_nPos
 local l_aErrors := {}
@@ -1042,46 +1095,70 @@ local l_cNonTableAlias
 if empty(par_cType)
     ::p_Join[par_nJoinNumber] := {}
 else
-    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cSchemaAndTableName),"")
+    l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,lower(par_cNamespaceAndTableName),"")
     if !empty(l_cNonTableAlias)
-        l_cSchemaAndTableName := l_cNonTableAlias
+        l_cNamespaceAndTableName := l_cNonTableAlias
         if pcount() >= 4 .and. !empty(par_cAlias)
             l_cAlias := lower(par_cAlias)
         else
-            l_cAlias := l_cSchemaAndTableName
+            l_cAlias := l_cNamespaceAndTableName
         endif
-        ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
+        ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
+
     else
-        if empty(::p_SchemaName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
-            l_cSchemaAndTableName = ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-            if pcount() >= 4 .and. !empty(par_cAlias)
-                l_cAlias := lower(par_cAlias)
-            else
-                l_cAlias := lower(l_cSchemaAndTableName)
-            endif
-        else
-            l_nPos = at(".",par_cSchemaAndTableName)
-            if empty(l_nPos)
-                l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(::p_SchemaName+"."+par_cSchemaAndTableName)
-                l_nPos = at(".",l_cSchemaAndTableName)
-            else
-                l_cSchemaAndTableName := ::p_oSQLConnection:CaseTableName(par_cSchemaAndTableName)
-            endif
-            if pcount() >= 4 .and. !empty(par_cAlias)
-                l_cAlias := lower(par_cAlias)
-            else
-                l_cAlias := lower(substr(l_cSchemaAndTableName,l_nPos+1))
-            endif
-        endif
-        if empty(l_cSchemaAndTableName)
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cSchemaAndTableName+[".],hb_orm_GetApplicationStack()})
+        // if ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL   //empty(::p_NamespaceName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
+        //     l_cNamespaceAndTableName = ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
+        //     if pcount() >= 4 .and. !empty(par_cAlias)
+        //         l_cAlias := lower(par_cAlias)
+        //     else
+        //         l_cAlias := lower(l_cNamespaceAndTableName)
+        //     endif
+        // else
+        //     l_nPos = at(".",par_cNamespaceAndTableName)
+        //     if empty(l_nPos)
+        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(::p_NamespaceName+"."+par_cNamespaceAndTableName)
+        //         l_nPos = at(".",l_cNamespaceAndTableName)
+        //     else
+        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
+        //     endif
+        //     if pcount() >= 4 .and. !empty(par_cAlias)
+        //         l_cAlias := lower(par_cAlias)
+        //     else
+        //         l_cAlias := lower(substr(l_cNamespaceAndTableName,l_nPos+1))
+        //     endif
+        // endif
+        // if empty(l_cNamespaceAndTableName)
+        //     AAdd(l_aErrors,{par_cNamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".],hb_orm_GetApplicationStack()})
+        //     ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
+        // else
+        //     ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
+        // endif
+
+
+        l_cNamespaceAndTableName := ::p_oSQLConnection:NormalizeTableNameInternal(par_cNamespaceAndTableName)
+        l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(l_cNamespaceAndTableName)
+
+        if empty(l_cNamespaceAndTableName)
+            AAdd(l_aErrors,{par_cNamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".],hb_orm_GetApplicationStack()})
             ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
+            l_cAlias := ""   // To ensure will crash later on.
         else
-            ::p_AliasToSchemaAndTableNames[l_cAlias] := l_cSchemaAndTableName
+            if pcount() >= 4 .and. !empty(par_cAlias)
+                l_cAlias := lower(par_cAlias)
+            else
+                l_nPos   = at(".",l_cNamespaceAndTableName)
+                l_cAlias := lower(substr(l_cNamespaceAndTableName,l_nPos+1))
+            endif
+
+            ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
+            
         endif
+
+
+
     endif
 
-    ::p_Join[par_nJoinNumber] := {upper(allt(par_cType)),l_cSchemaAndTableName,l_cAlias,allt(::PrepExpression(par_cExpression,...))}
+    ::p_Join[par_nJoinNumber] := {upper(allt(par_cType)),l_cNamespaceAndTableName,l_cAlias,allt(::PrepExpression(par_cExpression,...))}
 endif
 
 return par_nJoinNumber
@@ -1307,19 +1384,19 @@ endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method ExpressionToMYSQL(par_cExpression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
+method ExpressionToMYSQL(par_cSource,par_cExpression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
 //_M_
-return ::FixAliasAndFieldNameCasingInExpression(par_cExpression)
+return ::FixAliasAndFieldNameCasingInExpression(par_cSource,par_cExpression)
 //-----------------------------------------------------------------------------------------------------------------
-method ExpressionToPostgreSQL(par_cExpression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
+method ExpressionToPostgreSQL(par_cSource,par_cExpression) class hb_orm_SQLData    //_M_  to generalize UDF translation to backend
 //_M_
-return ::FixAliasAndFieldNameCasingInExpression(par_cExpression)
+return ::FixAliasAndFieldNameCasingInExpression(par_cSource,par_cExpression)
 //-----------------------------------------------------------------------------------------------------------------
-method FixAliasAndFieldNameCasingInExpression(par_cExpression) class hb_orm_SQLData   //_M_
+method FixAliasAndFieldNameCasingInExpression(par_cSource,par_cExpression) class hb_orm_SQLData   //_M_
 local l_nHashPos
 local l_cResult := ""
 local l_cAliasName,l_cFieldName
-local l_cSchemaAndTableName
+local l_cNamespaceAndTableName
 local l_cTokenDelimiterLeft,l_cTokenDelimiterRight
 local l_cByte
 local l_lByteIsToken
@@ -1328,14 +1405,16 @@ local l_cStreamBuffer        := ""
 local l_lValueMode := .f.
 
 local l_nColumnTypeDetectCount := 0  // to detect the type of returned field.
-local l_aFieldInfo
+local l_hFieldInfo
 local l_cColumnTypeDetectExpression
 local l_cColumnTypeDetectType
 local l_lColumnTypeDetectArray := .f.
 
 local l_cNonTableAlias
 
-
+local l_hColumnDefinition
+local l_lLastFieldWasAForeignKeyZeroNullConversion := .f.  // Only used if par_cSource <> "column", since in column mode we are using a COALESCE() to deal with NULLs
+local l_lLastFieldWasAForeignKeyZeroNullFoundOperator
 // if par_cExpression == "table.pk"
 //     altd()
 // endif
@@ -1348,7 +1427,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_cTokenDelimiterLeft  := ["]
     l_cTokenDelimiterRight := ["]
-    //l_SchemaPrefix        := ::p_SchemaName+"."  // ::p_oSQLConnection:GetCurrentSchemaName()+"."
+    //l_SchemaPrefix        := ::p_NamespaceName+"."  // ::p_oSQLConnection:GetCurrentNamespaceName()+"."
 endcase
 
 for each l_cByte in @par_cExpression
@@ -1362,7 +1441,12 @@ for each l_cByte in @par_cExpression
         loop
     endif
 
-    l_lByteIsToken := (l_cByte $ "0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    if l_nTableFieldDetection == 0  //Token may not start with a numeric
+        l_lByteIsToken := (l_cByte $ "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    else
+        l_lByteIsToken := (l_cByte $ "0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    endif
+
     do case
     case l_nTableFieldDetection == 0  // Not in <AliasName>.<FieldName> pattern
         if l_lByteIsToken
@@ -1370,8 +1454,29 @@ for each l_cByte in @par_cExpression
             l_cStreamBuffer        := l_cByte
             l_cAliasName           := l_cByte
             l_cFieldName           := ""
+            l_lLastFieldWasAForeignKeyZeroNullConversion := .f.
         else
-            l_cResult += l_cByte
+            // Logic to deal with "= 0" and "> 0" that should be converted to "IS NULL" or "IS NOT NULL"
+            if l_lLastFieldWasAForeignKeyZeroNullConversion
+                do case
+                case l_cByte == " "
+                    if !l_lLastFieldWasAForeignKeyZeroNullFoundOperator  //Don't add extra blanks
+                        l_cResult += " "
+                    endif
+                case l_cByte == "="
+                    l_cResult += INPOSSIBLEZERONULLEQUAL+" "   // Also add a blank after the operator
+                    l_lLastFieldWasAForeignKeyZeroNullFoundOperator := .t.
+                case l_cByte == ">"
+                    l_cResult += INPOSSIBLEZERONULLGREATER+" "   // Also add a blank after the operator
+                    l_lLastFieldWasAForeignKeyZeroNullFoundOperator := .t.
+                otherwise
+                    l_cResult += l_cByte
+                    l_lLastFieldWasAForeignKeyZeroNullConversion := .f.
+                endcase
+            else
+                l_cResult += l_cByte
+            endif
+
         endif
     case l_nTableFieldDetection == 1 // in <AliasName>
         do case
@@ -1412,26 +1517,57 @@ for each l_cByte in @par_cExpression
 
             l_cNonTableAlias := hb_HGetDef(::p_NonTableAliases,l_cAliasName,"")
             if !empty(l_cNonTableAlias)   // If the alias is probably from a CTE statement
-                l_cResult += l_cTokenDelimiterLeft+l_cNonTableAlias+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
+                l_cResult += l_cTokenDelimiterLeft+l_cNonTableAlias+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight+l_cByte
             else
 
                 // Fix The Casing of l_cAliasName and l_cFieldName based on the actual on file tables.
 
-                l_nHashPos := hb_hPos(::p_oSQLConnection:p_Schema,hb_HGetDef(::p_AliasToSchemaAndTableNames,l_cAliasName,l_cAliasName))
+                l_nHashPos := hb_hPos(::p_oSQLConnection:p_TableSchema,hb_HGetDef(::p_AliasToNamespaceAndTableNames,l_cAliasName,l_cAliasName))
                 if l_nHashPos > 0
-                    l_cSchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_nHashPos)
-                    l_nHashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+                    l_cNamespaceAndTableName := hb_hKeyAt(::p_oSQLConnection:p_TableSchema,l_nHashPos)
+                    l_nHashPos := hb_hPos(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
                     if l_nHashPos > 0
-                        l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
-                        l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight+l_cByte
+                        l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+
+                        l_hColumnDefinition := ::p_oSQLConnection:GetColumnConfiguration(l_cNamespaceAndTableName,l_cFieldName)
+                        if par_cSource == "column"
+                            if l_hColumnDefinition["NullZeroEquivalent"]
+                                l_cResult += "COALESCE("+l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight+",0)"
+                            else
+                                l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
+                            endif
+                            l_cResult += l_cByte
+                        else
+                            l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
+                            l_lLastFieldWasAForeignKeyZeroNullConversion := l_hColumnDefinition["NullZeroEquivalent"]
+                            if l_lLastFieldWasAForeignKeyZeroNullConversion
+                                do case
+                                case l_cByte == " "
+                                    l_cResult += " "
+                                    l_lLastFieldWasAForeignKeyZeroNullFoundOperator := .f.
+                                case l_cByte == "="   //There was no blanls 
+                                    l_cResult += INPOSSIBLEZERONULLEQUAL+" "   // Also add a blank after the operator
+                                    l_lLastFieldWasAForeignKeyZeroNullFoundOperator := .t.
+                                case l_cByte == ">"
+                                    l_cResult += INPOSSIBLEZERONULLGREATER+" "   // Also add a blank after the operator
+                                    l_lLastFieldWasAForeignKeyZeroNullFoundOperator := .t.
+                                otherwise
+                                    l_cResult += l_cByte
+                                    l_lLastFieldWasAForeignKeyZeroNullConversion := .f.   // Actually we are not in a scenario that could warrant IS NULL or IS NOT NULL
+                                endcase
+                            else
+                                l_cResult += l_cByte
+                            endif
+                        endif
+                        // l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight+l_cByte
                         
                         // Detect the field type if only 1 field is used in the expression
                         if l_nColumnTypeDetectCount == 0
                             l_nColumnTypeDetectCount      := 1
-                            l_aFieldInfo                 := hb_HValueAt(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                            l_hFieldInfo                  := hb_HValueAt(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
                             l_cColumnTypeDetectExpression := l_cAliasName+"."+l_cFieldName
-                            l_cColumnTypeDetectType       := l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
-                            l_lColumnTypeDetectArray      := ("A" $ nvl(l_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES],""))
+                            l_cColumnTypeDetectType       := l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
+                            l_lColumnTypeDetectArray      := hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
                         else
                             l_nColumnTypeDetectCount += 1
                         endif
@@ -1453,6 +1589,17 @@ for each l_cByte in @par_cExpression
     
 endfor
 
+//1234567
+l_cResult := strtran(l_cResult," "+INPOSSIBLEZERONULLEQUAL+" 0"," IS NULL ")   //Logic to replace with a blank before the operator. A potential extra blank after "NULL" to avoid concatenating with a literal.
+l_cResult := strtran(l_cResult,    INPOSSIBLEZERONULLEQUAL+" 0"," IS NULL ")   //In case there was no blank before the operator
+l_cResult := strtran(l_cResult,INPOSSIBLEZERONULLEQUAL,"=")
+
+l_cResult := strtran(l_cResult," "+INPOSSIBLEZERONULLGREATER+" 0"," IS NOT NULL ")   //Logic to replace with a blank before the operator
+l_cResult := strtran(l_cResult,    INPOSSIBLEZERONULLGREATER+" 0"," IS NOT NULL ")   //In case there was no blank before the operator
+l_cResult := strtran(l_cResult,INPOSSIBLEZERONULLGREATER,">")
+
+l_lLastFieldWasAForeignKeyZeroNullConversion := .f.  //No more space of a right side expression.
+
 if l_nTableFieldDetection == 3
     // Fix The Casing of l_cAliasName and l_cFieldName based on the actual on-file tables.
     l_cAliasName := lower(l_cAliasName)   //Alias are always converted to lowercase.
@@ -1461,25 +1608,35 @@ if l_nTableFieldDetection == 3
     if !empty(l_cNonTableAlias)   // If the alias is probably from a CTE statement
         l_cResult += l_cTokenDelimiterLeft+l_cNonTableAlias+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
     else
-        l_nHashPos := hb_hPos(::p_oSQLConnection:p_Schema,hb_HGetDef(::p_AliasToSchemaAndTableNames,l_cAliasName,l_cAliasName))
+        l_nHashPos := hb_hPos(::p_oSQLConnection:p_TableSchema,hb_HGetDef(::p_AliasToNamespaceAndTableNames,l_cAliasName,l_cAliasName))
         if l_nHashPos > 0
-            l_cSchemaAndTableName := hb_hKeyAt(::p_oSQLConnection:p_Schema,l_nHashPos) 
-            // l_nPos := at(".",l_cSchemaAndTableName)
+            l_cNamespaceAndTableName := hb_hKeyAt(::p_oSQLConnection:p_TableSchema,l_nHashPos) 
+            // l_nPos := at(".",l_cNamespaceAndTableName)
             // if !empty(l_nPos)
-            //     l_cAliasName := substr(l_cSchemaAndTableName,l_nPos+1)
+            //     l_cAliasName := substr(l_cNamespaceAndTableName,l_nPos+1)
             // endif
-            l_nHashPos := hb_hPos(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+            l_nHashPos := hb_hPos(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
             if l_nHashPos > 0
-                l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
-                l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
+                l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+
+                if par_cSource == "column"
+                    l_hColumnDefinition := ::p_oSQLConnection:GetColumnConfiguration(l_cNamespaceAndTableName,l_cFieldName)
+                    if l_hColumnDefinition["NullZeroEquivalent"]
+                        l_cResult += "COALESCE("+l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight+",0)"
+                    else
+                        l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
+                    endif
+                else
+                    l_cResult += l_cTokenDelimiterLeft+l_cAliasName+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
+                endif
                 
                 // Detect the field type if only 1 field is used in the expression
                 if l_nColumnTypeDetectCount == 0
                     l_nColumnTypeDetectCount      := 1
-                    l_aFieldInfo                 := hb_HValueAt(::p_oSQLConnection:p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                    l_hFieldInfo                  := hb_HValueAt(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
                     l_cColumnTypeDetectExpression := l_cAliasName+"."+l_cFieldName
-                    l_cColumnTypeDetectType       := l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
-                    l_lColumnTypeDetectArray      := ("A" $ nvl(l_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES],""))
+                    l_cColumnTypeDetectType       := l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
+                    l_lColumnTypeDetectArray      := hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
                 else
                     l_nColumnTypeDetectCount += 1
                 endif
@@ -1505,6 +1662,8 @@ if l_nColumnTypeDetectCount == 1
         case l_cColumnTypeDetectType == "UUI"
             // l_cResult := "("+l_cResult+")::character varying(36)"
             l_cResult := "("+l_cResult+")::character(36)"
+        case l_cColumnTypeDetectType == "JSB"
+            l_cResult := "("+l_cResult+")::text"
         case l_cColumnTypeDetectType == "JS"
             l_cResult := "("+l_cResult+")::text"
         endcase
@@ -1512,6 +1671,10 @@ if l_nColumnTypeDetectCount == 1
 endif
 
 return l_cResult
+//-----------------------------------------------------------------------------------------------------------------
+method SetExplainMode(par_nMode) class hb_orm_SQLData                                          // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
+::p_ExplainMode := par_nMode
+return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method BuildSQL(par_cAction) class hb_orm_SQLData   // Used internally. par_cAction can be "Count" or "Fetch".
 
@@ -1555,7 +1718,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         //Precompute the max length of the Column Expression
         l_nMaxTextLength1 := 0
         for l_nCounter := 1 to l_nNumberOfColumnsToReturn
-            l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToMYSQL(::p_ColumnToReturn[l_nCounter,1])))
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToMYSQL("column",::p_ColumnToReturn[l_nCounter,1])))
         endfor
 
         // _M_ add support to "*"
@@ -1564,9 +1727,9 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                 l_cSQLCommand += [,]+l_cEndOfLine
             endif
             if l_cSQLCommand == [SELECT ]+l_cEndOfLine
-                l_cSQLCommand := [SELECT ]+padr(::ExpressionToMYSQL(::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                l_cSQLCommand := [SELECT ]+padr(::ExpressionToMYSQL("column",::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
             else
-                l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToMYSQL(::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToMYSQL("column",::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
             endif
             
             if !empty(::p_ColumnToReturn[l_nCounter,2])
@@ -1579,10 +1742,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
     endcase
     
-    if ::p_SchemaAndTableName == ::p_TableAlias
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+l_cEndOfLine
+    if ::p_NamespaceAndTableName == ::p_TableAlias
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+l_cEndOfLine
     else
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
     endif
     
     l_nMaxTextLength1 := 0
@@ -1603,7 +1766,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             loop
         endcase
 
-        l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]) ))
+        l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_Join[l_nCounter,2])) ))
 
         l_nMaxTextLength3 := max(l_nMaxTextLength3,len( ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])) ))
 
@@ -1623,24 +1786,24 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             loop
         endcase
         
-        l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]),l_nMaxTextLength2,chr(1))
+        l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_Join[l_nCounter,2])),l_nMaxTextLength2,chr(1))
         
         l_cSQLCommand += [ AS ] + padr(::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,3]),l_nMaxTextLength3,chr(1))
 
-        l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_nCounter,4])+l_cEndOfLine
+        l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL("join",::p_Join[l_nCounter,4])+l_cEndOfLine
         
     endfor
     
     do case
     case l_nNumberOfWheres = 1
-        l_cSQLCommand += [ WHERE (]+::ExpressionToMYSQL(::p_Where[1])+[)]+l_cEndOfLine
+        l_cSQLCommand += [ WHERE (]+::ExpressionToMYSQL("where",::p_Where[1])+[)]+l_cEndOfLine
     case l_nNumberOfWheres > 1
         l_cSQLCommand += [ WHERE (]
         for l_nCounter = 1 to l_nNumberOfWheres
             if l_nCounter > 1
                 l_cSQLCommand += l_cEndOfLine+ padl([ AND ],7,chr(1))
             endif
-            l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Where[l_nCounter])+[)]
+            l_cSQLCommand += [(]+::ExpressionToMYSQL("where",::p_Where[l_nCounter])+[)]
         endfor
         l_cSQLCommand += [)]+l_cEndOfLine
     endcase
@@ -1651,7 +1814,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             if l_nCounter > 1
                 l_cSQLCommand += [,]+l_cEndOfLine+replicate(chr(1),len([ GROUP BY ]))
             endif
-            // l_cSQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_nCounter])  //_M_ not an expression
+            // l_cSQLCommand += ::ExpressionToMYSQL("groupby",::p_GroupBy[l_nCounter])  //_M_ not an expression
             l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_GroupBy[l_nCounter])
         endfor
         l_cSQLCommand += l_cEndOfLine
@@ -1659,14 +1822,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         
     do case
     case l_nNumberOfHavings = 1
-        l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])+l_cEndOfLine
+        l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL("having",::p_Having[1])+l_cEndOfLine
     case l_nNumberOfHavings > 1
         l_cSQLCommand += [ HAVING (]
         for l_nCounter = 1 to l_nNumberOfHavings
             if l_nCounter > 1
                 l_cSQLCommand += l_cEndOfLine+padl([ AND ],8,chr(1))
             endif
-            l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_nCounter])+[)]
+            l_cSQLCommand += [(]+::ExpressionToMYSQL("having",::p_Having[l_nCounter])+[)]
         endfor
         l_cSQLCommand += [)]+l_cEndOfLine
     endcase
@@ -1783,7 +1946,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         //Precompute the max length of the Column Expression
         l_nMaxTextLength1 := 0
         for l_nCounter := 1 to l_nNumberOfColumnsToReturn
-            l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToPostgreSQL(::p_ColumnToReturn[l_nCounter,1])))
+            l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToPostgreSQL("column",::p_ColumnToReturn[l_nCounter,1])))
         endfor
         
         // _M_ add support to "*"
@@ -1792,9 +1955,9 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_cSQLCommand += [,]+l_cEndOfLine
             endif
             if l_cSQLCommand == [SELECT ]+l_cEndOfLine
-                l_cSQLCommand := [SELECT ]+padr(::ExpressionToPostgreSQL(::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                l_cSQLCommand := [SELECT ]+padr(::ExpressionToPostgreSQL("column",::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
             else
-                l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToPostgreSQL(::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToPostgreSQL("column",::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
             endif
             
             if !empty(::p_ColumnToReturn[l_nCounter,2])
@@ -1807,10 +1970,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     endcase
     
-    if ::p_SchemaAndTableName == ::p_TableAlias
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+l_cEndOfLine
+    if ::p_NamespaceAndTableName == ::p_TableAlias
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+l_cEndOfLine
     else
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
     endif
     
     l_nMaxTextLength1 := 0
@@ -1831,7 +1994,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             loop
         endcase
 
-        l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]) ))
+        l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_Join[l_nCounter,2])) ))
 
         l_nMaxTextLength3 := max(l_nMaxTextLength3,len( ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])) ))
 
@@ -1851,24 +2014,24 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             loop
         endcase
         
-        l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]),l_nMaxTextLength2,chr(1))
+        l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_Join[l_nCounter,2])),l_nMaxTextLength2,chr(1))
 
         l_cSQLCommand += [ AS ] + padr(::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,3]),l_nMaxTextLength3,chr(1))
         
-        l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_nCounter,4])+l_cEndOfLine
+        l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL("join",::p_Join[l_nCounter,4])+l_cEndOfLine
         
     endfor
     
     do case
     case l_nNumberOfWheres = 1
-        l_cSQLCommand += [ WHERE (]+::ExpressionToPostgreSQL(::p_Where[1])+[)]+l_cEndOfLine
+        l_cSQLCommand += [ WHERE (]+::ExpressionToPostgreSQL("where",::p_Where[1])+[)]+l_cEndOfLine
     case l_nNumberOfWheres > 1
         l_cSQLCommand += [ WHERE (]
         for l_nCounter = 1 to l_nNumberOfWheres
             if l_nCounter > 1
                 l_cSQLCommand += l_cEndOfLine+padl([ AND ],7,chr(1))
             endif
-            l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Where[l_nCounter])+[)]
+            l_cSQLCommand += [(]+::ExpressionToPostgreSQL("where",::p_Where[l_nCounter])+[)]
         endfor
         l_cSQLCommand += [)]+l_cEndOfLine
     endcase
@@ -1879,7 +2042,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             if l_nCounter > 1
                 l_cSQLCommand += [,]+l_cEndOfLine+replicate(chr(1),len([ GROUP BY ]))
             endif
-            // l_cSQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_nCounter])
+            // l_cSQLCommand += ::ExpressionToPostgreSQL("groupby",::p_GroupBy[l_nCounter])
             l_cSQLCommand += ::p_oSQLConnection:FormatIdentifier(::p_GroupBy[l_nCounter])
         endfor
         l_cSQLCommand += l_cEndOfLine
@@ -1887,14 +2050,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         
     do case
     case l_nNumberOfHavings = 1
-        l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])+l_cEndOfLine
+        l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL("having",::p_Having[1])+l_cEndOfLine
     case l_nNumberOfHavings > 1
         l_cSQLCommand += [ HAVING (]
         for l_nCounter = 1 to l_nNumberOfHavings
             if l_nCounter > 1
                 l_cSQLCommand += l_cEndOfLine+padl([ AND ],8,chr(1))
             endif
-            l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_nCounter])+[)]
+            l_cSQLCommand += [(]+::ExpressionToPostgreSQL("having",::p_Having[l_nCounter])+[)]
         endfor
         l_cSQLCommand += [)]+l_cEndOfLine
     endcase
@@ -1961,11 +2124,6 @@ else
 endif
 
 return l_cSQLCommand
-//par_cAction
-//-----------------------------------------------------------------------------------------------------------------
-method SetExplainMode(par_nMode) class hb_orm_SQLData                                          // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
-::p_ExplainMode := par_nMode
-return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method SQL(par_1) class hb_orm_SQLData                                          // Assemble and Run SQL command
 
@@ -2033,7 +2191,7 @@ otherwise
 endcase
 
 if !empty(::p_ErrorMessage)
-    AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,::p_ErrorMessage,hb_orm_GetApplicationStack()})
+    AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,::p_ErrorMessage,hb_orm_GetApplicationStack()})
     ::Tally := -1
     
 else
@@ -2068,11 +2226,11 @@ else
 
         l_nTimeStart := seconds()
         l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
-        l_nTimeEnd := seconds()
+        l_nTimeEnd   := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
         if !l_lSQLResult
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
+            AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
         else
             l_xResult := ""
 
@@ -2120,7 +2278,7 @@ else
             enddo
 
             l_lErrorOccurred := .f.
-            ::Tally        := (l_cCursorTempName)->(reccount())
+            ::Tally          := (l_cCursorTempName)->(reccount())
         endif
         CloseAlias(l_cCursorTempName)
         
@@ -2129,11 +2287,11 @@ else
         
         l_nTimeStart := seconds()
         l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
-        l_nTimeEnd := seconds()
+        l_nTimeEnd   := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
         if !l_lSQLResult
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
+            AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
         else
             //  _M_
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
@@ -2141,7 +2299,7 @@ else
             // endif
             
             l_lErrorOccurred := .f.
-            ::Tally        := (l_cCursorTempName)->(reccount())
+            ::Tally          := (l_cCursorTempName)->(reccount())
             
         endif
         CloseAlias(l_cCursorTempName)
@@ -2154,7 +2312,7 @@ else
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
         if !l_lSQLResult
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
+            AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
         else
             select (::p_CursorName)
             //_M_
@@ -2163,7 +2321,7 @@ else
             // endif
             
             l_lErrorOccurred := .f.
-            ::Tally        := (::p_CursorName)->(reccount())
+            ::Tally          := (::p_CursorName)->(reccount())
             
             ::p_oCursor := hb_orm_Cursor():Init():Associate(::p_CursorName)
 
@@ -2183,18 +2341,18 @@ else
                     
         l_nTimeStart := seconds()
         l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
-        l_nTimeEnd := seconds()
+        l_nTimeEnd   := seconds()
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
         if !l_lSQLResult
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
+            AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
         else
             // if (l_nTimeEnd - l_nTimeStart + 0.0000 >= ::p_MaxTimeForSlowWarning)
             // 	// ::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
             l_lErrorOccurred := .f.
-            ::Tally        := (l_cCursorTempName)->(reccount())
+            ::Tally          := (l_cCursorTempName)->(reccount())
             
             if ::Tally > 0
                 select (l_cCursorTempName)
@@ -2224,7 +2382,7 @@ else
         ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
         
         if !l_lSQLResult
-            AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
+            AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,"Failed SQLExec. Error Text="+::p_oSQLConnection:GetSQLExecErrorMessage(),hb_orm_GetApplicationStack()})
         else
             select (l_cCursorTempName)
 
@@ -2232,8 +2390,8 @@ else
             // 	::SQLSendPerformanceIssueToMonitoringSystem(::p_cEventId,2,::p_MaxTimeForSlowWarning,l_nTimeStart,l_nTimeEnd,l_SQLPerformanceInfo,l_cSQLCommand)
             // endif
             
-            ::Tally          := reccount()
-            l_lErrorOccurred   := .f.
+            ::Tally           := reccount()
+            l_lErrorOccurred  := .f.
             l_nNumberOfFields := fcount()
             
             do case
@@ -2317,17 +2475,17 @@ l_cCursorTempName := "c_DB_Temp"
 
 l_nTimeStart := seconds()
 l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
-l_nTimeEnd := seconds()
+l_nTimeEnd   := seconds()
 ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
 
 if !l_lSQLResult
-    AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Failed SQLExec in :Count().],hb_orm_GetApplicationStack()})
+    AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Failed SQLExec in :Count().],hb_orm_GetApplicationStack()})
 
 else
     if (l_cCursorTempName)->(reccount()) == 1
         ::Tally := (l_cCursorTempName)->(FieldGet(1))
     else
-        AAdd(l_aErrors,{::p_SchemaAndTableName,NIL,[Did not return a single row in :Count().],hb_orm_GetApplicationStack()})
+        AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Did not return a single row in :Count().],hb_orm_GetApplicationStack()})
     endif
 endif
 CloseAlias(l_cCursorTempName)
@@ -2343,10 +2501,10 @@ return ::Tally
 //-----------------------------------------------------------------------------------------------------------------
 method Get(par_iKey) class hb_orm_SQLData             // Returns an Object with properties matching a record referred by primary key
 
-local l_nNumberOfJoins          := len(::p_Join)
-local l_nNumberOfHavings        := len(::p_Having)
-local l_nNumberOfGroupBys       := len(::p_GroupBy)
-local l_nNumberOfWheres         := len(::p_Where)
+local l_nNumberOfJoins           := len(::p_Join)
+local l_nNumberOfHavings         := len(::p_Having)
+local l_nNumberOfGroupBys        := len(::p_GroupBy)
+local l_nNumberOfWheres          := len(::p_Where)
 local l_nNumberOfColumnsToReturn := len(::p_ColumnToReturn)
 
 local l_nCounter
@@ -2377,7 +2535,7 @@ l_oResult := NIL
 do case
 case len(::p_FieldsAndValues) > 0
     ::p_ErrorMessage = [Called Get() while using Fields()!]
-    AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
+    AAdd(l_aErrors,{::p_NamespaceAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
     
 otherwise
     l_nSelect = iif(used(),select(),0)
@@ -2399,13 +2557,13 @@ otherwise
             else
                 l_lErrorOccurred := .t.
                 ::p_ErrorMessage := "May not get all field when using joins."
-                AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
+                AAdd(l_aErrors,{::p_NamespaceAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
             endif
         else
             //Precompute the max length of the Column Expression
             l_nMaxTextLength1 := 0
             for l_nCounter := 1 to l_nNumberOfColumnsToReturn
-                l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToMYSQL(::p_ColumnToReturn[l_nCounter,1])))
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToMYSQL("column",::p_ColumnToReturn[l_nCounter,1])))
             endfor
 
             for l_nCounter = 1 to l_nNumberOfColumnsToReturn
@@ -2414,9 +2572,9 @@ otherwise
                 endif
 
                 if l_cSQLCommand == [SELECT ]+l_cEndOfLine
-                    l_cSQLCommand :=  [SELECT ]+padr(::ExpressionToMYSQL(::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                    l_cSQLCommand :=  [SELECT ]+padr(::ExpressionToMYSQL("column",::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
                 else
-                    l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToMYSQL(::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                    l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToMYSQL("column",::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
                 endif
 
                 if !empty(::p_ColumnToReturn[l_nCounter,2])
@@ -2429,7 +2587,7 @@ otherwise
             l_cSQLCommand += l_cEndOfLine
         endif
         
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
 
         l_nMaxTextLength1 := 0
         l_nMaxTextLength2 := 0
@@ -2449,7 +2607,7 @@ otherwise
                 loop
             endcase
 
-            l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]) ))
+            l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_Join[l_nCounter,2])) ))
 
             l_nMaxTextLength3 := max(l_nMaxTextLength3,len( ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])) ))
 
@@ -2470,9 +2628,9 @@ otherwise
                 loop
             endcase
             
-            l_cSQLCommand += padr([ ] + ::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]),l_nMaxTextLength2,chr(1))
+            l_cSQLCommand += padr([ ] + ::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_Join[l_nCounter,2])),l_nMaxTextLength2,chr(1))
             l_cSQLCommand += [ AS ] + padr(::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])),l_nMaxTextLength3,chr(1))
-            l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL(::p_Join[l_nCounter,4])+l_cEndOfLine
+            l_cSQLCommand += [ ON ] + ::ExpressionToMYSQL("join",::p_Join[l_nCounter,4])+l_cEndOfLine
             
         endfor
         
@@ -2482,7 +2640,7 @@ otherwise
             l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+l_cEndOfLine
             for l_nCounter = 1 to l_nNumberOfWheres
                 l_cSQLCommand += l_cEndOfLine+ padl([ AND ],7,chr(1))
-                l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Where[l_nCounter])+[)]
+                l_cSQLCommand += [(]+::ExpressionToMYSQL("where",::p_Where[l_nCounter])+[)]
             endfor
             l_cSQLCommand += [)]+l_cEndOfLine
         endif
@@ -2493,21 +2651,21 @@ otherwise
                 if l_nCounter > 1
                     l_cSQLCommand += [,]+l_cEndOfLine+replicate(chr(1),len([ GROUP BY ]))
                 endif
-                l_cSQLCommand += ::ExpressionToMYSQL(::p_GroupBy[l_nCounter])
+                l_cSQLCommand += ::ExpressionToMYSQL("groupby",::p_GroupBy[l_nCounter])
             endfor
             l_cSQLCommand += l_cEndOfLine
         endif
 
         do case
         case l_nNumberOfHavings = 1
-            l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL(::p_Having[1])+l_cEndOfLine
+            l_cSQLCommand += [ HAVING ]+::ExpressionToMYSQL("having",::p_Having[1])+l_cEndOfLine
         case l_nNumberOfHavings > 1
             l_cSQLCommand += [ HAVING (]
             for l_nCounter = 1 to l_nNumberOfHavings
                 if l_nCounter > 1
                     l_cSQLCommand += l_cEndOfLine+padl([ AND ],8,chr(1))
                 endif
-                l_cSQLCommand += [(]+::ExpressionToMYSQL(::p_Having[l_nCounter])+[)]
+                l_cSQLCommand += [(]+::ExpressionToMYSQL("having",::p_Having[l_nCounter])+[)]
             endfor
             l_cSQLCommand += [)]+l_cEndOfLine
         endcase
@@ -2536,13 +2694,13 @@ otherwise
             else
                 l_lErrorOccurred := .t.
                 ::p_ErrorMessage := "May not get all field when using joins."
-                AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
+                AAdd(l_aErrors,{::p_NamespaceAndTableName,::p_KEY,::p_ErrorMessage,hb_orm_GetApplicationStack()})
             endif
         else
             //Precompute the max length of the Column Expression
             l_nMaxTextLength1 := 0
             for l_nCounter := 1 to l_nNumberOfColumnsToReturn
-                l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToPostgreSQL(::p_ColumnToReturn[l_nCounter,1])))
+                l_nMaxTextLength1 := max(l_nMaxTextLength1,len(::ExpressionToPostgreSQL("column",::p_ColumnToReturn[l_nCounter,1])))
             endfor
 
             for l_nCounter = 1 to l_nNumberOfColumnsToReturn
@@ -2551,9 +2709,9 @@ otherwise
                 endif
 
                 if l_cSQLCommand == [SELECT ]+l_cEndOfLine
-                    l_cSQLCommand :=  [SELECT ]+padr(::ExpressionToPostgreSQL(::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                    l_cSQLCommand :=  [SELECT ]+padr(::ExpressionToPostgreSQL("column",::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
                 else
-                    l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToPostgreSQL(::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
+                    l_cSQLCommand += l_cColumnIndent + padr(::ExpressionToPostgreSQL("column",::p_ColumnToReturn[l_nCounter,1]),l_nMaxTextLength1,chr(1))
                 endif
                 
                 if !empty(::p_ColumnToReturn[l_nCounter,2])
@@ -2566,7 +2724,7 @@ otherwise
             l_cSQLCommand += l_cEndOfLine
         endif
         
-        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_SchemaAndTableName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
+        l_cSQLCommand += [ FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+l_cEndOfLine
 
         l_nMaxTextLength1 := 0
         l_nMaxTextLength2 := 0
@@ -2586,7 +2744,7 @@ otherwise
                 loop
             endcase
 
-            l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]) ))
+            l_nMaxTextLength2 := max(l_nMaxTextLength2,len( [ ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_Join[l_nCounter,2])) ))
 
             l_nMaxTextLength3 := max(l_nMaxTextLength3,len( ::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])) ))
 
@@ -2606,9 +2764,9 @@ otherwise
                 loop
             endcase
             
-            l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_Join[l_nCounter,2]),l_nMaxTextLength2,chr(1))
+            l_cSQLCommand += padr([ ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_Join[l_nCounter,2])),l_nMaxTextLength2,chr(1))
             l_cSQLCommand += [ AS ] + padr(::p_oSQLConnection:FormatIdentifier(lower(::p_Join[l_nCounter,3])),l_nMaxTextLength3,chr(1))
-            l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL(::p_Join[l_nCounter,4])+l_cEndOfLine
+            l_cSQLCommand += [ ON ] +  ::ExpressionToPostgreSQL("join",::p_Join[l_nCounter,4])+l_cEndOfLine
             
         endfor
 
@@ -2618,7 +2776,7 @@ otherwise
             l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+l_cEndOfLine
             for l_nCounter = 1 to l_nNumberOfWheres
                 l_cSQLCommand += l_cEndOfLine+ padl([ AND ],7,chr(1))
-                l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Where[l_nCounter])+[)]
+                l_cSQLCommand += [(]+::ExpressionToPostgreSQL("where",::p_Where[l_nCounter])+[)]
             endfor
             l_cSQLCommand += [)]+l_cEndOfLine
         endif
@@ -2629,21 +2787,21 @@ otherwise
                 if l_nCounter > 1
                     l_cSQLCommand += [,]+l_cEndOfLine+replicate(chr(1),len([ GROUP BY ]))
                 endif
-                l_cSQLCommand += ::ExpressionToPostgreSQL(::p_GroupBy[l_nCounter])
+                l_cSQLCommand += ::ExpressionToPostgreSQL("groupby",::p_GroupBy[l_nCounter])
             endfor
             l_cSQLCommand += l_cEndOfLine
         endif
             
         do case
         case l_nNumberOfHavings = 1
-            l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL(::p_Having[1])+l_cEndOfLine
+            l_cSQLCommand += [ HAVING ]+::ExpressionToPostgreSQL("having",::p_Having[1])+l_cEndOfLine
         case l_nNumberOfHavings > 1
             l_cSQLCommand += [ HAVING (]
             for l_nCounter = 1 to l_nNumberOfHavings
                 if l_nCounter > 1
                     l_cSQLCommand += l_cEndOfLine+padl([ AND ],8,chr(1))
                 endif
-                l_cSQLCommand += [(]+::ExpressionToPostgreSQL(::p_Having[l_nCounter])+[)]
+                l_cSQLCommand += [(]+::ExpressionToPostgreSQL("having",::p_Having[l_nCounter])+[)]
             endfor
             l_cSQLCommand += [)]+l_cEndOfLine
         endcase
@@ -2667,7 +2825,7 @@ otherwise
             
             do case
             case ::Tally == 0
-                AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,"Error in method get() did not find record."+CRLF+::LastSQL(),hb_orm_GetApplicationStack()})
+                AAdd(l_aErrors,{::p_NamespaceAndTableName,::p_KEY,"Error in method get() did not find record."+CRLF+::LastSQL(),hb_orm_GetApplicationStack()})
             case ::Tally == 1
                 //Build an object to return
                 l_oResult := hb_orm_Data()
@@ -2679,11 +2837,11 @@ otherwise
                 endfor
             otherwise
                 //Should not happen. Returned more than 1 record.
-                AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,"Error in method get() more than 1 record."+CRLF+::LastSQL(),hb_orm_GetApplicationStack()})
+                AAdd(l_aErrors,{::p_NamespaceAndTableName,::p_KEY,"Error in method get() more than 1 record."+CRLF+::LastSQL(),hb_orm_GetApplicationStack()})
             endcase
         else
             ::Tally = -1
-            AAdd(l_aErrors,{::p_SchemaAndTableName,::p_KEY,"Error in method get() "+::p_ErrorMessage,hb_orm_GetApplicationStack()})
+            AAdd(l_aErrors,{::p_NamespaceAndTableName,::p_KEY,"Error in method get() "+::p_ErrorMessage,hb_orm_GetApplicationStack()})
         endif
         
         CloseAlias(l_cCursorTempName)
@@ -2781,17 +2939,17 @@ else
 endif
 return l_cResult
 //-----------------------------------------------------------------------------------------------------------------
-method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors) class hb_orm_SQLData
+method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_hFieldInfo,l_aAutoTrimmedFields,l_aErrors) class hb_orm_SQLData
 local l_lResult := .t.
 local l_cValue  := NIL
-local l_cFieldType := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
+local l_cFieldType := par_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
 local l_cValueType := Valtype(par_xValue)                       //See https://github.com/Petewg/harbour-core/wiki/V
 local l_nFieldLen,l_nFieldDec
 local l_nMaxValue
 local l_nUnsignedLength,l_nDecimals
 
 if hb_IsNIL(par_xValue)
-    if ("N" $ par_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES])
+    if hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
         l_cValue  := "NULL"
     else
         AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" NULL is not allowed',hb_orm_GetApplicationStack()})
@@ -2842,8 +3000,8 @@ else
     case  "N" // numeric
         do case
         case l_cValueType == "N"
-            l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-            l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+            l_nFieldLen := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+            l_nFieldDec := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
             if l_nFieldLen > 15
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric with more than 15 digits.',hb_orm_GetApplicationStack()})
                 l_lResult := .f.
@@ -2864,8 +3022,8 @@ else
         case l_cValueType == "C"
             l_nUnsignedLength := l_nDecimals := 0
             if el_AUnpack(IsStringANumber(par_xValue),,@l_nUnsignedLength,@l_nDecimals)
-                l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-                l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+                l_nFieldLen := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+                l_nFieldDec := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
                 if l_nUnsignedLength <= l_nFieldLen .and. l_nDecimals <= l_nFieldDec
                     l_cValue := par_xValue
                 else
@@ -2889,7 +3047,7 @@ else
             if empty(par_xValue)  // At this point we already know it is not null
                 l_cValue := "''"
             else
-                l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+                l_nFieldLen := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0)
                 if len(par_xValue) <= l_nFieldLen
                     l_cValue := "x'"+hb_StrToHex(par_xValue)+"'"
                 else
@@ -2936,7 +3094,7 @@ else
     case"TOZ" // Time with time zone               'hh:mm:ss[.fraction]'
     case "TO" // Time without time zone
         if l_cValueType == "C"
-            l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+            l_nFieldDec := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
             if hb_orm_CheckTimeFormatValidity(par_xValue)
                 if len(par_xValue) > 9 + l_nFieldDec
                     AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Time String precision Overflow: '+alltrim(par_xValue),hb_orm_GetApplicationStack()})
@@ -2965,7 +3123,8 @@ else
             l_lResult := .f.
         endif
         exit
-    case "JS" // json string
+    case "JSB" // jsonb string
+    case "JS"  // json string
         if l_cValueType == "C"
             if len(par_xValue) == 0   //_M_ Test if this logic makes senses for MySQL
                 l_cValue := "''"
@@ -3007,18 +3166,18 @@ endif
 
 return {l_lResult,l_cValue}
 //-----------------------------------------------------------------------------------------------------------------
-method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_aFieldInfo,l_aAutoTrimmedFields,l_aErrors) class hb_orm_SQLData
+method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_hFieldInfo,l_aAutoTrimmedFields,l_aErrors) class hb_orm_SQLData
 local l_lResult := .t.
 local l_cValue  := NIL
 local l_xValue
-local l_cFieldType := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
+local l_cFieldType := par_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
 local l_cValueType := Valtype(par_xValue)                       //See https://github.com/Petewg/harbour-core/wiki/V
 local l_nFieldLen,l_nFieldDec
 local l_nMaxValue
 local l_nUnsignedLength,l_nDecimals
 
 if hb_IsNIL(par_xValue)
-    if ("N" $ par_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES])
+    if hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
         l_cValue  := "NULL"
     else
         AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" NULL is not allowed',hb_orm_GetApplicationStack()})
@@ -3069,8 +3228,8 @@ else
     case  "N" // numeric
         do case
         case l_cValueType == "N"
-            l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-            l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+            l_nFieldLen := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+            l_nFieldDec := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
             if l_nFieldLen > 15
                 AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Numeric with more than 15 digits.',hb_orm_GetApplicationStack()})
                 l_lResult := .f.
@@ -3091,8 +3250,8 @@ else
         case l_cValueType == "C"
             l_nUnsignedLength := l_nDecimals := 0
             if el_AUnpack(IsStringANumber(par_xValue),,@l_nUnsignedLength,@l_nDecimals)
-                l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
-                l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+                l_nFieldLen := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+                l_nFieldDec := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
                 if l_nUnsignedLength <= l_nFieldLen .and. l_nDecimals <= l_nFieldDec
                     l_cValue := par_xValue
                 else
@@ -3116,7 +3275,7 @@ else
             if empty(par_xValue)  // At this point we already know it is not null
                 l_cValue := "''"
             else
-                l_nFieldLen := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH]
+                l_nFieldLen := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0)
                 if len(par_xValue) <= l_nFieldLen
                     // l_cValue := "E'\x"+hb_StrToHex(par_xValue,"\x")+"'"
                     if "B" $ l_cFieldType
@@ -3179,7 +3338,7 @@ else
     case "TO" // Time without time zone
         if l_cValueType == "C"
             //if (SecToTime(TimeToSec(par_xValue),len(par_xValue)=11) == par_xValue)   //_M_ Verify format validity
-            l_nFieldDec := par_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS]
+            l_nFieldDec := hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
             if hb_orm_CheckTimeFormatValidity(par_xValue)
                 if len(par_xValue) > 9 + l_nFieldDec
                     AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" Time String precision Overflow: '+alltrim(par_xValue),hb_orm_GetApplicationStack()})
@@ -3206,6 +3365,20 @@ else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Datetime',hb_orm_GetApplicationStack()})
             l_lResult := .f.
         endif
+        exit
+    case "JSB" // jsonb string
+        if l_cValueType == "C"
+            l_xValue := vfp_strtran(par_xValue,"::jsonb","",-1,-1,1)
+            if len(l_xValue) == 0
+                l_cValue := "{}::jsonb"
+            else
+                l_cValue := hb_orm_PostgresqlEncodeUTF8String(l_xValue)+"::jsonb"
+            endif
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a string',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+
         exit
     case "JS" // json string
         if l_cValueType == "C"
@@ -3310,6 +3483,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cCast := [money]
     case par_cFieldType == "UUI"
         l_cCast := [uuid]
+    case par_cFieldType == "JSB"
+        l_cCast := [jsonb]
     case par_cFieldType == "JS"
         l_cCast := [json]
     case par_cFieldType == "OID"
@@ -3420,11 +3595,10 @@ return l_lResult
 
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-method SaveFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName) class hb_orm_SQLData   // Where par_cFieldName must be of type OID. Will store in PostgreSQL a file using Large Objects
+method SaveFile(par_xEventId,par_cNamespaceAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName) class hb_orm_SQLData   // Where par_cFieldName must be of type OID. Will store in PostgreSQL a file using Large Objects
 local l_lResult := .t.                                                                                                        // return true of false. If false call ::ErrorMessage() to get more information
 local l_oData
 local l_cSQLCommand
-local l_iOid
 ::p_ErrorMessage := ""
 
 do case
@@ -3438,7 +3612,7 @@ case !hb_FileExists(par_cFullPathFileName)
     l_lResult := .f.
     ::p_ErrorMessage := [File is not present.]
 otherwise
-    ::Table(par_xEventId,par_cSchemaAndTableName)
+    ::Table(par_xEventId,par_cNamespaceAndTableName)
     ::Column(par_cOidFieldName,"oid")
     l_oData := ::Get(par_iKey)
     if hb_IsNil(l_oData)
@@ -3449,7 +3623,7 @@ otherwise
             l_cSQLCommand := [select lo_unlink(]+trans(l_oData:oid)+[);]
             if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,"TempCursorSaveFile")
                 if TempCursorSaveFile->(reccount()) == 1 .and. TempCursorSaveFile->lo_unlink == 1
-                    ::Table(par_xEventId,par_cSchemaAndTableName)
+                    ::Table(par_xEventId,par_cNamespaceAndTableName)
                     ::Field(par_cOidFieldName,nil)
                     if !::Update(par_iKey)
                         //The :Update will already set an error message
@@ -3466,7 +3640,7 @@ otherwise
         endif
         if l_lResult
             // Save the file now.
-            ::Table(par_xEventId,par_cSchemaAndTableName)
+            ::Table(par_xEventId,par_cNamespaceAndTableName)
             ::FieldExpression(par_cOidFieldName,[lo_import(']+par_cFullPathFileName+[')])
             if !::Update(par_iKey)
                 //The :Update will already set an error message
@@ -3478,11 +3652,10 @@ endcase
 
 return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
-method GetFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName) class hb_orm_SQLData    // Will create a file at par_cFullPathFileName from the content previously saved
-local l_lResult := .t.                                                                                                        // return true of false. If false call ::ErrorMessage() to get more information
+method GetFile(par_xEventId,par_cNamespaceAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName) class hb_orm_SQLData    // Will create a file at par_cFullPathFileName from the content previously saved
+local l_lResult   // := .t.                                                                                                        // return true of false. If false call ::ErrorMessage() to get more information
 local l_oData
 local l_cSQLCommand
-local l_iOid
 ::p_ErrorMessage := ""
 
 //Example: select lo_export(178171, 'd:\LastExport_restored1.Zip');
@@ -3498,7 +3671,7 @@ case hb_FileExists(par_cFullPathFileName)
     l_lResult := .f.
     ::p_ErrorMessage := [File already present. May not overwrite file.]
 otherwise
-    ::Table(par_xEventId,par_cSchemaAndTableName)
+    ::Table(par_xEventId,par_cNamespaceAndTableName)
     ::Column(par_cOidFieldName,"oid")
     l_oData := ::Get(par_iKey)
     if hb_IsNil(l_oData)
@@ -3527,11 +3700,10 @@ endcase
 
 return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
-method DeleteFile(par_xEventId,par_cSchemaAndTableName,par_iKey,par_cOidFieldName) class hb_orm_SQLData                       // To remove the file from the table and nullify par_cFieldName
+method DeleteFile(par_xEventId,par_cNamespaceAndTableName,par_iKey,par_cOidFieldName) class hb_orm_SQLData                       // To remove the file from the table and nullify par_cFieldName
 local l_lResult := .t.                                                                                                        // return true of false. If false call ::ErrorMessage() to get more information
 local l_oData
 local l_cSQLCommand
-local l_iOid
 ::p_ErrorMessage := ""
 
 do case
@@ -3539,7 +3711,7 @@ case pcount() < 4
     l_lResult := .f.
     ::p_ErrorMessage := [Missing Parameter.]
 otherwise
-    ::Table(par_xEventId,par_cSchemaAndTableName)
+    ::Table(par_xEventId,par_cNamespaceAndTableName)
     ::Column(par_cOidFieldName,"oid")
     l_oData := ::Get(par_iKey)
     if hb_IsNil(l_oData)
@@ -3550,7 +3722,7 @@ otherwise
             l_cSQLCommand := [select lo_unlink(]+trans(l_oData:oid)+[);]
             if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,"TempCursorSaveFile")
                 if TempCursorSaveFile->(reccount()) == 1 .and. TempCursorSaveFile->lo_unlink == 1
-                    ::Table(par_xEventId,par_cSchemaAndTableName)
+                    ::Table(par_xEventId,par_cNamespaceAndTableName)
                     ::Field(par_cOidFieldName,nil)
                     if !::Update(par_iKey)
                         //The :Update will already set an error message

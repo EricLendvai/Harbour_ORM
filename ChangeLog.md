@@ -1,15 +1,34 @@
 # Harbour ORM - Change Log
 
+## 01/05/2024 V 4.0   IMPORTANT COMPATIBILITY NOTE
+* Stop assigning values to "PostgreSQLHBORMSchemaName" and instead call the following two new methods: SetHarbourORMNamespace(par_cName) and GetHarbourORMNamespace(). This will now also apply to MySQL/MariaDB.
+* Support for JSONB PostgreSQL field types.
+* New connection methods SetApplicationName and GetApplicationName, used to inform the SQL Backend the application connecting. Implemented in Postgres and can be tested using "select * from pg_stat_activity where state is not null" query.
+* Renamed method GetCurrentSchemaName to GetCurrentNamespaceName.
+* Renamed method SetCurrentSchemaName to SetCurrentNamespaceName.
+* Renamed method UpdateSchemaName to UpdateNamespaceName.
+* Code refactor, every where "Schema Name" or similar was used, we now use "Namespace Name". We avoid using "Schema" as the PostgreSQL definition, but instead it is a namespace. In Postgres, schemas also provide a mechanism to secure access right to elements in that schema.
+* Major code refactoring to ensure proper support of Namespaces in MySQL Engine (meaning MariaDB as well).
+* In MySQL engine, the "public" name space will be dropped in the name of tables.
+* In MySQL indexes are names by simply using the Index Name, while in Postgres to ensure non conflict the index name is a concatenation of <tablename>_<indexnname>_idx.
+* Support to have Combined SQL (unions ...) as CTE elements.
+* Renamed property p_Schema to p_TableSchema (For the current loaded table definitions.)
+* New Methods in SQLConnect:
+  * DeleteAllOrphanRecords(par_hTableSchemaDefinition) - Destructive delete of any orphans in all the tables in par_hTableSchemaDefinition
+  * RemoveWharfForeignKeyConstraints(par_hTableSchemaDefinition) - Remove any Foreign Key Constraint that and with "_fkc"
+  * AddUpdateWharfForeignKeyConstraints(par_hTableSchemaDefinition) - Add/Update if missing any Foreign Key Constraint that and with "_fkc"
+  * ForeignKeyConvertAllZeroToNull(par_hTableSchemaDefinition) - Find and replace any Zero in Integer type foreign key columns. Used to prepare data to handle foreign key constraints.
+
 ## 11/12/2023 V 3.14   IMPORTANT COMPATIBILITY NOTE
 * The SQLExec method now requires the first parameter to be an EventId (Spring or Numeric). Highly recommend use uuid to generate a string!   
 * The Delete method will not affect any previous call to Table method, meaning you can safely call :Delete(...) from within a scan/endscan without loosing cursor being traversed.   
     The following properties are still being affected: p_ErrorMessage,Tally.   
 * New Function "hb_ORM_UsedWorkAreas()" to return a hash array listing all open work areas with the recno() and reccount().   
-* Change is structure of p_Schema connection property. Each Table has now a hash array instead of a 2 dimension array. {"Field"=>  ,"Indexes"=>  }   
+* Change is structure of p_TableSchema connection property. Each Table has now a hash array instead of a 2 dimension array. {"Field"=>  ,"Indexes"=>  }   
 * Added support for PostgreSQL UNLOGGED table setting.   
 
 ## 11/05/2023 V 3.13
-* In PostgreSQL, stopped adding the Schema Name in index name. Since the restriction for index names is "Two indexes in the same schema cannot have the same name", across schema (Name Spaces) they can be the same. This will make it easier to move table to other schemas, and help reduce the change of hitting the 63 character object name length.
+* In PostgreSQL, stopped adding the Namespace in index name. Since the restriction for index names is "Two indexes in the same schema cannot have the same name", across schema (Namespaces) they can be the same. This will make it easier to move table to other schemas, and help reduce the change of hitting the 63 character object name length.
 * Fix minor bug on field definition compare on default values. Reduces the number of migration code being generated.
 
 ## 09/24/2023 V 3.12

@@ -1,4 +1,4 @@
-//Copyright (c) 2023 Eric Lendvai MIT License
+//Copyright (c) 2024 Eric Lendvai MIT License
 
 #include "hbapi.h"
 #include "hbapierr.h"

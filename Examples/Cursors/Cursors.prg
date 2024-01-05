@@ -1,4 +1,4 @@
-//Copyright (c) 2023 Eric Lendvai MIT License
+//Copyright (c) 2024 Eric Lendvai MIT License
 
 #include "hbmemory.ch"
 
@@ -36,7 +36,7 @@ hb_DirCreate(l_cOutputFolder)
 //=====================================================================================
 l_oCursor1 := hb_Cursor()
 with object l_oCursor1
-// Altd()
+
     :Field("KEY"                       ,"I",  4,0,"+")
     :Field("ID"                        ,"C", 10,0)
     :Field("FNAME"                     ,"C", 20,0,"T")

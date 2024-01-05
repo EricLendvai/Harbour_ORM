@@ -1,4 +1,4 @@
-//Copyright (c) 2023 Eric Lendvai MIT License
+//Copyright (c) 2024 Eric Lendvai MIT License
 
 //IMPORTANT Set the l_lAccess* and l_lTest* variables below as needed.
 
@@ -16,8 +16,8 @@ local l_cOutputFolder := iif(l_lInDocker,"Output/","Output\")
 local l_lAccessPostgresql := .t.
 local l_lAccessMariaDB    := .f.
 
-local l_lTestUpdates         := .f.
-local l_lTestSimpleQueries   := .f.
+local l_lTestUpdates         := .t.
+local l_lTestSimpleQueries   := .t.
 local l_lTestCombinedQueries := .t.
 
 local l_iSQLHandle
@@ -39,17 +39,18 @@ local l_oData
 
 local l_oCursor
 
-local l_hSchemaDefinitionA
-local l_hSchemaDefinitionB
+local l_hTableSchemaDefinitionA
+local l_hTableSchemaDefinitionB
 
-local l_cSQLScript
+local l_cUpdateScript
+local l_nMigrateSchemaResult := 0
 local l_cLastError
 local l_cLastSQLError
 local l_cLastSQL
 
 local l_nVersion
 
-local l_cPreviousSchemaName
+local l_cPreviousNamespaceName
 
 local l_oCursorTable003Records
 
@@ -75,9 +76,11 @@ local l_oCompoundQuery1
 local l_oCompoundQuery2
 local l_oCompoundQuery3
 
+local l_cRuntimePrefixStamp := GetZuluTimeStampForFileNameSuffix()+"_"
+
 // local l_iPID := el_GetProcessId()
 
-altd()
+// altd()
 hb_cdpSelect("UTF8EX") 
 
 hb_DirCreate(l_cOutputFolder)
@@ -102,6 +105,7 @@ if l_lAccessMariaDB
         :SetDatabase("test001")
         // :SetServer("127.0.0.1")
         :SetPrimaryKeyFieldName("key")
+        :SetHarbourORMNamespace("Harbour_ORM")
 
         l_iSQLHandle := :Connect()
         do case
@@ -121,13 +125,14 @@ if l_lAccessPostgresql
     if l_lInDocker
         l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL Unicode","host.docker.internal",5432,"postgres","rndrnd","test001","set001")
     else
-        l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL ODBC Driver(UNICODE)","localhost",5432,"postgres","rndrnd","test001","set001")
+        // l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL ODBC Driver(UNICODE)","localhost",5432,"postgres","rndrnd","test001","set001")
+        l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL Unicode(x64)","localhost",5432,"postgres","rndrnd","test001","set001")
     endif
 
     with object l_oSQLConnection2
         ?"PostgreSQL - ORM version - "+:p_hb_orm_version
         :PostgreSQLIdentifierCasing := HB_ORM_POSTGRESQL_CASE_SENSITIVE
-        :PostgreSQLHBORMSchemaName := "MyDataDic"
+        :SetHarbourORMNamespace("Harbour_ORM")
 // altd()
         l_iSQLHandle := :Connect()
         do case
@@ -159,188 +164,6 @@ if l_lAccessPostgresql
     endif
 endif
 
-hb_orm_SendToDebugView("Will Initialize l_hSchemaDefinitionA")
-
-l_hSchemaDefinitionA := ;
-{"dbf001"=>{;   //Field Definition
-{"key"          =>{,  "I",   0,  0,"+"};
-,"customer_name"=>{,  "C",  50,  0,}};
-,;   //Index Definition
-NIL};
-,"dbf002"=>{;   //Field Definition
-{"key"     =>{,  "I",   0,  0,"+"};
-,"p_dbf001"=>{,  "I",   0,  0,}};
-,;   //Index Definition
-NIL};
-,"noindextesttable"=>{;   //Field Definition
-{"KeY" =>{,  "I",   0,  0,"+"};
-,"Code"=>{,  "C",   3,  0,"N"}};
-,;   //Index Definition
-NIL};
-,"table001"=>{;   //Field Definition
-{"key"     =>{   ,  "I",   0,  0,"+"};
-,"sysc"    =>{   ,"DTZ",   0,  0,};
-,"sysm"    =>{   ,"DTZ",   0,  0,};
-,"LnAme"   =>{   ,  "C",  50,  0,};
-,"fname"   =>{   ,  "C",  53,  0,};
-,"minitial"=>{   ,  "C",   1,  0,};
-,"age"     =>{   ,  "N",   3,  0,};
-,"dob"     =>{   ,  "D",   0,  0,};
-,"dati"    =>{   ,"DTZ",   0,  0,};
-,"logical1"=>{"P",  "L",   0,  0,};
-,"numdec2" =>{   ,  "N",   6,  1,};
-,"bigint"  =>{"M", "IB",   0,  0,};
-,"varchar" =>{   , "CV", 203,  0,}};
-,;   //Index Definition
-{"lname"=>{   ,"LnAme",.f.,"BTREE"};
-,"tag1" =>{"P","upper((lname)::text)",.f.,"BTREE"};
-,"tag2" =>{"P","upper((fname)::text)",.f.,"BTREE"}}};
-,"table002"=>{;   //Field Definition
-{"key"       =>{,  "I",   0,  0,"+"};
-,"p_table001"=>{,  "I",   0,  0,"N"};
-,"children"  =>{, "CV", 200,  0,"N"};
-,"Cars"      =>{, "CV", 300,  0,}};
-,;   //Index Definition
-NIL};
-,"table003"=>{;   //Field Definition
-{"key"        =>{,  "I",   0,  0,"+"};
-,"p_table001" =>{,  "I",   0,  0,};
-,"p_table003" =>{,  "I",   0,  0,};
-,"char50"     =>{,  "C",  50,  0,"N","'val1A'"};
-,"bigint"     =>{, "IB",   0,  0,"N"};
-,"Bit"        =>{,  "R",   0,  0,"N"};
-,"Decimal5_2" =>{,  "N",   5,  2,"N"};
-,"Decimal25_7"=>{,  "N",  25,  7,"N"};
-,"VarChar51"  =>{, "CV",  50,  0,"N"};
-,"VarChar52"  =>{, "CV",  50,  0,,"'val1B'"};
-,"Text"       =>{,  "M",   0,  0,"N"};
-,"Binary"     =>{,  "R",   0,  0,"N"};
-,"Date"       =>{,  "D",   0,  0,"N"};
-,"DateTime"   =>{, "DT",   0,  4,"N","now"};
-,"TOZ"        =>{,"TOZ",   0,  0,"N"};
-,"TOZ4"       =>{,"TOZ",   0,  4,"N"};
-,"TO"         =>{, "TO",   0,  0,"N"};
-,"TO4"        =>{, "TO",   0,  4,"N"};
-,"DTZ"        =>{,"DTZ",   0,  0,"N"};
-,"DTZ4"       =>{,"DTZ",   0,  4,"N"};
-,"DT"         =>{, "DT",   0,  0,"N"};
-,"DT4"        =>{, "DT",   0,  4,"N"};
-,"time"       =>{, "TO",   0,  4,"N"};
-,"Boolean"    =>{,  "L",   0,  0,"N"}};
-,;   //Index Definition
-NIL};
-,"table004"=>{;   //Field Definition
-{"id"    =>{,  "I",   0,  0,};
-,"street"=>{,  "C",  50,  0,"N"};
-,"zip"   =>{,  "C",   5,  0,"N"};
-,"state" =>{,  "C",   2,  0,"N"}};
-,;   //Index Definition
-{"pkey"=>{,"id",.t.,"BTREE"}}};
-,"alltypes"=>{;   //Field Definition
-{"key"                =>{   ,  "I",   0,  0,"+"};
-,"integer"            =>{   ,  "I",   0,  0,"N"};
-,"many_int"           =>{"P",  "I",   0,  0,"NA"};
-,"many_flags"         =>{"P",  "L",   0,  0,"NA"};
-,"uuid1"              =>{   ,"UUI",   0,  0,};
-,"uuid2"              =>{   ,"UUI",   0,  0,"N","uuid()"};
-,"many_uuid"          =>{"P","UUI",   0,  0,"NA"};
-,"json1_without_null" =>{   , "JS",   0,  0,""};
-,"json2_with_null"    =>{   , "JS",   0,  0,"N"};
-,"big_integer"        =>{   , "IB",   0,  0,"N"};
-,"small_integer"      =>{   , "IS",   0,  0,"N"};
-,"money"              =>{   ,  "Y",   0,  0,};
-,"char10"             =>{   ,  "C",  10,  0,"N"};
-,"varchar10"          =>{   , "CV",  10,  0,"N"};
-,"binary10"           =>{   ,  "B",  10,  0,"N"};
-,"varbinary11"        =>{   , "BV",  11,  0,"N"};
-,"memo"               =>{   ,  "M",   0,  0,"N"};
-,"raw"                =>{   ,  "R",   0,  0,"N"};
-,"logical"            =>{   ,  "L",   0,  0,};
-,"date"               =>{   ,  "D",   0,  0,"N"};
-,"time_with_zone"     =>{   ,"TOZ",   0,  0,"N"};
-,"time_no_zone"       =>{   , "TO",   0,  0,"N"};
-,"datetime_with_zone" =>{   ,"DTZ",   0,  0,"N"};
-,"datetime_no_zone"   =>{   , "DT",   0,  0,"N"}};
-,;   //Index Definition
-NIL};
-,"item_category"=>{;   //Field Definition
-{"key"            =>{   ,  "I",   0,  0,"+"};
-,"sysc"           =>{   ,"DTZ",   0,  0,};
-,"sysm"           =>{   ,"DTZ",   0,  0,};
-,"name"           =>{   , "CV",  50,  0,}};
-,;   //Index Definition
-NIL};
-,"item"=>{;   //Field Definition
-{"key"              =>{   ,  "I",   0,  0,"+"};
-,"sysc"             =>{   ,"DTZ",   0,  0,};
-,"sysm"             =>{   ,"DTZ",   0,  0,};
-,"fk_item_category" =>{   ,  "I",   0,  0,};
-,"name"             =>{   , "CV",  50,  0,};
-,"note"             =>{   , "CV", 100,  0,}};
-,;   //Index Definition
-{"name"            =>{,"name"     ,.f.,"BTREE"};
-,"fk_item_category"=>{,"fk_item_category",.f.,"BTREE"}}};
-,"price_history"=>{;   //Field Definition
-{"key"            =>{   ,  "I",   0,  0,"+"};
-,"sysc"           =>{   ,"DTZ",   0,  0,};
-,"sysm"           =>{   ,"DTZ",   0,  0,};
-,"fk_item"        =>{   ,  "I",   0,  0,};
-,"effective_date" =>{   ,  "D",   0,  0,};
-,"price"          =>{   ,  "N",   8,  2,}};
-,;   //Index Definition
-{"fk_item"       =>{,"fk_item"       ,.f.,"BTREE"};
-,"effective_date"=>{,"effective_date",.f.,"BTREE"}}};
-,"zipcodes"=>{;   //Field Definition
-{"key"    =>{, "IB",   0,  0,"+"};
-,"zipcode"=>{,  "C",   5,  0,"N"};
-,"city"   =>{,  "C",  45,  0,"N"}};
-,;   //Index Definition
-NIL};
-}
-
-hb_orm_SendToDebugView("Initialized l_hSchemaDefinitionA")
-
-
-hb_orm_SendToDebugView("Will Initialize l_hSchemaDefinitionB")
-
-l_hSchemaDefinitionB := ;
-{"set003.ListOfFiles"=>{;   //Field Definition
-{"key"                      =>{   ,  "I",   0,  0,"+"};
-,"file_name"                =>{   ,  "C", 120,  0,"N"};
-,"reference_to_large_object"=>{   ,"OID",   0,  0,"N"}};
-,;   //Index Definition
-NIL};
-,"set003.cust001"=>{;   //Field Definition
-{"KeY" =>{,  "I",   0,  0,"+"};
-,"Code"=>{,  "C",   3,  0,"N"}};
-,;   //Index Definition
-NIL};
-,"set003.form001"=>{;   //Field Definition
-{"key"     =>{   ,  "I",   0,  0,"+"};
-,"LnAme"   =>{   ,  "C",  50,  0,};
-,"fname"   =>{   ,  "C",  53,  0,};
-,"minitial"=>{   ,  "C",   1,  0,};
-,"age"     =>{   ,  "N",   3,  0,};
-,"dob"     =>{   ,  "D",   0,  0,};
-,"dati"    =>{   ,"DTZ",   0,  0,};
-,"logical1"=>{"P",  "L",   0,  0,};
-,"numdec2" =>{   ,  "N",   6,  1,};
-,"bigint"  =>{"M", "IB",   0,  0,};
-,"varchar" =>{   , "CV", 203,  0,}};
-,;   //Index Definition
-{"lname"=>{   ,"LnAme",.f.,"BTREE"};
-,"tag1" =>{"P","upper((lname)::text)",.f.,"BTREE"};
-,"tag2" =>{"P","upper((fname)::text)",.f.,"BTREE"}}};
-,"form002"=>{;   //Field Definition
-{"key"       =>{,  "I",   0,  0,"+"};
-,"p_table001"=>{,  "I",   0,  0,"N"};
-,"children"  =>{, "CV", 200,  0,"N"};
-,"Cars"      =>{, "CV", 300,  0,}};
-,;   //Index Definition
-NIL};
-}
-
-
 if l_lAccessMariaDB
     if l_oSQLConnection1:Connected
         l_nVersion := l_oSQLConnection1:GetSchemaDefinitionVersion("AllMySQL v1")
@@ -358,40 +181,228 @@ endif
 //===========================================================================================================================
 if l_lAccessMariaDB
     if l_oSQLConnection1:Connected
-        l_cFullFileName := l_cOutputFolder+"BeforeUpdatesSchema_MariaDB_"+l_oSQLConnection1:GetDatabase()+".txt"
+        l_cFullFileName := l_cOutputFolder+l_cRuntimePrefixStamp+"BeforeUpdatesSchema_MariaDB_"+l_oSQLConnection1:GetDatabase()+".txt"
         hb_orm_SendToDebugView("MariaDB - Will Generate file: "+l_cFullFileName)
         l_oSQLConnection1:GenerateCurrentSchemaHarbourCode(l_cFullFileName)
         hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
 
+        //-------------------------------------------------------------------------------
+        hb_orm_SendToDebugView("Will Initialize l_hTableSchemaDefinitionA")
+
+        l_hTableSchemaDefinitionA := ;
+            {"public.clients"=>{"Fields"=>;
+                {"key" =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"name"=>{"Type"=>"CV","Length"=>100}};
+                            };
+            ,"set001.alltypes"=>{"Fields"=>;
+                {"key"                =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"integer"            =>{"Type"=>"I","Nullable"=>.t.};
+                ,"uuid1"              =>{"Type"=>"UUI"};
+                ,"uuid2"              =>{"Type"=>"UUI","Default"=>"Wharf-uuid()","Nullable"=>.t.};
+                ,"json1_without_null" =>{"Type"=>"JS"};
+                ,"json2_with_null"    =>{"Type"=>"JS","Nullable"=>.t.};
+                ,"jsonb1_without_null"=>{"Type"=>"JSB"};
+                ,"jsonb2_with_null"   =>{"Type"=>"JSB","Nullable"=>.t.};
+                ,"big_integer"        =>{"Type"=>"IB","Nullable"=>.t.};
+                ,"small_integer"      =>{"Type"=>"IS","Nullable"=>.t.};
+                ,"money"              =>{"Type"=>"Y"};
+                ,"char10"             =>{"Type"=>"C","Length"=>10,"Nullable"=>.t.};
+                ,"varchar10"          =>{"Type"=>"CV","Length"=>10,"Nullable"=>.t.};
+                ,"binary10"           =>{"Type"=>"R","Nullable"=>.t.};
+                ,"varbinary11"        =>{"Type"=>"R","Nullable"=>.t.};
+                ,"memo"               =>{"Type"=>"M","Nullable"=>.t.};
+                ,"raw"                =>{"Type"=>"R","Nullable"=>.t.};
+                ,"logical"            =>{"Type"=>"L"};
+                ,"date"               =>{"Type"=>"D","Nullable"=>.t.};
+                ,"time_with_zone"     =>{"Type"=>"TOZ","Nullable"=>.t.};
+                ,"time_no_zone"       =>{"Type"=>"TO","Nullable"=>.t.};
+                ,"datetime_with_zone" =>{"Type"=>"DTZ","Nullable"=>.t.};
+                ,"datetime_no_zone"   =>{"Type"=>"DT","Nullable"=>.t.}};
+                                };
+            ,"set001.dbf001"=>{"Fields"=>;
+                {"key"          =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"customer_name"=>{"Type"=>"C","Length"=>50}};
+                            };
+            ,"set001.dbf002"=>{"Fields"=>;
+                {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"p_dbf001"=>{"Type"=>"I"}};
+                            ,"Indexes"=>;
+                {"p_dbf001"=>{"Expression"=>"p_dbf001"}}};
+            ,"set001.item"=>{"Fields"=>;
+                {"key"             =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"sysc"            =>{"Type"=>"DTZ"};
+                ,"sysm"            =>{"Type"=>"DTZ"};
+                ,"fk_item_category"=>{"Type"=>"I"};
+                ,"name"            =>{"Type"=>"CV","Length"=>50};
+                ,"note"            =>{"Type"=>"CV","Length"=>100}};
+                            ,"Indexes"=>;
+                {"fk_item_category"=>{"Expression"=>"fk_item_category"};
+                ,"name"            =>{"Expression"=>"name"}}};
+            ,"set001.item_category"=>{"Fields"=>;
+                {"key" =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"sysc"=>{"Type"=>"DTZ"};
+                ,"sysm"=>{"Type"=>"DTZ"};
+                ,"name"=>{"Type"=>"CV","Length"=>50}};
+                                    };
+            ,"set001.noindextesttable"=>{"Fields"=>;
+                {"KeY" =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"Code"=>{"Type"=>"C","Length"=>3,"Nullable"=>.t.}};
+                                        };
+            ,"set001.price_history"=>{"Fields"=>;
+                {"key"           =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"sysc"          =>{"Type"=>"DTZ"};
+                ,"sysm"          =>{"Type"=>"DTZ"};
+                ,"fk_item"       =>{"Type"=>"I"};
+                ,"effective_date"=>{"Type"=>"D"};
+                ,"price"         =>{"Type"=>"N","Length"=>8,"Scale"=>2}};
+                                    ,"Indexes"=>;
+                {"effective_date"=>{"Expression"=>"effective_date"};
+                ,"fk_item"       =>{"Expression"=>"fk_item"}}};
+            ,"set001.table001"=>{"Fields"=>;
+                {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"sysc"    =>{"Type"=>"DTZ"};
+                ,"sysm"    =>{"Type"=>"DTZ"};
+                ,"LnAme"   =>{"Type"=>"C","Length"=>50};
+                ,"fname"   =>{"Type"=>"C","Length"=>53};
+                ,"minitial"=>{"Type"=>"C","Length"=>1};
+                ,"age"     =>{"Type"=>"N","Length"=>3};
+                ,"dob"     =>{"Type"=>"D"};
+                ,"dati"    =>{"Type"=>"DTZ"};
+                ,"logical1"=>{"Type"=>"L"};
+                ,"numdec2" =>{"Type"=>"N","Length"=>6,"Scale"=>1};
+                ,"varchar" =>{"Type"=>"CV","Length"=>203}};
+                                ,"Indexes"=>;
+                {"lname"=>{"Expression"=>"LnAme"}}};
+            ,"set001.table002"=>{"Fields"=>;
+                {"key"       =>{"Type"=>"I","Wharf-AutoIncrement"=>.t.};
+                ,"p_table001"=>{"Type"=>"I","Nullable"=>.t.};
+                ,"children"  =>{"Type"=>"CV","Length"=>200,"Nullable"=>.t.};
+                ,"Cars"      =>{"Type"=>"CV","Length"=>300}};
+                                ,"Indexes"=>;
+                {"p_table001"=>{"Expression"=>"p_table001"}}};
+            ,"set001.table003"=>{"Fields"=>;
+                {"key"        =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"p_table001" =>{"Type"=>"I"};
+                ,"p_table003" =>{"Type"=>"I"};
+                ,"char50"     =>{"Type"=>"C","Length"=>50,"Default"=>"'val1A'","Nullable"=>.t.};
+                ,"bigint"     =>{"Type"=>"IB","Nullable"=>.t.};
+                ,"Bit"        =>{"Type"=>"R","Nullable"=>.t.};
+                ,"Decimal5_2" =>{"Type"=>"N","Length"=>5,"Scale"=>2,"Nullable"=>.t.};
+                ,"Decimal25_7"=>{"Type"=>"N","Length"=>25,"Scale"=>7,"Nullable"=>.t.};
+                ,"VarChar51"  =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
+                ,"VarChar52"  =>{"Type"=>"CV","Length"=>50,"Default"=>"'val1B'"};
+                ,"Text"       =>{"Type"=>"M","Nullable"=>.t.};
+                ,"Binary"     =>{"Type"=>"R","Nullable"=>.t.};
+                ,"Date"       =>{"Type"=>"D","Nullable"=>.t.};
+                ,"DateTime"   =>{"Type"=>"DT","Scale"=>4,"Default"=>"Wharf-Now()","Nullable"=>.t.};
+                ,"TOZ"        =>{"Type"=>"TOZ","Nullable"=>.t.};
+                ,"TOZ4"       =>{"Type"=>"TOZ","Scale"=>4,"Nullable"=>.t.};
+                ,"TO"         =>{"Type"=>"TO","Nullable"=>.t.};
+                ,"TO4"        =>{"Type"=>"TO","Scale"=>4,"Nullable"=>.t.};
+                ,"DTZ"        =>{"Type"=>"DTZ","Nullable"=>.t.};
+                ,"DTZ4"       =>{"Type"=>"DTZ","Scale"=>4,"Nullable"=>.t.};
+                ,"DT"         =>{"Type"=>"DT","Nullable"=>.t.};
+                ,"DT4"        =>{"Type"=>"DT","Scale"=>4,"Nullable"=>.t.};
+                ,"time"       =>{"Type"=>"TO","Scale"=>4,"Nullable"=>.t.};
+                ,"Boolean"    =>{"Type"=>"L","Nullable"=>.t.}};
+                                ,"Indexes"=>;
+                {"p_table001"=>{"Expression"=>"p_table001"};
+                ,"p_table003"=>{"Expression"=>"p_table003"}}};
+            ,"set001.table004"=>{"Fields"=>;
+                {"id"    =>{"Type"=>"I"};
+                ,"street"=>{"Type"=>"C","Length"=>50,"Nullable"=>.t.};
+                ,"zip"   =>{"Type"=>"C","Length"=>5,"Nullable"=>.t.};
+                ,"state" =>{"Type"=>"C","Length"=>2,"Nullable"=>.t.}};
+                                ,"Indexes"=>;
+                {"id"=>{"Expression"=>"id","Unique"=>.t.}}};
+            ,"set001.zipcodes"=>{"Fields"=>;
+                {"key"    =>{"Type"=>"IB","AutoIncrement"=>.t.};
+                ,"zipcode"=>{"Type"=>"C","Length"=>5,"Nullable"=>.t.};
+                ,"city"   =>{"Type"=>"C","Length"=>45,"Nullable"=>.t.}};
+                                };
+            }
+
+        hb_orm_SendToDebugView("Initialized l_hTableSchemaDefinitionA")
+        hb_orm_SendToDebugView("Will Initialize l_hTableSchemaDefinitionB")
+
+        l_hTableSchemaDefinitionB := ;
+            {"set003.cust001"=>{"Fields"=>;
+                {"KeY" =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"Code"=>{"Type"=>"C","Length"=>3,"Nullable"=>.t.}};
+                            };
+            ,"set003.form001"=>{"Fields"=>;
+                {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"LnAme"   =>{"Type"=>"C","Length"=>50};
+                ,"fname"   =>{"Type"=>"C","Length"=>53};
+                ,"minitial"=>{"Type"=>"C","Length"=>1};
+                ,"age"     =>{"Type"=>"N","Length"=>3};
+                ,"dob"     =>{"Type"=>"D"};
+                ,"dati"    =>{"Type"=>"DTZ"};
+                ,"logical1"=>{"Type"=>"L"};
+                ,"numdec2" =>{"Type"=>"N","Length"=>6,"Scale"=>1};
+                ,"varchar" =>{"Type"=>"CV","Length"=>203}};
+                            ,"Indexes"=>;
+                {"lname"=>{"Expression"=>"LnAme"}}};
+            ,"set003.form002"=>{"Fields"=>;
+                {"key"       =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"p_table001"=>{"Type"=>"I","Nullable"=>.t.};
+                ,"children"  =>{"Type"=>"CV","Length"=>200,"Nullable"=>.t.};
+                ,"Cars"      =>{"Type"=>"CV","Length"=>300}};
+                            };
+            ,"set003.ListOfFiles"=>{"Fields"=>;
+                {"key"                      =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"file_name"                =>{"Type"=>"C","Length"=>120,"Nullable"=>.t.};
+                ,"reference_to_large_object"=>{"Type"=>"OID","Nullable"=>.t.}};
+                                };
+            }
+        //-------------------------------------------------------------------------------
+
+        ?"Table Exists clients: ",l_oSQLConnection1:TableExists("clients")
+        l_oSQLConnection1:DeleteTable("clients")
+        ?"Table Exists clients: ",l_oSQLConnection1:TableExists("clients")
+
+        ?"Field Exists set001.table002.children: ",l_oSQLConnection1:FieldExists("set001.table002","children")
+        l_oSQLConnection1:DeleteField("set001.table002","children")
+        ?"Field Exists set001.table002.children: ",l_oSQLConnection1:FieldExists("set001.table002","children")
+
+        l_oSQLConnection1:DeleteIndex("set001.table001","lname")
+
+
         // altd()
-        // l_cSQLScript := l_cLastError := ""
-        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hSchemaDefinitionA),,@l_cSQLScript,@l_cLastError) > 0
-            hb_orm_SendToDebugView("MariaDB - Updated Schema with Definition A")
+        l_cUpdateScript := l_cLastError := ""
+        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hTableSchemaDefinitionA),,@l_cUpdateScript,@l_cLastError) > 0
+            hb_orm_SendToDebugView("MariaDB - Updated Schema with Definition A - No Errors")
         else
             if !empty(l_cLastError)
-                l_cFullFileName := l_cOutputFolder+"MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+"_A.txt"
+                l_cFullFileName := l_cOutputFolder+l_cRuntimePrefixStamp+"MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+"_A.txt"
                 hb_MemoWrit(l_cFullFileName,l_cLastError)
                 hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
             endif
         endif
-        l_cFullFileName := l_cOutputFolder+"MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_A.txt"
-        hb_MemoWrit(l_cFullFileName,l_cSQLScript)
-        hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
+        if !empty(l_cUpdateScript)
+            l_cFullFileName := l_cOutputFolder+l_cRuntimePrefixStamp+"MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_A_"+".txt"
+             hb_MemoWrit(l_cFullFileName,l_cUpdateScript)
+            hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
+        endif
 
 
-        l_cSQLScript := ""
-        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hSchemaDefinitionB),,@l_cSQLScript,@l_cLastError) > 0
-            hb_orm_SendToDebugView("MariaDB - Updated Schema with Definition A")
+
+        l_cUpdateScript := l_cLastError := ""
+        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hTableSchemaDefinitionB),,@l_cUpdateScript,@l_cLastError) > 0
+            hb_orm_SendToDebugView("MariaDB - Updated Schema with Definition B - No Errors")
         else
             if !empty(l_cLastError)
-                l_cFullFileName := l_cOutputFolder+"MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+"_B.txt"
+                l_cFullFileName := l_cOutputFolder+l_cRuntimePrefixStamp+"MigrationSqlScript_MariaDB_LastError_"+l_oSQLConnection1:GetDatabase()+"_B.txt"
                 hb_MemoWrit(l_cFullFileName,l_cLastError)
                 hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
             endif
         endif
-        l_cFullFileName := l_cOutputFolder+"MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_B.txt"
-        hb_MemoWrit(l_cFullFileName,l_cSQLScript)
-        hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
+        if !empty(l_cUpdateScript)
+            l_cFullFileName := l_cOutputFolder+l_cRuntimePrefixStamp+"MigrationSqlScript_MariaDB_"+l_oSQLConnection1:GetDatabase()+"_B_"+".txt"
+             hb_MemoWrit(l_cFullFileName,l_cUpdateScript)
+            hb_orm_SendToDebugView("MariaDB - Generated file: "+l_cFullFileName)
+        endif
+
 
     endif
 endif
@@ -399,36 +410,231 @@ endif
 if l_lAccessPostgresql
     if l_oSQLConnection2:Connected
 
-        l_oSQLConnection2:SetCurrentSchemaName("set001")
+        l_oSQLConnection2:SetCurrentNamespaceName("set001")
+
+// l_oDB2 := hb_SQLData(l_oSQLConnection2)
+// altd()
+// l_oDB2:Delete("SQLCRUD001","set001.dbf001",1)
+// altd()
+// l_oSQLConnection2:SQLExec("test1",[DELETE FROM "set001"."dbf001" WHERE 1=0 ])
+
 
         hb_orm_SendToDebugView("PostgreSQL - Will GenerateCurrentSchemaHarbourCode")
-        l_oSQLConnection2:GenerateCurrentSchemaHarbourCode(l_cOutputFolder+"CurrentSchema_PostgreSQL_"+l_oSQLConnection2:GetDatabase()+".txt")
+        l_oSQLConnection2:GenerateCurrentSchemaHarbourCode(l_cOutputFolder+l_cRuntimePrefixStamp+"CurrentSchema_PostgreSQL_"+l_oSQLConnection2:GetDatabase()+".txt")
         hb_orm_SendToDebugView("PostgreSQL - Done CurrentSchema_PostgreSQL_...text")
 
-        l_cSQLScript := ""
-        if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hSchemaDefinitionA),,@l_cSQLScript,@l_cLastError) > 0
+        //-------------------------------------------------------------------------------
+        hb_orm_SendToDebugView("Will Initialize l_hTableSchemaDefinitionA")
+
+        l_hTableSchemaDefinitionA := ;
+            {"public.clients"=>{"Fields"=>;
+                {"key" =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"name"=>{"Type"=>"CV","Length"=>100}};
+                            };
+            ,"set001.alltypes"=>{"Fields"=>;
+                {"key"                =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"integer"            =>{"Type"=>"I","Nullable"=>.t.};
+                ,"many_int"           =>{"Type"=>"I","Nullable"=>.t.,"Array"=>.t.};
+                ,"many_flags"         =>{"Type"=>"L","Nullable"=>.t.,"Array"=>.t.};
+                ,"uuid1"              =>{"Type"=>"UUI"};
+                ,"uuid2"              =>{"Type"=>"UUI","Default"=>"Wharf-uuid()","Nullable"=>.t.};
+                ,"many_uuid"          =>{"Type"=>"UUI","Nullable"=>.t.,"Array"=>.t.};
+                ,"json1_without_null" =>{"Type"=>"JS"};
+                ,"json2_with_null"    =>{"Type"=>"JS","Nullable"=>.t.};
+                ,"jsonb1_without_null"=>{"Type"=>"JSB"};
+                ,"jsonb2_with_null"   =>{"Type"=>"JSB","Nullable"=>.t.};
+                ,"big_integer"        =>{"Type"=>"IB","Nullable"=>.t.};
+                ,"small_integer"      =>{"Type"=>"IS","Nullable"=>.t.};
+                ,"money"              =>{"Type"=>"Y"};
+                ,"char10"             =>{"Type"=>"C","Length"=>10,"Nullable"=>.t.};
+                ,"varchar10"          =>{"Type"=>"CV","Length"=>10,"Nullable"=>.t.};
+                ,"binary10"           =>{"Type"=>"R","Nullable"=>.t.};
+                ,"varbinary11"        =>{"Type"=>"R","Nullable"=>.t.};
+                ,"memo"               =>{"Type"=>"M","Nullable"=>.t.};
+                ,"raw"                =>{"Type"=>"R","Nullable"=>.t.};
+                ,"logical"            =>{"Type"=>"L"};
+                ,"date"               =>{"Type"=>"D","Nullable"=>.t.};
+                ,"time_with_zone"     =>{"Type"=>"TOZ","Nullable"=>.t.};
+                ,"time_no_zone"       =>{"Type"=>"TO","Nullable"=>.t.};
+                ,"datetime_with_zone" =>{"Type"=>"DTZ","Nullable"=>.t.};
+                ,"datetime_no_zone"   =>{"Type"=>"DT","Nullable"=>.t.}};
+                                };
+            ,"set001.dbf001"=>{"Fields"=>;
+                {"key"          =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"customer_name"=>{"Type"=>"C","Length"=>50}};
+                            };
+            ,"set001.dbf002"=>{"Fields"=>;
+                {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"p_dbf001"=>{"Type"=>"I"}};
+                            ,"Indexes"=>;
+                {"p_dbf001"=>{"Expression"=>"p_dbf001"}}};
+            ,"set001.item"=>{"Fields"=>;
+                {"key"             =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"sysc"            =>{"Type"=>"DTZ"};
+                ,"sysm"            =>{"Type"=>"DTZ"};
+                ,"fk_item_category"=>{"Type"=>"I"};
+                ,"name"            =>{"Type"=>"CV","Length"=>50};
+                ,"note"            =>{"Type"=>"CV","Length"=>100}};
+                            ,"Indexes"=>;
+                {"fk_item_category"=>{"Expression"=>"fk_item_category"};
+                ,"name"            =>{"Expression"=>"name"}}};
+            ,"set001.item_category"=>{"Fields"=>;
+                {"key" =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"sysc"=>{"Type"=>"DTZ"};
+                ,"sysm"=>{"Type"=>"DTZ"};
+                ,"name"=>{"Type"=>"CV","Length"=>50}};
+                                    };
+            ,"set001.noindextesttable"=>{"Fields"=>;
+                {"KeY" =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"Code"=>{"Type"=>"C","Length"=>3,"Nullable"=>.t.}};
+                                        };
+            ,"set001.price_history"=>{"Fields"=>;
+                {"key"           =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"sysc"          =>{"Type"=>"DTZ"};
+                ,"sysm"          =>{"Type"=>"DTZ"};
+                ,"fk_item"       =>{"Type"=>"I"};
+                ,"effective_date"=>{"Type"=>"D"};
+                ,"price"         =>{"Type"=>"N","Length"=>8,"Scale"=>2}};
+                                    ,"Indexes"=>;
+                {"effective_date"=>{"Expression"=>"effective_date"};
+                ,"fk_item"       =>{"Expression"=>"fk_item"}}};
+            ,"set001.table001"=>{"Fields"=>;
+                {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"sysc"    =>{"Type"=>"DTZ"};
+                ,"sysm"    =>{"Type"=>"DTZ"};
+                ,"LnAme"   =>{"Type"=>"C","Length"=>50};
+                ,"fname"   =>{"Type"=>"C","Length"=>53};
+                ,"minitial"=>{"Type"=>"C","Length"=>1};
+                ,"age"     =>{"Type"=>"N","Length"=>3};
+                ,"dob"     =>{"Type"=>"D"};
+                ,"dati"    =>{"Type"=>"DTZ"};
+                ,"logical1"=>{"Type"=>"L"};
+                ,"numdec2" =>{"Type"=>"N","Length"=>6,"Scale"=>1};
+                ,"varchar" =>{"Type"=>"CV","Length"=>203}};
+                                ,"Indexes"=>;
+                {"lname"=>{"Expression"=>"LnAme"};
+                ,"tag1" =>{"Expression"=>"upper(LnAme)"}}};
+            ,"set001.table002"=>{"Fields"=>;
+                {"key"       =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"p_table001"=>{"Type"=>"I","Nullable"=>.t.};
+                ,"children"  =>{"Type"=>"CV","Length"=>200,"Nullable"=>.t.};
+                ,"Cars"      =>{"Type"=>"CV","Length"=>300}};
+                                ,"Indexes"=>;
+                {"p_table001"=>{"Expression"=>"p_table001"}}};
+            ,"set001.table003"=>{"Fields"=>;
+                {"key"        =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"p_table001" =>{"Type"=>"I"};
+                ,"p_table003" =>{"Type"=>"I"};
+                ,"char50"     =>{"Type"=>"C","Length"=>50,"Default"=>"'val1A'","Nullable"=>.t.};
+                ,"bigint"     =>{"Type"=>"IB","Nullable"=>.t.};
+                ,"Bit"        =>{"Type"=>"R","Nullable"=>.t.};
+                ,"Decimal5_2" =>{"Type"=>"N","Length"=>5,"Scale"=>2,"Nullable"=>.t.};
+                ,"Decimal25_7"=>{"Type"=>"N","Length"=>25,"Scale"=>7,"Nullable"=>.t.};
+                ,"VarChar51"  =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
+                ,"VarChar52"  =>{"Type"=>"CV","Length"=>50,"Default"=>"'val1B'"};
+                ,"Text"       =>{"Type"=>"M","Nullable"=>.t.};
+                ,"Binary"     =>{"Type"=>"R","Nullable"=>.t.};
+                ,"Date"       =>{"Type"=>"D","Nullable"=>.t.};
+                ,"DateTime"   =>{"Type"=>"DT","Scale"=>4,"Default"=>"Wharf-Now()","Nullable"=>.t.};
+                ,"TOZ"        =>{"Type"=>"TOZ","Nullable"=>.t.};
+                ,"TOZ4"       =>{"Type"=>"TOZ","Scale"=>4,"Nullable"=>.t.};
+                ,"TO"         =>{"Type"=>"TO","Nullable"=>.t.};
+                ,"TO4"        =>{"Type"=>"TO","Scale"=>4,"Nullable"=>.t.};
+                ,"DTZ"        =>{"Type"=>"DTZ","Nullable"=>.t.};
+                ,"DTZ4"       =>{"Type"=>"DTZ","Scale"=>4,"Nullable"=>.t.};
+                ,"DT"         =>{"Type"=>"DT","Nullable"=>.t.};
+                ,"DT4"        =>{"Type"=>"DT","Scale"=>4,"Nullable"=>.t.};
+                ,"time"       =>{"Type"=>"TO","Scale"=>4,"Nullable"=>.t.};
+                ,"Boolean"    =>{"Type"=>"L","Nullable"=>.t.}};
+                                ,"Indexes"=>;
+                {"p_table001"=>{"Expression"=>"p_table001"};
+                ,"p_table003"=>{"Expression"=>"p_table003"}}};
+            ,"set001.table004"=>{"Fields"=>;
+                {"id"    =>{"Type"=>"I"};
+                ,"street"=>{"Type"=>"C","Length"=>50,"Nullable"=>.t.};
+                ,"zip"   =>{"Type"=>"C","Length"=>5,"Nullable"=>.t.};
+                ,"state" =>{"Type"=>"C","Length"=>2,"Nullable"=>.t.}};
+                                ,"Indexes"=>;
+                {"id"=>{"Expression"=>"id","Unique"=>.t.}}};
+            ,"set001.zipcodes"=>{"Fields"=>;
+                {"key"    =>{"Type"=>"IB","AutoIncrement"=>.t.};
+                ,"zipcode"=>{"Type"=>"C","Length"=>5,"Nullable"=>.t.};
+                ,"city"   =>{"Type"=>"C","Length"=>45,"Nullable"=>.t.}};
+                                };
+            }
+
+        hb_orm_SendToDebugView("Initialized l_hTableSchemaDefinitionA")
+        hb_orm_SendToDebugView("Will Initialize l_hTableSchemaDefinitionB")
+
+        l_hTableSchemaDefinitionB := ;
+            {"set003.cust001"=>{"Fields"=>;
+                {"KeY" =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"Code"=>{"Type"=>"C","Length"=>3,"Nullable"=>.t.}};
+                            };
+            ,"set003.form001"=>{"Fields"=>;
+                {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"LnAme"   =>{"Type"=>"C","Length"=>50};
+                ,"fname"   =>{"Type"=>"C","Length"=>53};
+                ,"minitial"=>{"Type"=>"C","Length"=>1};
+                ,"age"     =>{"Type"=>"N","Length"=>3};
+                ,"dob"     =>{"Type"=>"D"};
+                ,"dati"    =>{"Type"=>"DTZ"};
+                ,"logical1"=>{"Type"=>"L"};
+                ,"numdec2" =>{"Type"=>"N","Length"=>6,"Scale"=>1};
+                ,"varchar" =>{"Type"=>"CV","Length"=>203}};
+                            ,"Indexes"=>;
+                {"lname"=>{"Expression"=>"LnAme"};
+                ,"tag1" =>{"Expression"=>"upper(LnAme)"}}};
+            ,"set003.form002"=>{"Fields"=>;
+                {"key"       =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"p_table001"=>{"Type"=>"I","Nullable"=>.t.};
+                ,"children"  =>{"Type"=>"CV","Length"=>200,"Nullable"=>.t.};
+                ,"Cars"      =>{"Type"=>"CV","Length"=>300}};
+                            };
+            ,"set003.ListOfFiles"=>{"Fields"=>;
+                {"key"                      =>{"Type"=>"I","AutoIncrement"=>.t.};
+                ,"file_name"                =>{"Type"=>"C","Length"=>120,"Nullable"=>.t.};
+                ,"reference_to_large_object"=>{"Type"=>"OID","Nullable"=>.t.}};
+                                };
+            }
+        //-------------------------------------------------------------------------------
+
+        ?"Table Exists public.clients: ",l_oSQLConnection2:TableExists("public.clients")
+        l_oSQLConnection2:DeleteTable("public.clients")
+        ?"Table Exists public.clients: ",l_oSQLConnection2:TableExists("public.clients")
+
+        ?"Field Exists set001.table002.children: ",l_oSQLConnection2:FieldExists("set001.table002","children")
+        l_oSQLConnection2:DeleteField("set001.table002","children")
+        ?"Field Exists set001.table002.children: ",l_oSQLConnection2:FieldExists("set001.table002","children")
+        
+        l_oSQLConnection2:DeleteIndex("set001.table001","lname")
+
+
+
+        l_cUpdateScript := ""
+        if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hTableSchemaDefinitionA),,@l_cUpdateScript,@l_cLastError) > 0
             hb_orm_SendToDebugView("PostgreSQL - Updated MigrationSqlScript_PostgreSQL_set001.txt")
         else
             if !empty(l_cLastError)
                 hb_orm_SendToDebugView("PostgreSQL - Failed Migrate MigrationSqlScript_PostgreSQL_set001_....txt")
-                hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_PostgreSQL_set001_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_cLastError)
+                hb_MemoWrit(l_cOutputFolder+l_cRuntimePrefixStamp+"MigrationSqlScript_PostgreSQL_set001_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_cLastError)
             endif
         endif
-        hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_PostgreSQL_set001_"+l_oSQLConnection2:GetDatabase()+".txt",l_cSQLScript)
+        hb_MemoWrit(l_cOutputFolder+l_cRuntimePrefixStamp+"MigrationSqlScript_PostgreSQL_set001_"+l_oSQLConnection2:GetDatabase()+".txt",l_cUpdateScript)
 
 
-        l_cPreviousSchemaName := l_oSQLConnection2:SetCurrentSchemaName("set002")
+        l_cPreviousNamespaceName := l_oSQLConnection2:SetCurrentNamespaceName("set002")
 
-        l_cSQLScript := ""
-        if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hSchemaDefinitionB),,@l_cSQLScript,@l_cLastError) > 0
+        l_cUpdateScript := ""
+        if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hTableSchemaDefinitionB),,@l_cUpdateScript,@l_cLastError) > 0
             hb_orm_SendToDebugView("PostgreSQL - Updated MigrationSqlScript_PostgreSQL_set002....txt")
         else
             if !empty(l_cLastError)
                 hb_orm_SendToDebugView("PostgreSQL - Failed Migrate MigrationSqlScript_PostgreSQL_set002_....txt")
-                hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_PostgreSQL_set002_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_cLastError)
+                hb_MemoWrit(l_cOutputFolder+l_cRuntimePrefixStamp+"MigrationSqlScript_PostgreSQL_set002_LastError_"+l_oSQLConnection2:GetDatabase()+".txt",l_cLastError)
             endif
         endif
-        hb_MemoWrit(l_cOutputFolder+"MigrationSqlScript_PostgreSQL_set002_"+l_oSQLConnection2:GetDatabase()+".txt",l_cSQLScript)
+        hb_MemoWrit(l_cOutputFolder+l_cRuntimePrefixStamp+"MigrationSqlScript_PostgreSQL_set002_"+l_oSQLConnection2:GetDatabase()+".txt",l_cUpdateScript)
 
 
 
@@ -437,7 +643,7 @@ if l_lAccessPostgresql
 
 
 
-        l_oSQLConnection2:SetCurrentSchemaName(l_cPreviousSchemaName)
+        l_oSQLConnection2:SetCurrentNamespaceName(l_cPreviousNamespaceName)
         
 
         l_oSQLConnection2:Lock("set001.table001",1000)
@@ -457,8 +663,7 @@ if l_lTestUpdates
         if l_oSQLConnection1:Connected
             l_oDB1 := hb_SQLData(l_oSQLConnection1)
             with object l_oDB1
-
-                :Table("MySQLAddAllTypes","alltypes")
+                :Table("MySQLAddAllTypes","set001.alltypes","alltypes")
                 :Field("integer"            ,123)
                 :Field("big_integer"        ,10**15)
                 :Field("money"              ,123456.1245)
@@ -481,7 +686,7 @@ if l_lTestUpdates
                 :Field("uuid1"              ,'11111111-2222-3333-4444-555555555555')
                 :Add()
 
-                :Table("MySQLDecimalTest","table003")
+                :Table("MySQLDecimalTest","set001.table003","table003")
                 :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog
                 :Field("Decimal25_7","-1111567890123456.1234567")
                 // :Field("DateTime",hb_ctot("02/25/2021 07:24:03:234 pm","mm/dd/yyyy", "hh:mm:ss:fff pp"))
@@ -491,7 +696,7 @@ if l_lTestUpdates
 
                 // :UseConnection(l_oSQLConnection1)
 
-                :Table("mysql 1","table003")
+                :Table("mysql 1","set001.table003","table003")
                 :Column("table003.key"        ,"table003_key")
                 :Column("table003.char50"     ,"table003_char50")
                 :Column("table003.Bigint"     ,"table003_Bigint")
@@ -524,7 +729,7 @@ if l_lTestUpdates
 
                 //Example of adding a record and adding a local index in activating it
                 l_oCursor := l_oDB1:p_oCursor
-
+altd()
                 l_oCursor:AppendBlank() //Blank Record
                 // l_oCursor:SetFieldValue("TABLE003_CHAR50","Bogus")
 
@@ -538,12 +743,12 @@ if l_lTestUpdates
                 // l_Tally         := :tally
                 // l_cLastSQLError := :ErrorMessage()
                 // l_cLastSQL      := :LastSQL()
-                // l_TestResult   := l_oSQLConnection1:p_Schema["table003"][1]
+                // l_TestResult   := l_oSQLConnection1:p_TableSchema["table003"]["Fields"]
 
-                ExportTableToHtmlFile("Table003Records",l_cOutputFolder+"MySQL_Table003Records","From MySQL",,,.t.)
+                ExportTableToHtmlFile("Table003Records",l_cOutputFolder+l_cRuntimePrefixStamp+"MySQL_Table003Records","From MySQL",,,.t.)
 
 
-                :Table(2,"table001")
+                :Table(2,"set001.table001","table001")
                 :Field("age","5")   //To trigger new SchemaAndDataErrorLog
                 :Field("dob",date())
                 :Field("dati",hb_datetime())
@@ -553,7 +758,7 @@ if l_lTestUpdates
                 if :Add()
                     l_nKey := :Key()
 
-                    :Table(3,"table001")
+                    :Table(3,"set001.table001","table001")
                     :Field("fname"   ,"Ingrid2")
                     :Field("lname","1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890")
                     :Field("minitial","aBBA2")
@@ -564,7 +769,7 @@ if l_lTestUpdates
                     // :Join("inner","table003","","table001.key = table003.key")
                     // l_oData := :Get(l_nKey) 
 
-                    :Table(5,"table001")
+                    :Table(5,"set001.table001","table001")
                     :Column("table001.fname","table001_fname")
                     l_oData := :Get(l_nKey)
 
@@ -572,10 +777,10 @@ if l_lTestUpdates
 
                 endif
 
-                :Table(6,"table001")
+                :Table(6,"set001.table001","table001")
                 // :Join("inner","table002","","table002.p_table001 = table001 and key = ^",5)
-                l_xW1 := :Join("inner","table002","","table002.p_table001 = table001")
-                :ReplaceJoin(l_xW1,"inner","table002","","table002.p_table001 = table001.key")
+                l_xW1 := :Join("inner","set001.table002","table002","table002.p_table001 = table001")
+                :ReplaceJoin(l_xW1,"inner","set001.table002","table002","table002.p_table001 = table001.key")
 
                 l_xW1 := :Where("table001.fname = ^","Jodie")
                 :Where("table001.lname = ^","Foster")
@@ -588,13 +793,13 @@ if l_lTestUpdates
                 //:KeywordCondition("Jodie","fname+lname","or",.t.)
                 
                 ?"----------------------------------------------"
-                :Table(7,"table001")
+                :Table(7,"set001.table001","table001")
                 :Column("table001.key"  ,"key")
                 :Column("table001.fname","table001_fname")
                 :Column("table001.lname","table001_lname")
                 :Column("table002.children","table002_children")
                 :Where("table001.key < 4")
-                :Join("inner","table002","","table002.p_table001 = table001.key")
+                :Join("inner","set001.table002","","table002.p_table001 = table001.key")
                 :SQL("AllRecords")
                 
                 ?"Will use scan/endscan"
@@ -605,7 +810,7 @@ if l_lTestUpdates
                     ?"MySQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
                 endscan
                 
-                ExportTableToHtmlFile("AllRecords",l_cOutputFolder+"MySQL_Table001_Join_Table002","From MySQL",,,.t.)
+                ExportTableToHtmlFile("AllRecords",l_cOutputFolder+l_cRuntimePrefixStamp+"MySQL_Table001_Join_Table002","From MySQL",,,.t.)
 
                 ?"----------------------------------------------"
 
@@ -675,7 +880,7 @@ if l_lTestUpdates
                 // scan all
                 //     ?"Tag1 Index",">"+padr(trans(ListOfFiles->key)+'*'+upper(alltrim(ListOfFiles->file_name)),240)+"<"
                 // endscan
-                // ExportTableToHtmlFile("ListOfFiles",l_cOutputFolder+"Postgresql_ListOfFiles","From Postgresql",,,.t.)
+                // ExportTableToHtmlFile("ListOfFiles",l_cOutputFolder+l_cRuntimePrefixStamp+"Postgresql_ListOfFiles","From Postgresql",,,.t.)
                 // ?"Seek test 001",vfp_seek(upper("LastExport.Zip"),"ListOfFiles","tag1"),ListOfFiles->key
                 // ?"Seek test 002 - tag1",vfp_seek(upper("2*LastExp")       ,"ListOfFiles","tag1"),ListOfFiles->key
                 // ?"Seek test 002 - tag2",vfp_seek(upper("2*LastExp")       ,"ListOfFiles","tag2"),ListOfFiles->key
@@ -687,7 +892,7 @@ if l_lTestUpdates
 
 
 
-                :Table("PostgreSQLAddAllTypes","alltypes")
+                :Table("PostgreSQLAddAllTypes","set001.alltypes","alltypes")
                 :Field("integer"            ,123)
                 :Field("big_integer"        ,10**15)
                 :Field("money"              ,123456.1245)
@@ -726,7 +931,7 @@ if l_lTestUpdates
     // l_cLastSQL := :LastSQL()
     // ? l_cLastSQL
 
-                :Table( "fc20f0e9-fb3e-4094-9df3-591095385a1b","alltypes")
+                :Table( "fc20f0e9-fb3e-4094-9df3-591095385a1b","set001.alltypes","alltypes")
                 :Column("alltypes.key"               ,"key")
                 :Column("alltypes.money"             ,"money")
                 :Column("alltypes.json1_without_null","json1_without_null")
@@ -742,15 +947,15 @@ if l_lTestUpdates
                     ?"SQL on AllTypesRecords : Last SQL Command = "+:LastSQL()
                 endif
 
-                ExportTableToHtmlFile("AllTypesRecords",l_cOutputFolder+"Postgresql_AllTypesRecords","From Postgresql",,,.t.)
+                ExportTableToHtmlFile("AllTypesRecords",l_cOutputFolder+l_cRuntimePrefixStamp+"Postgresql_AllTypesRecords","From Postgresql",,,.t.)
                 //html
 
 
-                :Table("PostgreSQLAddAllTypes","alltypes")
+                :Table("PostgreSQLAddAllTypes","set001.alltypes","alltypes")
                 :Field("integer" ,124)
                 if :Add()
                     l_nKey = :Key()
-                    :Table("PostgreSQLAddAllTypes","alltypes")
+                    :Table("PostgreSQLAddAllTypes","set001.alltypes","alltypes")
                     :FieldArray("many_int",{5,1,0})
                     :FieldArray("many_flags",{.t.,.f.,.t.})
                     :FieldArray("many_uuid",{'46d8e196-3333-4404-b167-3756dfa32555','46d8e196-2222-4404-b167-3756dfa32555'})
@@ -759,7 +964,7 @@ if l_lTestUpdates
 
 
 
-                :Table("PostgreSQLDecimalTest","table003")
+                :Table("PostgreSQLDecimalTest","set001.table003","table003")
                 :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog
                 :Field("Decimal25_7","-1111567890123456.1234567")
                 // :Field("DateTime",hb_ctot("02/25/2021 07:24:03:234 pm","mm/dd/yyyy", "hh:mm:ss:fff pp"))
@@ -769,7 +974,7 @@ if l_lTestUpdates
                 :Add()
 
 
-                :Table("PostgreSQLDecimalTest","table003")
+                :Table("PostgreSQLDecimalTest","set001.table003","table003")
                 :Field("Decimal5_2","523.35")   //To trigger new SchemaAndDataErrorLog
                 :Field("Decimal25_7","-1111567890123456.1234567")
                 // :Field("DateTime",hb_ctot("02/25/2021 07:24:03:234 pm","mm/dd/yyyy", "hh:mm:ss:fff pp"))
@@ -782,7 +987,7 @@ if l_lTestUpdates
                 :Add()
 
 
-                :Table(8,"table003")
+                :Table(8,"set001.table003","table003")
                 :Column("table003.key"        ,"table003_key")
                 :Column("table003.char50"     ,"table003_char50")
                 :Column("table003.bigint"     ,"table003_Bigint")
@@ -833,7 +1038,7 @@ if l_lTestUpdates
         ?"l_cLastSQLError = ",l_cLastSQLError
     endif
 
-                ExportTableToHtmlFile("Table003Records",l_cOutputFolder+"PostgreSQL_Table003Records.html","From PostgreSQL",,25,.t.)
+                ExportTableToHtmlFile("Table003Records",l_cOutputFolder+l_cRuntimePrefixStamp+"PostgreSQL_Table003Records.html","From PostgreSQL",,25,.t.)
 
                 :Table("Postgres 9","table001")
                 :Field("age","a6")
@@ -1040,7 +1245,7 @@ if l_lTestUpdates
                 // l_cLastSQL := :LastSQL()
                 // altd()
 
-                ExportTableToHtmlFile("AllItems",l_cOutputFolder+"PostgreSQL_AllItems.html","From PostgreSQL",,25,.t.)
+                ExportTableToHtmlFile("AllItems",l_cOutputFolder+l_cRuntimePrefixStamp+"PostgreSQL_AllItems.html","From PostgreSQL",,25,.t.)
 
 
             end
@@ -1060,7 +1265,7 @@ if l_lTestSimpleQueries
 
 
 
-                :Table("mysql 1","table003")
+                :Table("mysql 1","set001.table003")
                 :Column("table003.key"        ,"table003_key")
                 :Column("table003.char50"     ,"table003_char50")
                 :Column("table003.Bigint"     ,"table003_Bigint")
@@ -1092,7 +1297,7 @@ if l_lTestSimpleQueries
 
                 //Example of adding a record and adding a local index in activating it
                 l_oCursor := l_oDB1:p_oCursor
-
+altd()
                 l_oCursor:AppendBlank() //Blank Record
                 // l_oCursor:SetFieldValue("TABLE003_CHAR50","Bogus")
 
@@ -1103,10 +1308,10 @@ if l_lTestSimpleQueries
                 l_oCursor:CreateIndexes()
                 l_oCursor:SetOrder("tag1")
                 
-                ExportTableToHtmlFile("Table003Records",l_cOutputFolder+"MySQL_Table003Records","From MySQL",,,.t.)
+                ExportTableToHtmlFile("Table003Records",l_cOutputFolder+l_cRuntimePrefixStamp+"MySQL_Table003Records","From MySQL",,,.t.)
 
 
-                :Table(2,"table001")
+                :Table(2,"set001.table001")
                 :Field("age","5")   //To trigger new SchemaAndDataErrorLog
                 :Field("dob",date())
                 :Field("dati",hb_datetime())
@@ -1116,7 +1321,7 @@ if l_lTestSimpleQueries
                 if :Add()
                     l_nKey := :Key()
 
-                    :Table(3,"table001")
+                    :Table(3,"set001.table001")
                     :Field("fname"   ,"Ingrid2")
                     :Field("lname","1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890")
                     :Field("minitial","aBBA2")
@@ -1127,7 +1332,7 @@ if l_lTestSimpleQueries
                     // :Join("inner","table003","","table001.key = table003.key")
                     // l_oData := :Get(l_nKey) 
 
-                    :Table(5,"table001")
+                    :Table(5,"set001.table001")
                     :Column("table001.fname","table001_fname")
                     l_oData := :Get(l_nKey)
 
@@ -1135,10 +1340,10 @@ if l_lTestSimpleQueries
 
                 endif
 
-                :Table(6,"table001")
+                :Table(6,"set001.table001")
                 // :Join("inner","table002","","table002.p_table001 = table001 and key = ^",5)
-                l_xW1 := :Join("inner","table002","","table002.p_table001 = table001")
-                :ReplaceJoin(l_xW1,"inner","table002","","table002.p_table001 = table001.key")
+                l_xW1 := :Join("inner","set001.table002","","table002.p_table001 = table001")
+                :ReplaceJoin(l_xW1,"inner","set001.table002","","table002.p_table001 = table001.key")
 
                 l_xW1 := :Where("table001.fname = ^","Jodie")
                 :Where("table001.lname = ^","Foster")
@@ -1151,13 +1356,13 @@ if l_lTestSimpleQueries
                 //:KeywordCondition("Jodie","fname+lname","or",.t.)
                 
                 ?"----------------------------------------------"
-                :Table(7,"table001")
+                :Table(7,"set001.table001")
                 :Column("table001.key"  ,"key")
                 :Column("table001.fname","table001_fname")
                 :Column("table001.lname","table001_lname")
                 :Column("table002.children","table002_children")
                 :Where("table001.key < 4")
-                :Join("inner","table002","","table002.p_table001 = table001.key")
+                :Join("inner","set001.table002","","table002.p_table001 = table001.key")
                 :SQL("AllRecords")
                 
                 ?"Will use scan/endscan"
@@ -1168,7 +1373,7 @@ if l_lTestSimpleQueries
                     ?"MySQL "+trans(AllRecords->key)+" - "+allt(AllRecords->table001_fname)+" "+allt(AllRecords->table001_lname)+" "+allt(AllRecords->table002_children)
                 endscan
                 
-                ExportTableToHtmlFile("AllRecords",l_cOutputFolder+"MySQL_Table001_Join_Table002","From MySQL",,,.t.)
+                ExportTableToHtmlFile("AllRecords",l_cOutputFolder+l_cRuntimePrefixStamp+"MySQL_Table001_Join_Table002","From MySQL",,,.t.)
 
                 ?"----------------------------------------------"
 
@@ -1205,7 +1410,7 @@ if l_lTestSimpleQueries
                     ?"SQL on AllTypesRecords : Last SQL Command = "+:LastSQL()
                 endif
 
-                ExportTableToHtmlFile("AllTypesRecords",l_cOutputFolder+"Postgresql_AllTypesRecords","From Postgresql",,,.t.)
+                ExportTableToHtmlFile("AllTypesRecords",l_cOutputFolder+l_cRuntimePrefixStamp+"Postgresql_AllTypesRecords","From Postgresql",,,.t.)
                 //html
 
 
@@ -1293,7 +1498,7 @@ if l_lTestSimpleQueries
                 // l_cLastSQL := :LastSQL()
                 // altd()
 
-                ExportTableToHtmlFile("AllItems",l_cOutputFolder+"PostgreSQL_AllItems.html","From PostgreSQL",,25,.t.)
+                ExportTableToHtmlFile("AllItems",l_cOutputFolder+l_cRuntimePrefixStamp+"PostgreSQL_AllItems.html","From PostgreSQL",,25,.t.)
 
 
             end
@@ -1599,4 +1804,10 @@ endif
 ?"Done"
 return nil
 //=================================================================================================================
+//=================================================================================================================
+//=================================================================================================================
+function GetZuluTimeStampForFileNameSuffix()
+local l_cTimeStamp := hb_TSToStr(hb_TSToUTC(hb_DateTime()))
+l_cTimeStamp := left(l_cTimeStamp,len(l_cTimeStamp)-4)
+return hb_StrReplace( l_cTimeStamp , {" "=>"-",":"=>"-"})+"-Zulu"
 //=================================================================================================================

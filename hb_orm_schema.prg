@@ -1,4 +1,4 @@
-//Copyright (c) 2023 Eric Lendvai, MIT License
+//Copyright (c) 2024 Eric Lendvai, MIT License
 
 #include "hb_orm.ch"
 #include "hb_vfp.ch"
@@ -11,38 +11,44 @@
 // autoincrement fields are not null with no default.
 
 //-----------------------------------------------------------------------------------------------------------------
-method LoadSchema() class hb_orm_SQLConnect
+method LoadSchema(par_cSource) class hb_orm_SQLConnect
+//par_cSource is optional, will help to debug ORM
+
 local l_nSelect := iif(used(),select(),0)
 local l_cSQLCommand
 local l_cSQLCommandFields  := ""
 local l_cSQLCommandIndexes := ""
-local l_cFieldType,l_nFieldLen,l_nFieldDec,l_lFieldAllowNull,l_lFieldAutoIncrement,l_lFieldArray,l_cFieldComment,l_cFieldDefault
-local l_cTableName,l_cTableNameLast
-local l_cSchemaAndTableName,l_cSchemaAndTableNameLast
+local l_cFieldType,l_nFieldLen,l_nFieldDec,l_lFieldNullable,l_lFieldAutoIncrement,l_lFieldArray,l_cFieldComment,l_cFieldDefault
+local l_cTableName
+local l_cNamespaceAndTableName,l_cNamespaceAndTableNameLast
 local l_cIndexName,l_cIndexDefinition,l_cIndexExpression,l_lIndexUnique,l_cIndexType
-local l_hSchemaFields  := {=>}
-local l_hSchemaIndexes := {=>}
+local l_hTableSchemaField   := {=>}
+local l_hTableSchemaFields  := {=>}
+local l_hTableSchemaIndexes := {=>}
 local l_nPos1,l_nPos2,l_nPos3,l_nPos4
 local l_lLoadedCache
 local l_cFieldCommentType
 local l_nFieldCommentLength
 local l_lUnlogged
 local l_lUnloggedLast
+local l_cSource := nvl(par_cSource,"Not Specified")
 
-hb_orm_SendToDebugView("In LoadSchema")
+hb_orm_SendToDebugView("LoadSchema Start - Source: "+l_cSource)
 
-hb_HCaseMatch(l_hSchemaFields ,.f.)
-hb_HCaseMatch(l_hSchemaIndexes,.f.)
-hb_HClear(::p_Schema)
-hb_HCaseMatch(::p_Schema,.f.)
+hb_HCaseMatch(l_hTableSchemaField ,.f.)
+hb_HCaseMatch(l_hTableSchemaFields ,.f.)
+hb_HCaseMatch(l_hTableSchemaIndexes,.f.)
+hb_HClear(::p_TableSchema)
+hb_HCaseMatch(::p_TableSchema,.f.)
 
 CloseAlias("hb_orm_sqlconnect_schema_fields")
 CloseAlias("hb_orm_sqlconnect_schema_indexes")
 
-::p_SchemaCacheLogLastPk := 0
+::p_TableSchemaCacheLogLastPk := 0
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    // In MySQL engine, internally, if a table does not have a Namespace (a name before a "." character.), will be using "public" as namespace.
     l_cSQLCommandFields  += [SELECT columns.table_name                 AS table_name,]
     l_cSQLCommandFields  +=        [columns.ordinal_position           AS field_position,]
     l_cSQLCommandFields  +=        [columns.column_name                AS field_name,]
@@ -119,7 +125,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommandIndexes += [ GROUP BY table_name,index_name]
     l_cSQLCommandIndexes += [ ORDER BY index_schema,table_name,index_name;]
 
-
     if !::SQLExec("LoadSchema",l_cSQLCommandFields,"hb_orm_sqlconnect_schema_fields")
         ::p_ErrorMessage := [Failed SQL for hb_orm_sqlconnect_schema_fields.]
         // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommandFields+[ -> ]+::p_ErrorMessage)
@@ -129,14 +134,25 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         if used("hb_orm_sqlconnect_schema_fields") .and. used("hb_orm_sqlconnect_schema_indexes")
             select hb_orm_sqlconnect_schema_fields
             if Reccount() > 0
-                l_cTableNameLast := Trim(hb_orm_sqlconnect_schema_fields->table_name)
-                hb_HClear(l_hSchemaFields)
+                l_cNamespaceAndTableNameLast := Trim(hb_orm_sqlconnect_schema_fields->table_name)
+                l_nPos1 := at(".",l_cNamespaceAndTableNameLast)
+                if empty(l_nPos1)
+                    l_cNamespaceAndTableNameLast := "public."+l_cNamespaceAndTableNameLast
+                endif
+
+                hb_HClear(l_hTableSchemaFields)
                 scan all
-                    l_cTableName := Trim(hb_orm_sqlconnect_schema_fields->table_name)
-                    if !(l_cTableName == l_cTableNameLast)  // Method to for an exact not equal
-                        ::p_Schema[l_cTableNameLast] := {"Fields"=>hb_hClone(l_hSchemaFields),"Indexes"=>NIL}
-                        hb_HClear(l_hSchemaFields)
-                        l_cTableNameLast := l_cTableName
+                    l_cNamespaceAndTableName := Trim(hb_orm_sqlconnect_schema_fields->table_name)
+                    l_nPos1 := at(".",l_cNamespaceAndTableName)
+                    if empty(l_nPos1)
+                        l_cNamespaceAndTableName := "public."+l_cNamespaceAndTableName
+                    endif
+
+
+                    if !(l_cNamespaceAndTableName == l_cNamespaceAndTableNameLast)  // Method to for an exact not equal
+                        ::p_TableSchema[l_cNamespaceAndTableNameLast] := {"Fields"=>hb_hClone(l_hTableSchemaFields),"Indexes"=>NIL}
+                        hb_HClear(l_hTableSchemaFields)
+                        l_cNamespaceAndTableNameLast := l_cNamespaceAndTableName
                     endif
 
                     //Parse the comment field to see if recorded the field type and its length. Since in MySQL there is no need of LENGTH=, the code was simplified.
@@ -238,15 +254,20 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                         l_nFieldDec           := 0
                         exit
                     case "longtext"
-                        if l_cFieldCommentType == "JS"
+                        do case
+                        case l_cFieldCommentType == "JSB"
+                            l_cFieldType      := "JSB"
+                            l_nFieldLen       := 0
+                            l_nFieldDec       := 0
+                        case l_cFieldCommentType == "JS"
                             l_cFieldType      := "JS"
                             l_nFieldLen       := 0
                             l_nFieldDec       := 0
-                        else
+                        otherwise
                             l_cFieldType          := "M"
                             l_nFieldLen           := 0
                             l_nFieldDec           := 0
-                        endif
+                        endcase
                         exit
                     case "longblob"
                         l_cFieldType          := "R"
@@ -293,66 +314,93 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                         l_nFieldDec           := 0
                     endswitch
 
-                    l_lFieldAllowNull     := (field->field_nullable == 1)
+                    l_lFieldNullable      := (field->field_nullable == 1)
                     l_lFieldAutoIncrement := (field->field_auto_increment == 1)
                     l_lFieldArray         := .f.
 
-                    l_cFieldDefault := ::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,iif(l_lFieldAllowNull,"N","")+iif(l_lFieldAutoIncrement,"+","")+iif(l_lFieldArray,"A",""),field->field_default)
+                    l_cFieldDefault := ::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,l_lFieldNullable,field->field_default)
 
-                    l_hSchemaFields[trim(field->field_Name)] := {,;
-                                                                 l_cFieldType,;
-                                                                 l_nFieldLen,;
-                                                                 l_nFieldDec,;
-                                                                 iif(l_lFieldAllowNull,"N","")+iif(l_lFieldAutoIncrement,"+","")+iif(l_lFieldArray,"A",""),;
-                                                                 l_cFieldDefault}
+                    l_hTableSchemaFields[trim(field->field_Name)] := {HB_ORM_SCHEMA_FIELD_TYPE => l_cFieldType}
+                    l_hTableSchemaField := l_hTableSchemaFields[trim(field->field_Name)]
+                    if !hb_IsNil(l_nFieldLen) .and. l_nFieldLen > 0
+                        l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_LENGTH] := l_nFieldLen
+                    endif
+                    if !hb_IsNil(l_nFieldDec) .and. l_nFieldDec > 0
+                        l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_DECIMALS] := l_nFieldDec
+                    endif
+                    if !hb_IsNil(l_lFieldNullable) .and. l_lFieldNullable
+                        l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_NULLABLE] := .t.
+                    endif
+                    if !hb_IsNil(l_lFieldAutoIncrement) .and. l_lFieldAutoIncrement
+                        l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_AUTOINCREMENT] := .t.
+                    endif
+                    if !hb_IsNil(l_lFieldArray) .and. l_lFieldArray
+                        l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_ARRAY] := .t.
+                    endif
+                    if !hb_IsNil(l_cFieldDefault) .and. !empty(l_cFieldDefault)
+                        l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_DEFAULT] := l_cFieldDefault
+                    endif
 
                 endscan
 
 
-                ::p_Schema[l_cTableNameLast] := {"Fields"=>hb_hClone(l_hSchemaFields),"Indexes"=>NIL}
-                hb_HClear(l_hSchemaFields)
+                ::p_TableSchema[l_cNamespaceAndTableNameLast] := {"Fields"=>hb_hClone(l_hTableSchemaFields),"Indexes"=>NIL}
+                hb_HClear(l_hTableSchemaFields)
 
-                //Since Indexes could only exists for an existing table we simply assign to a ::p_Schema[][HB_ORM_SCHEMA_INDEX] cell
+                //Since Indexes could only exists for an existing table we simply assign to a ::p_TableSchema[][HB_ORM_SCHEMA_INDEX] cell
                 select hb_orm_sqlconnect_schema_indexes
+// altd()
                 if Reccount() > 0
-                    l_cTableNameLast := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
-                    hb_HClear(l_hSchemaIndexes)
+                    l_cNamespaceAndTableNameLast := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
+                    l_nPos1 := at(".",l_cNamespaceAndTableNameLast)
+                    if empty(l_nPos1)
+                        l_cNamespaceAndTableNameLast := "public."+l_cNamespaceAndTableNameLast
+                    endif
+
+                    hb_HClear(l_hTableSchemaIndexes)
 
                     scan all
-                        l_cTableName := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
+                        l_cNamespaceAndTableName := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
+                        l_nPos1 := at(".",l_cNamespaceAndTableName)
+                        if empty(l_nPos1)
+                            l_cNamespaceAndTableName := "public."+l_cNamespaceAndTableName
+                        endif
 
-                        //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_schema
-                        if hb_HHasKey(::p_Schema,l_cTableName)
+                        //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_TableSchema
+                        if hb_HHasKey(::p_TableSchema,l_cNamespaceAndTableName)
 
-                            if !(l_cTableName == l_cTableNameLast)
-                                if len(l_hSchemaIndexes) > 0
-                                    ::p_Schema[l_cTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hSchemaIndexes)
-                                    hb_HClear(l_hSchemaIndexes)
+                            if !(l_cNamespaceAndTableName == l_cNamespaceAndTableNameLast)
+                                if len(l_hTableSchemaIndexes) > 0
+                                    ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
+                                    hb_HClear(l_hTableSchemaIndexes)
                                 else
-                                    ::p_Schema[l_cTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                                    ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                                 endif
-                                l_cTableNameLast := l_cTableName
+                                l_cNamespaceAndTableNameLast := l_cNamespaceAndTableName
                             endif
 
                             l_cIndexName := lower(trim(field->index_name))
-                            if left(l_cIndexName,len(l_cTableName)+1) == lower(l_cTableName)+"_" .and. right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
-                                l_cIndexName      := hb_orm_RootIndexName(l_cTableName,l_cIndexName)
+                            // if left(l_cIndexName,len(l_cNamespaceAndTableName)+1) == lower(l_cNamespaceAndTableName)+"_" .and. right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
+                            if right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
+                                l_cIndexName      := hb_orm_RootIndexName(l_cNamespaceAndTableName,l_cIndexName)
 
                                 l_cIndexExpression := trim(field->index_columns)
                                 if !(lower(l_cIndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
-                                    l_lIndexUnique     := (field->is_unique == 1)
-                                    l_cIndexType       := field->index_type
-                                    l_hSchemaIndexes[l_cIndexName] := {,l_cIndexExpression,l_lIndexUnique,l_cIndexType}
+                                    l_lIndexUnique := (field->is_unique == 1)
+                                    l_cIndexType   := field->index_type
+                                    l_hTableSchemaIndexes[l_cIndexName] := {HB_ORM_SCHEMA_INDEX_EXPRESSION => l_cIndexExpression,;
+                                                                            HB_ORM_SCHEMA_INDEX_UNIQUE     => l_lIndexUnique,;
+                                                                            HB_ORM_SCHEMA_INDEX_ALGORITHM  => l_cIndexType}
                                 endif
                             endif
                         endif
                     endscan
 
-                    if len(l_hSchemaIndexes) > 0
-                        ::p_Schema[l_cTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hSchemaIndexes)
-                        hb_HClear(l_hSchemaIndexes)
+                    if len(l_hTableSchemaIndexes) > 0
+                        ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
+                        hb_HClear(l_hTableSchemaIndexes)
                     else
-                        ::p_Schema[l_cTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                        ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                     endif
 
                 endif
@@ -379,14 +427,14 @@ SELECT pk
         l_cSQLCommand := Strtran(l_cSQLCommand,"SchemaCacheLog","schemacachelog")
     endif
 
-    if !(::PostgreSQLHBORMSchemaName == "hborm")
-        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
+    if !(::p_HBORMNamespace == "hborm")
+        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
     endif
 
     if ::SQLExec("LoadSchema",l_cSQLCommand,"SchemaCacheLogLast")
         if SchemaCacheLogLast->(reccount()) > 0
 
-            l_cSQLCommandFields  := [SELECT schema_name,]
+            l_cSQLCommandFields  := [SELECT namespace_name,]
             l_cSQLCommandFields  +=        [table_name,]
             l_cSQLCommandFields  +=        [table_is_unlogged,]
             l_cSQLCommandFields  +=        [field_position,]
@@ -403,25 +451,25 @@ SELECT pk
             l_cSQLCommandFields  +=        [field_comment,]
             l_cSQLCommandFields  +=        [tag1,]
             l_cSQLCommandFields  +=        [tag2]
-            // l_cSQLCommandFields  += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
-            l_cSQLCommandFields  += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+[p_SchemaCacheLogLastPk]+["]
+            // l_cSQLCommandFields  += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
+            l_cSQLCommandFields  += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+[p_TableSchemaCacheLogLastPk]+["]
             l_cSQLCommandFields  += [ ORDER BY tag1,tag2,field_position]
 
 
-            l_cSQLCommandIndexes := [SELECT schema_name,]
+            l_cSQLCommandIndexes := [SELECT namespace_name,]
             l_cSQLCommandIndexes +=        [table_name,]
             l_cSQLCommandIndexes +=        [index_name,]
             l_cSQLCommandIndexes +=        [index_definition,]
             l_cSQLCommandIndexes +=        [tag1,]
             l_cSQLCommandIndexes +=        [tag2]
-            // l_cSQLCommandIndexes += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
-            l_cSQLCommandIndexes += [ FROM ]+::FormatIdentifier(::PostgreSQLHBORMSchemaName)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+[p_SchemaCacheLogLastPk]+["]
+            // l_cSQLCommandIndexes += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
+            l_cSQLCommandIndexes += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+[p_TableSchemaCacheLogLastPk]+["]
             l_cSQLCommandIndexes += [ ORDER BY tag1,tag2,index_name]
 
-            if       ::SQLExec("LoadSchema",strtran(l_cSQLCommandFields ,"p_SchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
-               .and. ::SQLExec("LoadSchema",strtran(l_cSQLCommandIndexes,"p_SchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
+            if       ::SQLExec("LoadSchema",strtran(l_cSQLCommandFields ,"p_TableSchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
+               .and. ::SQLExec("LoadSchema",strtran(l_cSQLCommandIndexes,"p_TableSchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
                 l_lLoadedCache := .t.
-                ::p_SchemaCacheLogLastPk := SchemaCacheLogLast->pk
+                ::p_TableSchemaCacheLogLastPk := SchemaCacheLogLast->pk
             else
                 CloseAlias("hb_orm_sqlconnect_schema_fields")
                 CloseAlias("hb_orm_sqlconnect_schema_indexes")
@@ -429,10 +477,10 @@ SELECT pk
                 ::UpdateSchemaCache(.t.)
 
                 if ::SQLExec("LoadSchema",l_cSQLCommand,"SchemaCacheLogLast")
-                    if       ::SQLExec("LoadSchema",strtran(l_cSQLCommandFields ,"p_SchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
-                       .and. ::SQLExec("LoadSchema",strtran(l_cSQLCommandIndexes,"p_SchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
+                    if       ::SQLExec("LoadSchema",strtran(l_cSQLCommandFields ,"p_TableSchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
+                       .and. ::SQLExec("LoadSchema",strtran(l_cSQLCommandIndexes,"p_TableSchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
                         l_lLoadedCache := .t.
-                        ::p_SchemaCacheLogLastPk := SchemaCacheLogLast->pk
+                        ::p_TableSchemaCacheLogLastPk := SchemaCacheLogLast->pk
                     endif
                 endif
             endif
@@ -445,70 +493,23 @@ SELECT pk
         endif
     endif
 
-    // Will no longer support loading directly, due to performance since can not "SET enable_nestloop = false"
-    // if !l_lLoadedCache
-    //     // Load from Live information_schema
-    //     l_cSQLCommandFields  := [SELECT columns.table_schema             AS schema_name,]
-    //     l_cSQLCommandFields  +=        [columns.table_name               AS table_name,]
-    //     l_cSQLCommandFields  +=        [columns.ordinal_position         AS field_position,]
-    //     l_cSQLCommandFields  +=        [columns.column_name              AS field_name,]
-    //     l_cSQLCommandFields  +=        [columns.data_type                AS field_type,]
-    //     l_cSQLCommandFields  +=        [columns.character_maximum_length AS field_clength,]
-    //     l_cSQLCommandFields  +=        [columns.numeric_precision        AS field_nlength,]
-    //     l_cSQLCommandFields  +=        [columns.datetime_precision       AS field_tlength,]
-    //     l_cSQLCommandFields  +=        [columns.numeric_scale            AS field_decimals,]
-    //     l_cSQLCommandFields  +=        [(columns.is_nullable = 'YES')    AS field_nullable,]
-    //     //_M_
-    //     l_cSQLCommandFields  +=        [columns.column_default           AS field_default,]
-    //     l_cSQLCommandFields  +=        [(columns.is_identity = 'YES')    AS field_auto_increment,]
-    //     l_cSQLCommandFields  +=        [pgd.description                  AS field_comment,]
-    //     l_cSQLCommandFields  +=        [upper(columns.table_schema)      AS tag1,]
-    //     l_cSQLCommandFields  +=        [upper(columns.table_name)        AS tag2]
-    //     l_cSQLCommandFields  +=  [ FROM information_schema.columns]
-    //     l_cSQLCommandFields  +=  [ INNER JOIN pg_catalog.pg_statio_all_tables as st ON columns.table_schema = st.schemaname and columns.table_name = st.relname]
-    //     l_cSQLCommandFields  +=  [ INNER JOIN information_schema.tables             ON columns.table_schema = tables.table_schema AND columns.table_name = tables.table_name]
-    //     l_cSQLCommandFields  +=  [ LEFT JOIN pg_catalog.pg_description pgd          ON pgd.objoid=st.relid and pgd.objsubid=columns.ordinal_position]
-    //     l_cSQLCommandFields  +=  [ WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))]
-    //     l_cSQLCommandFields  +=  [ AND   tables.table_type = 'BASE TABLE']
-    //     l_cSQLCommandFields  +=  [ ORDER BY tag1,tag2,field_position]
-
-
-    //     l_cSQLCommandIndexes := [SELECT pg_indexes.schemaname        AS schema_name,]
-    //     l_cSQLCommandIndexes +=        [pg_indexes.tablename         AS table_name,]
-    //     l_cSQLCommandIndexes +=        [pg_indexes.indexname         AS index_name,]
-    //     l_cSQLCommandIndexes +=        [pg_indexes.indexdef          AS index_definition,]
-    //     l_cSQLCommandIndexes +=        [upper(pg_indexes.schemaname) AS tag1,]
-    //     l_cSQLCommandIndexes +=        [upper(pg_indexes.tablename)  AS tag2]
-    //     l_cSQLCommandIndexes += [ FROM pg_indexes]
-    //     l_cSQLCommandIndexes += [ WHERE NOT (lower(left(pg_indexes.tablename,11)) = 'schemacache' OR lower(pg_indexes.schemaname) in ('information_schema','pg_catalog'))]
-    //     l_cSQLCommandIndexes += [ ORDER BY tag1,tag2,index_name]
-
-    // endif
-
-    // if !l_lLoadedCache .and. !::SQLExec("LoadSchema",l_cSQLCommandFields,"hb_orm_sqlconnect_schema_fields")
-    //     ::p_ErrorMessage := [Failed SQL for hb_orm_sqlconnect_schema_fields.]
-    //     // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommandFields+[ -> ]+::p_ErrorMessage)
-
-    // elseif !l_lLoadedCache .and. !::SQLExec("LoadSchema",l_cSQLCommandIndexes,"hb_orm_sqlconnect_schema_indexes")
-    //     ::p_ErrorMessage := [Failed SQL for hb_orm_sqlconnect_schema_indexes.]
-
     if !(used("hb_orm_sqlconnect_schema_fields") .and. used("hb_orm_sqlconnect_schema_indexes"))
         ::p_ErrorMessage := [Failed load cached PostgreSQL schema.]
     else
         select hb_orm_sqlconnect_schema_fields
         
         if Reccount() > 0
-            l_cSchemaAndTableNameLast := Trim(hb_orm_sqlconnect_schema_fields->schema_name)+"."+Trim(hb_orm_sqlconnect_schema_fields->table_name)
-            l_lUnloggedLast           := hb_orm_sqlconnect_schema_fields->table_is_unlogged
-            hb_HClear(l_hSchemaFields)
+            l_cNamespaceAndTableNameLast := Trim(hb_orm_sqlconnect_schema_fields->namespace_name)+"."+Trim(hb_orm_sqlconnect_schema_fields->table_name)
+            l_lUnloggedLast              := hb_orm_sqlconnect_schema_fields->table_is_unlogged
+            hb_HClear(l_hTableSchemaFields)
 
             scan all
-                l_cSchemaAndTableName := Trim(hb_orm_sqlconnect_schema_fields->schema_name)+"."+Trim(hb_orm_sqlconnect_schema_fields->table_name)
-                l_lUnlogged           := hb_orm_sqlconnect_schema_fields->table_is_unlogged
-                if !(l_cSchemaAndTableName == l_cSchemaAndTableNameLast)
-                    ::p_Schema[l_cSchemaAndTableNameLast] := {"Fields"=>hb_hClone(l_hSchemaFields),"Indexes"=>NIL,"Unlogged"=>l_lUnloggedLast}    //{Table Fields (HB_ORM_SCHEMA_FIELD), Table Indexes (HB_ORM_SCHEMA_INDEX)}
-                    hb_HClear(l_hSchemaFields)
-                    l_cSchemaAndTableNameLast := l_cSchemaAndTableName
+                l_cNamespaceAndTableName := Trim(hb_orm_sqlconnect_schema_fields->namespace_name)+"."+Trim(hb_orm_sqlconnect_schema_fields->table_name)
+                l_lUnlogged              := hb_orm_sqlconnect_schema_fields->table_is_unlogged
+                if !(l_cNamespaceAndTableName == l_cNamespaceAndTableNameLast)
+                    ::p_TableSchema[l_cNamespaceAndTableNameLast] := {"Fields"=>hb_hClone(l_hTableSchemaFields),"Indexes"=>NIL,"Unlogged"=>l_lUnloggedLast}    //{Table Fields (HB_ORM_SCHEMA_FIELD), Table Indexes (HB_ORM_SCHEMA_INDEX)}
+                    hb_HClear(l_hTableSchemaFields)
+                    l_cNamespaceAndTableNameLast := l_cNamespaceAndTableName
                     l_lUnloggedLast           := l_lUnlogged
                 endif
 
@@ -624,6 +625,11 @@ SELECT pk
                     l_nFieldLen       := 0
                     l_nFieldDec       := 0
                     exit
+                case "jsonb"
+                    l_cFieldType      := "JSB"
+                    l_nFieldLen       := 0
+                    l_nFieldDec       := 0
+                    exit
                 case "json"
                     l_cFieldType      := "JS"
                     l_nFieldLen       := 0
@@ -640,53 +646,64 @@ SELECT pk
                     l_nFieldDec           := 0
                 endswitch
 
-                l_lFieldAllowNull     := field->field_nullable
+                l_lFieldNullable      := field->field_nullable
                 l_lFieldAutoIncrement := field->field_auto_increment                    //{"I",,,,.t.}
                 l_lFieldArray         := field->field_array
 
-                l_cFieldDefault := ::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,iif(l_lFieldAllowNull,"N","")+iif(l_lFieldAutoIncrement,"+","")+iif(l_lFieldArray,"A",""),field->field_default)
+                l_cFieldDefault := ::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,l_lFieldNullable,field->field_default)
 
-                l_hSchemaFields[trim(field->field_Name)] := {,;
-                                                                l_cFieldType,;
-                                                                l_nFieldLen,;
-                                                                l_nFieldDec,;
-                                                                iif(l_lFieldAllowNull,"N","")+iif(l_lFieldAutoIncrement,"+","")+iif(l_lFieldArray,"A",""),;
-                                                                l_cFieldDefault}
+                l_hTableSchemaFields[trim(field->field_Name)] := {HB_ORM_SCHEMA_FIELD_TYPE => l_cFieldType}
+                l_hTableSchemaField := l_hTableSchemaFields[trim(field->field_Name)]
+                if !hb_IsNil(l_nFieldLen) .and. l_nFieldLen > 0
+                    l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_LENGTH] := l_nFieldLen
+                endif
+                if !hb_IsNil(l_nFieldDec) .and. l_nFieldDec > 0
+                    l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_DECIMALS] := l_nFieldDec
+                endif
+                if !hb_IsNil(l_lFieldNullable) .and. l_lFieldNullable
+                    l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_NULLABLE] := .t.
+                endif
+                if !hb_IsNil(l_lFieldAutoIncrement) .and. l_lFieldAutoIncrement
+                    l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_AUTOINCREMENT] := .t.
+                endif
+                if !hb_IsNil(l_lFieldArray) .and. l_lFieldArray
+                    l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_ARRAY] := .t.
+                endif
+                if !hb_IsNil(l_cFieldDefault) .and. !empty(l_cFieldDefault)
+                    l_hTableSchemaField[HB_ORM_SCHEMA_FIELD_DEFAULT] := l_cFieldDefault
+                endif
 
             endscan
 
-            ::p_Schema[l_cSchemaAndTableNameLast] := {"Fields"=>hb_hClone(l_hSchemaFields),"Indexes"=>NIL,"Unlogged"=>l_lUnloggedLast}    //{Table Fields (HB_ORM_SCHEMA_FIELD), Table Indexes (HB_ORM_SCHEMA_INDEX)}
-            hb_HClear(l_hSchemaFields)
+            ::p_TableSchema[l_cNamespaceAndTableNameLast] := {"Fields"=>hb_hClone(l_hTableSchemaFields),"Indexes"=>NIL,"Unlogged"=>l_lUnloggedLast}    //{Table Fields (HB_ORM_SCHEMA_FIELD), Table Indexes (HB_ORM_SCHEMA_INDEX)}
+            hb_HClear(l_hTableSchemaFields)
 
-            //Since Indexes could only exists for an existing table we simply assign to a ::p_Schema[][HB_ORM_SCHEMA_INDEX] cell
-            //Stopped added the schema name to the index names, to help fit objects length to 63 characters and in any case "Two indexes in the same schema cannot have the same name.", meaning can be the same in two different schema_name.
+            //Since Indexes could only exists for an existing table we simply assign to a ::p_TableSchema[][HB_ORM_SCHEMA_INDEX] cell
+            //Stopped added the namespace name to the index names, to help fit objects length to 63 characters and in any case "Two indexes in the same schema cannot have the same name.", meaning can be the same in two different namespace_name.
             select hb_orm_sqlconnect_schema_indexes
             if Reccount() > 0
-                l_cSchemaAndTableNameLast := Trim(hb_orm_sqlconnect_schema_indexes->schema_name)+"."+Trim(hb_orm_sqlconnect_schema_indexes->table_name)
-                // l_cTableNameLast := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
-                hb_HClear(l_hSchemaIndexes)
+                l_cNamespaceAndTableNameLast := Trim(hb_orm_sqlconnect_schema_indexes->namespace_name)+"."+Trim(hb_orm_sqlconnect_schema_indexes->table_name)
+                hb_HClear(l_hTableSchemaIndexes)
 
                 scan all
-                    l_cSchemaAndTableName := Trim(hb_orm_sqlconnect_schema_indexes->schema_name)+"."+Trim(hb_orm_sqlconnect_schema_indexes->table_name)
-                    l_cTableName          := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
+                    l_cNamespaceAndTableName := Trim(hb_orm_sqlconnect_schema_indexes->namespace_name)+"."+Trim(hb_orm_sqlconnect_schema_indexes->table_name)
+                    l_cTableName             := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
 
-                    //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_schema
-                    if hb_HHasKey(::p_Schema,l_cSchemaAndTableName)
+                    //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_TableSchema
+                    if hb_HHasKey(::p_TableSchema,l_cNamespaceAndTableName)
 
-                        if !(l_cSchemaAndTableName == l_cSchemaAndTableNameLast)
-                            if len(l_hSchemaIndexes) > 0
-                                ::p_Schema[l_cSchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hSchemaIndexes)
-                                hb_HClear(l_hSchemaIndexes)
+                        if !(l_cNamespaceAndTableName == l_cNamespaceAndTableNameLast)
+                            if len(l_hTableSchemaIndexes) > 0
+                                ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
+                                hb_HClear(l_hTableSchemaIndexes)
                             else
-                                ::p_Schema[l_cSchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                                ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                             endif
-                            l_cSchemaAndTableNameLast := l_cSchemaAndTableName
+                            l_cNamespaceAndTableNameLast := l_cNamespaceAndTableName
                         endif
 
                         l_cIndexName := lower(trim(field->index_name))
-                        // if left(l_cIndexName,len(l_cSchemaAndTableName)+1) == lower(strtran(l_cSchemaAndTableName,".","_"))+"_" .and. right(l_cIndexName,4) == "_idx"
                         if left(l_cIndexName,len(l_cTableName)+1) == lower(l_cTableName)+"_" .and. right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
-                            // l_cIndexName      := hb_orm_RootIndexName(l_cSchemaAndTableName,l_cIndexName)
                             l_cIndexName      := hb_orm_RootIndexName(l_cTableName,l_cIndexName)
                             
                             l_cIndexDefinition := field->index_definition
@@ -698,20 +715,22 @@ SELECT pk
                                 l_cIndexExpression := substr(l_cIndexDefinition,l_nPos3+1,l_nPos4-l_nPos3-1)
 
                                 if !(lower(l_cIndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
-                                    l_lIndexUnique     := ("UNIQUE INDEX" $ l_cIndexDefinition)
-                                    l_cIndexType       := upper(substr(l_cIndexDefinition,l_nPos2+1,l_nPos3-l_nPos2-2))
-                                    l_hSchemaIndexes[l_cIndexName] := {,l_cIndexExpression,l_lIndexUnique,l_cIndexType}
+                                    l_lIndexUnique := ("UNIQUE INDEX" $ l_cIndexDefinition)
+                                    l_cIndexType   := upper(substr(l_cIndexDefinition,l_nPos2+1,l_nPos3-l_nPos2-2))
+                                    l_hTableSchemaIndexes[l_cIndexName] := {HB_ORM_SCHEMA_INDEX_EXPRESSION => l_cIndexExpression,;
+                                                                            HB_ORM_SCHEMA_INDEX_UNIQUE     => l_lIndexUnique,;
+                                                                            HB_ORM_SCHEMA_INDEX_ALGORITHM  => l_cIndexType}
                                 endif
 
                             endif
                         endif
                     endif
                 endscan
-                if len(l_hSchemaIndexes) > 0
-                    ::p_Schema[l_cSchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hSchemaIndexes)
-                    hb_HClear(l_hSchemaIndexes)
+                if len(l_hTableSchemaIndexes) > 0
+                    ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
+                    hb_HClear(l_hTableSchemaIndexes)
                 else
-                    ::p_Schema[l_cSchemaAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                    ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                 endif
 
             endif
@@ -727,161 +746,208 @@ CloseAlias("hb_orm_sqlconnect_schema_indexes")
 
 select (l_nSelect)
 
+hb_orm_SendToDebugView("LoadSchema End")
+
 // altd()
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-method GenerateMigrateSchemaScript(par_hSchemaDefinition) class hb_orm_SQLConnect
+method GenerateMigrateSchemaScript(par_hTableSchemaDefinition) class hb_orm_SQLConnect
 
-local l_hTableDefinition,l_cTableName,l_aTableDefinition
-local l_hFieldDefinition,l_cFieldName,l_aFieldDefinitions,l_aFieldDefinition
-local l_hIndexDefinition,l_cIndexName,l_aIndexDefinitions,l_aIndexDefinition
+local l_hTableDefinition,l_cTableName
+local l_cFieldName,l_hFieldDefinition
+local l_cIndexName,l_hIndexDefinition
 local l_hFields,l_hIndexes
-local l_iArrayPos
-local l_aCurrentTableDefinition
-local l_aCurrentFieldDefinition
-local l_aCurrentIndexDefinition
-local l_cFieldType,       l_lFieldArray,       l_nFieldLen,       l_nFieldDec,       l_cFieldAttributes,       l_lFieldAllowNull,       l_lFieldAutoIncrement,       l_cFieldDefault
-local l_cCurrentFieldType,l_lCurrentFieldArray,l_nCurrentFieldLen,l_nCurrentFieldDec,l_cCurrentFieldAttributes,l_lCurrentFieldAllowNull,l_lCurrentFieldAutoIncrement,l_cCurrentFieldDefault
+local l_hField,l_hIndex
+local l_hCurrentTableDefinition
+local l_hCurrentFieldDefinition
+local l_hCurrentIndexDefinition
+local l_cFieldType,       l_lFieldArray,       l_nFieldLen,       l_nFieldDec,       l_lFieldNullable,       l_lFieldAutoIncrement,       l_cFieldDefault
+local l_cCurrentFieldType,l_lCurrentFieldArray,l_nCurrentFieldLen,l_nCurrentFieldDec,l_lCurrentFieldNullable,l_lCurrentFieldAutoIncrement,l_cCurrentFieldDefault
 local l_lMatchingFieldDefinition
 local l_cMismatchType
-local l_cInFocusSchemaName,l_cSchemaName
+// local l_cInFocusNamespaceName
+local l_cNamespaceName
 local l_cSQLScriptPreUpdate := ""
 local l_cSQLScript := ""
 local l_cSQLScriptPostUpdate := ""
 local l_cSQLScriptFieldChanges,l_cSQLScriptFieldChangesCycle1,l_cSQLScriptFieldChangesCycle2
-local l_cSchemaAndTableName
+local l_cNamespaceAndTableName
 local l_cFormattedTableName
-local l_cBackendType := ""
 local l_nPos
-local l_hListOfSchemaName := {=>}
-local l_cSQLScriptCreateOrUpdateSchemaName := ""
+local l_hListOfNamespaceName := {=>}
+local l_cSQLScriptCreateOrUpdateNamespaceName := ""
 
-local l_cCurrentSchemaAndTableName
-local l_cCurrentSchemaName
+local l_cCurrentNamespaceAndTableName
+local l_cCurrentNamespaceName
 local l_cCurrentTableName
 local l_cCurrentFieldName
 
 local l_lCurrentUnlogged
 local l_lUnlogged
 
-hb_HCaseMatch(l_hListOfSchemaName,.f.)
-hb_HClear(l_hListOfSchemaName)
+local l_cSQLForeignKeyConstraints
 
-do case
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cInFocusSchemaName := ""
-    l_cBackendType        := "M"
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cInFocusSchemaName := ::GetCurrentSchemaName()
-    l_cBackendType        := "P"
-endcase
+local l_cFieldUsedAs
+local l_cFieldParentTable
+local l_cSQLPrimaryKeyConstraints
+local l_oCursorPrimaryKeyConstraints
+
+hb_HCaseMatch(l_hListOfNamespaceName,.f.)
+hb_HClear(l_hListOfNamespaceName)
+
+// do case
+// case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+//     l_cInFocusNamespaceName := ::GetCurrentNamespaceName()
+// case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+//     l_cInFocusNamespaceName := ::GetCurrentNamespaceName()
+// endcase
+
+// l_cInFocusNamespaceName := ::GetCurrentNamespaceName()
 
 if ::UpdateSchemaCache()
-    ::LoadSchema()
+    ::LoadSchema("GenerateMigrateSchemaScript")
 endif
 
-for each l_hTableDefinition in par_hSchemaDefinition
-    l_cSchemaAndTableName := l_hTableDefinition:__enumKey()
-    l_aTableDefinition    := l_hTableDefinition:__enumValue()
+CloseAlias("hb_orm_ListOfPrimaryKeyConstraints")
+do case
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    l_cSQLPrimaryKeyConstraints := [select ns.nspname   as "NamespaceName",]
+    l_cSQLPrimaryKeyConstraints +=       [ cl.relname   as "TableName",]
+    l_cSQLPrimaryKeyConstraints +=       [ con1.conname as "ConstraintName"]
+    l_cSQLPrimaryKeyConstraints += [ from pg_class cl]
+    l_cSQLPrimaryKeyConstraints += [ join pg_namespace ns on cl.relnamespace = ns.oid]
+    l_cSQLPrimaryKeyConstraints += [ join pg_constraint con1 on con1.conrelid = cl.oid]
+    l_cSQLPrimaryKeyConstraints += [ where con1.contype = 'p' and ns.nspname not in ('cyanaudit','pg_catalog')]
+
+    if ! ::SQLExec("a660c126-8361-4bfb-9342-4dcd26778aaf",l_cSQLPrimaryKeyConstraints,"hb_orm_ListOfPrimaryKeyConstraints")
+        hb_orm_SendToDebugView("GenerateMigrateSchemaScript - Failed on hb_orm_ListOfPrimaryKeyConstraints")
+    else
+        l_oCursorPrimaryKeyConstraints := hb_orm_Cursor():Init():Associate("hb_orm_ListOfPrimaryKeyConstraints")   // Associating it with the variable will ensure the alias is also closed once the variable is gone.
+
+        with object l_oCursorPrimaryKeyConstraints
+            :Index("tag1","padr(upper(NamespaceName+'*'+TableName+'*'),240)")
+            :CreateIndexes()
+        endwith
+    endif
+
+endcase
+
+// if used("hb_orm_ListOfPrimaryKeyConstraints")
+//     if vfp_seek(padr(upper(NamespaceName+'*'+TableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
+//     endif
+// endif
+
+for each l_hTableDefinition in par_hTableSchemaDefinition
+    l_cNamespaceAndTableName := l_hTableDefinition:__enumKey()
 
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_cSchemaName := ""
+        // l_cNamespaceName := ""
+        // //Will ignore "public" as NameSpace
+        // if left(l_cNamespaceAndTableName,len("public.")) == "public."
+        //     l_cNamespaceAndTableName := substr(l_cNamespaceAndTableName,len("public.")+1)
+        // endif
+        // l_cTableName  := l_cNamespaceAndTableName
 
-        //Will ignore "public" as NameSpace
-        if left(l_cSchemaAndTableName,len("public.")) == "public."
-            l_cSchemaAndTableName := substr(l_cSchemaAndTableName,len("public.")+1)
+        l_nPos := at(".",l_cNamespaceAndTableName)
+        if empty(l_nPos)
+            l_cNamespaceName         := "public"
+            l_cTableName             := l_cNamespaceAndTableName
+            // l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
+        else
+            l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
+            l_cTableName     := substr(l_cNamespaceAndTableName,l_nPos+1)
+            if l_cNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
+                if ::MySQLEngineConvertIdentifierToLowerCase
+                    l_cNamespaceName := lower(::p_HBORMNamespace)
+                else
+                    l_cNamespaceName := ::p_HBORMNamespace
+                endif
+            endif
         endif
-
-        l_cTableName  := l_cSchemaAndTableName
+        l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
 
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_nPos := at(".",l_cSchemaAndTableName)
+        l_nPos := at(".",l_cNamespaceAndTableName)
         if empty(l_nPos)
-            l_cSchemaName         := l_cInFocusSchemaName
-            l_cTableName          := l_cSchemaAndTableName
-            l_cSchemaAndTableName := l_cSchemaName+"."+l_cTableName
+            l_cNamespaceName         := "public"
+            l_cTableName             := l_cNamespaceAndTableName
+            // l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
         else
-            l_cSchemaName := left(l_cSchemaAndTableName,l_nPos-1)
-            l_cTableName  := substr(l_cSchemaAndTableName,l_nPos+1)
+            l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
+            l_cTableName     := substr(l_cNamespaceAndTableName,l_nPos+1)
         endif
-        l_hListOfSchemaName[l_cSchemaName] := NIL  //Will use the Hash as a Set of values
+        if l_cNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
+            l_cNamespaceName := ::p_HBORMNamespace
+        endif
+        l_hListOfNamespaceName[l_cNamespaceName] := NIL  //Will use the Hash as a Set of values
+        l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
+
     endcase
 
-    l_aCurrentTableDefinition := hb_HGetDef(::p_Schema,l_cSchemaAndTableName,NIL)
+    l_hCurrentTableDefinition := hb_HGetDef(::p_TableSchema,l_cNamespaceAndTableName,NIL)
 
-    l_hFields   := l_aTableDefinition[HB_ORM_SCHEMA_FIELD]
-    l_hIndexes  := l_aTableDefinition[HB_ORM_SCHEMA_INDEX]
-    l_lUnlogged := hb_HGetDef(l_aTableDefinition,"Unlogged",.f.)
+    l_hFields   := l_hTableDefinition[HB_ORM_SCHEMA_FIELD]
+    l_hIndexes  := hb_HGetDef(l_hTableDefinition,HB_ORM_SCHEMA_INDEX,NIL)
+    l_lUnlogged := hb_HGetDef(l_hTableDefinition,"Unlogged",.f.)
 
-    if hb_IsNIL(l_aCurrentTableDefinition)
+    if hb_IsNIL(l_hCurrentTableDefinition)
 
-// VFP_StrToFile(hb_jsonEncode(::p_Schema,.t.) ,"d:\p_Schema.txt")
+// VFP_StrToFile(hb_jsonEncode(::p_TableSchema,.t.) ,"d:\p_TableSchema.txt")
 
         // Table does not exist in the current catalog
-        hb_orm_SendToDebugView("Add Table: "+l_cSchemaAndTableName)
-        l_cSQLScript += ::AddTable(l_cSchemaName,l_cTableName,l_hFields,l_lUnlogged)
+        hb_orm_SendToDebugView("Add Table: "+l_cNamespaceAndTableName)
+        l_cSQLScript += ::AddTable(l_cNamespaceName,l_cTableName,l_hFields,l_lUnlogged)
         
         // Add all the indexes
         if !hb_IsNIL(l_hIndexes)
-            for each l_hIndexDefinition in l_hIndexes
-                l_cIndexName        := lower(l_hIndexDefinition:__enumKey())
-                l_aIndexDefinitions := l_hIndexDefinition:__enumValue()
+            for each l_hIndex in l_hIndexes
+                l_cIndexName       := lower(l_hIndex:__enumKey())
+                l_hIndexDefinition := l_hIndex:__enumValue()
                 
-                if ValType(l_aIndexDefinitions[1]) == "A"
-                    l_iArrayPos        := len(l_aIndexDefinitions)
-                    l_aIndexDefinition := l_aIndexDefinitions[l_iArrayPos]
-                else
-                    l_iArrayPos        := 1
-                    l_aIndexDefinition := l_aIndexDefinitions
+                if !(lower(l_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so. This should not happen since no loaded in p_TableSchema to start with. But this method accepts any p_TableSchema hash arrays.
+                    l_cSQLScript += ::AddIndex(l_cNamespaceName,l_cTableName,l_hFields,l_cIndexName,l_hIndexDefinition)  //Passing l_hFields to help with index expressions
                 endif
-                do while l_iArrayPos > 0
-
-                    if l_cBackendType $ hb_DefaultValue(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_BACKEND_TYPES],"MP")
-                        if !(lower(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so. This should not happen since no loaded in p_Schema to start with. But this method accepts any p_Schema hash arrays.
-                            l_cSQLScript += ::AddIndex(l_cSchemaName,l_cTableName,l_hFields,l_cIndexName,l_aIndexDefinition)  //Passing l_hFields to help with index expressions
-                        endif
-                    endif
-                    
-                    l_iArrayPos -= 1
-                    if l_iArrayPos > 0
-                        l_aIndexDefinition := l_aIndexDefinitions[l_iArrayPos]
-                    endif
-                enddo
                 
             endfor
         endif
 
     else
-        // Found the table in the current ::p_Schema, now lets test all the fields are also there and matching
+        // Found the table in the current ::p_TableSchema, now lets test all the fields are also there and matching
         // Test Every Fields to see if structure must be updated.
-        l_cCurrentSchemaAndTableName := hb_HKeyAt(::p_Schema,hb_HPos(::p_Schema,l_cSchemaAndTableName))
-        l_lCurrentUnlogged           := hb_HGetDef(::p_Schema[l_cSchemaAndTableName],"Unlogged",.f.)
+        l_cCurrentNamespaceAndTableName := hb_HKeyAt(::p_TableSchema,hb_HPos(::p_TableSchema,l_cNamespaceAndTableName))
+        l_lCurrentUnlogged              := hb_HGetDef(::p_TableSchema[l_cNamespaceAndTableName],"Unlogged",.f.)
 
-        if !(l_cCurrentSchemaAndTableName == l_cSchemaAndTableName)
-            //Case Mismatch. Could be the SchemaName and/or TableName
+        if !(l_cCurrentNamespaceAndTableName == l_cNamespaceAndTableName)
+
+            //Case Mismatch. Could be the NamespaceName and/or TableName
             do case
             case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-                l_cCurrentSchemaName := ""
-                l_cCurrentTableName  := l_cCurrentSchemaAndTableName
+                //Ignore casing issues, since in MySQL engine everything will be used as lower case.
+                // This will also resolve the issue of:  SQLExec Error Code: 2014 - Error description: HY000 [ma-3.1.19][10.11.6-MariaDB]Commands out of sync; you can't run this command now
 
-                if !(l_cCurrentTableName == l_cTableName)
-                    l_cSQLScriptPreUpdate += ::UpdateTableName(l_cSchemaName,l_cTableName,l_cCurrentSchemaName,l_cCurrentTableName)
-                endif
+                // l_cCurrentNamespaceName := ""
+                // l_cCurrentTableName  := l_cCurrentNamespaceAndTableName
+
+                // if !(l_cCurrentTableName == l_cTableName)
+                //     l_cSQLScriptPreUpdate += ::UpdateTableName(l_cNamespaceName,l_cTableName,l_cCurrentNamespaceName,l_cCurrentTableName)
+                // endif
 
             case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-                l_nPos := at(".",l_cCurrentSchemaAndTableName)
-                l_cCurrentSchemaName := left(l_cCurrentSchemaAndTableName,l_nPos-1)
-                l_cCurrentTableName  := substr(l_cCurrentSchemaAndTableName,l_nPos+1)
+                l_nPos := at(".",l_cCurrentNamespaceAndTableName)
+                l_cCurrentNamespaceName := left(l_cCurrentNamespaceAndTableName,l_nPos-1)
+                l_cCurrentTableName     := substr(l_cCurrentNamespaceAndTableName,l_nPos+1)
 
-                //Schema Name to be already fixed before Table compare occurs
-                if !(l_cCurrentSchemaName == l_cSchemaName)
-                    l_hListOfSchemaName[l_cSchemaName] := l_cCurrentSchemaName  // To help detect if a schema name changed.
+                //Namespace Name to be already fixed before Table compare occurs
+                if !(l_cCurrentNamespaceName == l_cNamespaceName)
+                    l_hListOfNamespaceName[l_cNamespaceName] := l_cCurrentNamespaceName  // To help detect if a namespace name changed.
                 endif
 
                 if !(l_cCurrentTableName == l_cTableName)
-                    l_cSQLScriptPreUpdate += ::UpdateTableName(l_cSchemaName,l_cTableName,l_cCurrentSchemaName,l_cCurrentTableName)
+                    l_cSQLScriptPreUpdate += ::UpdateTableName(l_cNamespaceName,l_cTableName,l_cCurrentNamespaceName,l_cCurrentTableName)
                 endif
 
             endcase
@@ -891,9 +957,9 @@ for each l_hTableDefinition in par_hSchemaDefinition
             if l_lCurrentUnlogged <> l_lUnlogged
                 //Need to Set or Remove the UNLOGGED table attribute.
                 if l_lUnlogged
-                    l_cSQLScriptPreUpdate += [ALTER TABLE ]+::FormatIdentifier(l_cSchemaAndTableName)+[ SET UNLOGGED;]
+                    l_cSQLScriptPreUpdate += [ALTER TABLE ]+::FormatIdentifier(l_cNamespaceAndTableName)+[ SET UNLOGGED;]
                 else
-                    l_cSQLScriptPreUpdate += [ALTER TABLE ]+::FormatIdentifier(l_cSchemaAndTableName)+[ SET LOGGED;]
+                    l_cSQLScriptPreUpdate += [ALTER TABLE ]+::FormatIdentifier(l_cNamespaceAndTableName)+[ SET LOGGED;]
                 endif
             endif
         endif
@@ -901,150 +967,163 @@ for each l_hTableDefinition in par_hSchemaDefinition
         l_cSQLScriptFieldChangesCycle1 := ""
         l_cSQLScriptFieldChangesCycle2 := ""
 
-        for each l_hFieldDefinition in l_hFields   //l_aTableDefinition[1]
-            l_cFieldName              := l_hFieldDefinition:__enumKey()
+        for each l_hField in l_hFields
+            l_cFieldName       := l_hField:__enumKey()
+            l_hFieldDefinition := l_hField:__enumValue()
 
-            l_aFieldDefinitions       := l_hFieldDefinition:__enumValue()
+            l_cFieldType                 := iif(l_hFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE] == "T","DT",l_hFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
+            l_nFieldLen                  := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+            l_nFieldDec                  := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
+            l_cFieldDefault              := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DEFAULT,"")
+            l_lFieldNullable             := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
+            l_lFieldAutoIncrement        := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.)
+            l_lFieldArray                := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
 
-            if ValType(l_aFieldDefinitions[1]) == "A"
-                l_iArrayPos        := len(l_aFieldDefinitions)
-                l_aFieldDefinition := l_aFieldDefinitions[l_iArrayPos]
-            else
-                l_iArrayPos        := 1
-                l_aFieldDefinition := l_aFieldDefinitions
+            if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
+                l_lFieldAutoIncrement := .t.
             endif
-            do while l_iArrayPos > 0
+            if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
+                l_lFieldAutoIncrement := .f.
+            endif
+            if l_lFieldAutoIncrement .and. l_lFieldNullable  //Auto-Increment fields may not be null (and not have a default)
+                l_lFieldNullable := .f.
+            endif
 
-                //Only process fields that are valid for all backends or at least the current backend
-                if l_cBackendType $ hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_BACKEND_TYPES],"MP")
-                    l_cFieldType                 := iif(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE] == "T","DT",l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
-                    l_nFieldLen                  := iif(len(l_aFieldDefinition) < 2, 0 ,hb_defaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 ))
-                    l_nFieldDec                  := iif(len(l_aFieldDefinition) < 3, 0 ,hb_defaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]      , 0 ))
-                    l_cFieldAttributes           := iif(len(l_aFieldDefinition) < 4, "",hb_defaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]    , ""))
-                    l_cFieldDefault              := iif(len(l_aFieldDefinition) >= HB_ORM_SCHEMA_FIELD_DEFAULT,hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DEFAULT],""),"")
-                    l_lFieldAllowNull            := ("N" $ l_cFieldAttributes)
-                    l_lFieldAutoIncrement        := ("+" $ l_cFieldAttributes)
-                    l_lFieldArray                := ("A" $ l_cFieldAttributes)
+            l_hCurrentFieldDefinition := hb_HGetDef(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName,NIL)
+            if hb_IsNIL(l_hCurrentFieldDefinition)
+                //Missing Field
+                hb_orm_SendToDebugView("Table: "+l_cNamespaceAndTableName+" Add Field: "+l_cFieldName)
 
-                    if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
-                        l_lFieldAutoIncrement := .t.
+                l_cSQLScriptFieldChanges := ::AddField(l_cNamespaceName,;
+                                                        l_cTableName,;
+                                                        l_cFieldName,;
+                                                        {HB_ORM_SCHEMA_FIELD_TYPE=>l_cFieldType,;
+                                                         HB_ORM_SCHEMA_FIELD_LENGTH=>l_nFieldLen,;
+                                                         HB_ORM_SCHEMA_FIELD_DECIMALS=>l_nFieldDec,;
+                                                         HB_ORM_SCHEMA_FIELD_DEFAULT=>l_cFieldDefault,;
+                                                         HB_ORM_SCHEMA_FIELD_NULLABLE=>l_lFieldNullable,;
+                                                         HB_ORM_SCHEMA_FIELD_AUTOINCREMENT=>l_lFieldAutoIncrement,;
+                                                         HB_ORM_SCHEMA_FIELD_ARRAY=>l_lFieldArray})
+                l_cSQLScriptPreUpdate          += l_cSQLScriptFieldChanges[1]  // Allways blank for now MYSQL+POSTGRESQL
+                l_cSQLScriptFieldChangesCycle1 += l_cSQLScriptFieldChanges[2]
+                l_cSQLScriptFieldChangesCycle2 += l_cSQLScriptFieldChanges[3]  // Allways blank for now MYSQL+POSTGRESQL
+                l_cSQLScriptPostUpdate         += l_cSQLScriptFieldChanges[4]
+
+
+            else
+                //Compare the field definition using arrays l_hCurrentFieldDefinition and l_hFieldDefinition
+
+                //Test if the field Name Casing Changed
+                l_cCurrentFieldName := hb_HKeyAt(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],hb_HPos(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName))
+                if !(l_cCurrentFieldName == l_cFieldName)
+                    l_cSQLScriptPreUpdate += ::UpdateFieldName(l_cNamespaceName,l_cTableName,l_cFieldName,l_cCurrentFieldName)
+                endif
+
+                l_cCurrentFieldType          := iif(l_hCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE] == "T","DT",l_hCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
+                l_nCurrentFieldLen           := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+                l_nCurrentFieldDec           := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
+                l_cCurrentFieldDefault       := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_DEFAULT,"")
+                l_lCurrentFieldNullable      := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
+                l_lCurrentFieldAutoIncrement := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.)
+                l_lCurrentFieldArray         := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
+
+
+                if l_lCurrentFieldAutoIncrement .and. empty(el_inlist(l_cCurrentFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
+                    l_lCurrentFieldAutoIncrement := .f.
+                endif
+                if l_lCurrentFieldAutoIncrement .and. l_lCurrentFieldNullable  //Auto-Increment fields may not be null (and not have a default)
+                    l_lCurrentFieldNullable := .f.
+                endif
+
+//l_cCurrentFieldAttributes := iif(l_lCurrentFieldNullable,"N","")+iif(l_lCurrentFieldAutoIncrement,"+","")+iif(l_lCurrentFieldArray,"A","")
+
+                //Also using the nvl() below since doing the same when getting l_cCurrentFieldDefault above
+
+// if lower(l_cCurrentFieldName) == lower("PrimaryKeyDefaultInteger")
+//     altd()
+// endif
+
+                l_cFieldDefault := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault,l_cFieldType,l_nFieldDec)
+                l_cFieldDefault := nvl(::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,l_lFieldNullable,l_cFieldDefault),"")
+
+                l_lMatchingFieldDefinition := .t.
+                l_cMismatchType := ""
+                do case
+                case !(l_cFieldType == l_cCurrentFieldType)   // Field Type is always defined.  !(==) is a method to deal with SET EXACT being OFF by default.
+                    l_lMatchingFieldDefinition := .f.
+                    l_cMismatchType := "Field Type"
+                case l_lFieldArray != l_lCurrentFieldArray
+                    l_lMatchingFieldDefinition := .f.
+                    l_cMismatchType := "Field Array"
+                case !empty(el_inlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS","JSB","OID"))  //Field type with no length
+                case empty(el_inlist(l_cFieldType,"TOZ","TO","DTZ","DT")) .and. l_nFieldLen <> l_nCurrentFieldLen   //Ignore Length matching for datetime and time fields
+                    l_lMatchingFieldDefinition := .f.
+                    l_cMismatchType := "Field Length"
+                case !empty(el_inlist(l_cFieldType,"C","CV","B","BV"))  //Field type with a length but no decimal
+                case l_nFieldDec  <> l_nCurrentFieldDec
+                    l_lMatchingFieldDefinition := .f.
+                    l_cMismatchType := "Field Decimal"
+                endcase
+
+                if l_lMatchingFieldDefinition  // Should still test on nullable and incremental
+                    if l_lFieldAutoIncrement .and. l_cFieldDefault == "Wharf-AutoIncrement()"
+                        l_cFieldDefault := ""
                     endif
-                    if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
-                        l_lFieldAutoIncrement := .f.
-                    endif
-                    if l_lFieldAutoIncrement .and. l_lFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
-                        l_lFieldAllowNull := .f.
-                    endif
 
-                    //To ensure we only have the supported flags
-                    l_cFieldAttributes := iif(l_lFieldAllowNull,"N","")+iif(l_lFieldAutoIncrement,"+","")+iif(l_lFieldArray,"A","")
+                    do case
+                    case !(l_lFieldNullable == l_lCurrentFieldNullable)
+                        l_lMatchingFieldDefinition := .f.
+                        l_cMismatchType := "Field Nullable"
+                    case !(l_lFieldAutoIncrement == l_lCurrentFieldAutoIncrement)
+                        l_lMatchingFieldDefinition := .f.
+                        l_cMismatchType := "Field Auto Increment"
+                    case !(l_lFieldArray == l_lCurrentFieldArray)
+                        l_lMatchingFieldDefinition := .f.
+                        l_cMismatchType := "Field Array"
+                    case !(l_cFieldDefault == l_cCurrentFieldDefault)
+                        l_lMatchingFieldDefinition := .f.
+                        l_cMismatchType := "Field Default Value"
+                    endcase
+                endif
 
-                    l_aCurrentFieldDefinition := hb_HGetDef(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName,NIL)
-                    if hb_IsNIL(l_aCurrentFieldDefinition)
-                        //Missing Field
-                        hb_orm_SendToDebugView("Table: "+l_cSchemaAndTableName+" Add Field: "+l_cFieldName)
-
-                        l_cSQLScriptFieldChanges := ::AddField(l_cSchemaName,;
+                if !l_lMatchingFieldDefinition
+                    hb_orm_SendToDebugView("Table: "+l_cNamespaceAndTableName+" Field: "+l_cFieldName+"  Mismatch: "+l_cMismatchType)
+                    l_cSQLScriptFieldChanges := ::UpdateField(l_cNamespaceName,;
                                                               l_cTableName,;
                                                               l_cFieldName,;
-                                                              {,l_cFieldType,l_nFieldLen,l_nFieldDec,l_cFieldAttributes,l_cFieldDefault})
-                        l_cSQLScriptPreUpdate          += l_cSQLScriptFieldChanges[1]  // Allways blank for now MYSQL+POSTGRESQL
-                        l_cSQLScriptFieldChangesCycle1 += l_cSQLScriptFieldChanges[2]
-                        l_cSQLScriptFieldChangesCycle2 += l_cSQLScriptFieldChanges[3]  // Allways blank for now MYSQL+POSTGRESQL
-                        l_cSQLScriptPostUpdate         += l_cSQLScriptFieldChanges[4]
-
-
-                    else
-                        //Compare the field definition using arrays l_aCurrentFieldDefinition and l_aFieldDefinition
-
-                        //Test if the field Name Casing Changed
-                        l_cCurrentFieldName := hb_HKeyAt(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],hb_HPos(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName))
-                        if !(l_cCurrentFieldName == l_cFieldName)
-                            l_cSQLScriptPreUpdate += ::UpdateFieldName(l_cSchemaName,l_cTableName,l_cFieldName,l_cCurrentFieldName)
-                        endif
-
-                        l_cCurrentFieldType          := iif(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE] == "T","DT",l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
-                        l_nCurrentFieldLen           := iif(len(l_aCurrentFieldDefinition) < 2, 0 ,hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 ))
-                        l_nCurrentFieldDec           := iif(len(l_aCurrentFieldDefinition) < 3, 0 ,hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]      , 0 ))
-                        l_cCurrentFieldAttributes    := iif(len(l_aCurrentFieldDefinition) < 4, "",hb_defaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]    , ""))
-                        l_cCurrentFieldDefault       := iif(len(l_aCurrentFieldDefinition) >= HB_ORM_SCHEMA_FIELD_DEFAULT,hb_DefaultValue(l_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_DEFAULT],""),"")
-                        l_lCurrentFieldAllowNull     := ("N" $ l_cCurrentFieldAttributes)
-                        l_lCurrentFieldAutoIncrement := ("+" $ l_cCurrentFieldAttributes)
-                        l_lCurrentFieldArray         := ("A" $ l_cCurrentFieldAttributes)
-
-                        if l_lCurrentFieldAutoIncrement .and. empty(el_inlist(l_cCurrentFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
-                            l_lCurrentFieldAutoIncrement := .f.
-                        endif
-                        if l_lCurrentFieldAutoIncrement .and. l_lCurrentFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
-                            l_lCurrentFieldAllowNull := .f.
-                        endif
-
-                        l_cCurrentFieldAttributes := iif(l_lCurrentFieldAllowNull,"N","")+iif(l_lCurrentFieldAutoIncrement,"+","")+iif(l_lCurrentFieldArray,"A","")
-
-                        //Also using the nvl() below since doing the same when getting l_cCurrentFieldDefault above
-                        l_cFieldDefault := nvl(::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,l_cFieldAttributes,l_cFieldDefault),"")
-
-                        l_lMatchingFieldDefinition := .t.
-                        l_cMismatchType := ""
-                        do case
-                        case !(l_cFieldType == l_cCurrentFieldType)   // Field Type is always defined.  !(==) is a method to deal with SET EXACT being OFF by default.
-                            l_lMatchingFieldDefinition := .f.
-                            l_cMismatchType := "Field Type"
-                        case l_lFieldArray != l_lCurrentFieldArray
-                            l_lMatchingFieldDefinition := .f.
-                            l_cMismatchType := "Field Array"
-                        case !empty(el_inlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS","OID"))  //Field type with no length
-                        case empty(el_inlist(l_cFieldType,"TOZ","TO","DTZ","DT")) .and. l_nFieldLen <> l_nCurrentFieldLen   //Ignore Length matching for datetime and time fields
-                            l_lMatchingFieldDefinition := .f.
-                            l_cMismatchType := "Field Length"
-                        case !empty(el_inlist(l_cFieldType,"C","CV","B","BV"))  //Field type with a length but no decimal
-                        case l_nFieldDec  <> l_nCurrentFieldDec
-                            l_lMatchingFieldDefinition := .f.
-                            l_cMismatchType := "Field Decimal"
-                        endcase
-
-                        if l_lMatchingFieldDefinition  // Should still test on nullable and incremental
-                            do case
-                            case !(l_cFieldAttributes == l_cCurrentFieldAttributes)
-                                l_lMatchingFieldDefinition := .f.
-                                l_cMismatchType := "Field Attribute"
-                            case !(l_cFieldDefault == l_cCurrentFieldDefault)
-                                l_lMatchingFieldDefinition := .f.
-                                l_cMismatchType := "Field Default Value"
-                            endcase
-                        endif
-
-                        if !l_lMatchingFieldDefinition
-                            hb_orm_SendToDebugView("Table: "+l_cSchemaAndTableName+" Field: "+l_cFieldName+"  Mismatch: "+l_cMismatchType)
-                            l_cSQLScriptFieldChanges := ::UpdateField(l_cSchemaName,;
-                                                                    l_cTableName,;
-                                                                    l_cFieldName,;
-                                                                    {,l_cFieldType       ,l_nFieldLen       ,l_nFieldDec       ,l_cFieldAttributes       ,l_cFieldDefault},;
-                                                                    {,l_cCurrentFieldType,l_nCurrentFieldLen,l_nCurrentFieldDec,l_cCurrentFieldAttributes,l_cCurrentFieldDefault})
-                            l_cSQLScriptPreUpdate          += l_cSQLScriptFieldChanges[1]
-                            l_cSQLScriptFieldChangesCycle1 += l_cSQLScriptFieldChanges[2]
-                            l_cSQLScriptFieldChangesCycle2 += l_cSQLScriptFieldChanges[3]
-                            l_cSQLScriptPostUpdate         += l_cSQLScriptFieldChanges[4]
-                        endif
-
-                    endif
+                                                            {HB_ORM_SCHEMA_FIELD_TYPE          => l_cFieldType,;
+                                                             HB_ORM_SCHEMA_FIELD_LENGTH        => l_nFieldLen,;
+                                                             HB_ORM_SCHEMA_FIELD_DECIMALS      => l_nFieldDec,;
+                                                             HB_ORM_SCHEMA_FIELD_NULLABLE      => l_lFieldNullable,;
+                                                             HB_ORM_SCHEMA_FIELD_AUTOINCREMENT => l_lFieldAutoIncrement,;
+                                                             HB_ORM_SCHEMA_FIELD_ARRAY         => l_lFieldArray,;
+                                                             HB_ORM_SCHEMA_FIELD_DEFAULT       => l_cFieldDefault},;
+                                                            {HB_ORM_SCHEMA_FIELD_TYPE          => l_cCurrentFieldType,;
+                                                             HB_ORM_SCHEMA_FIELD_LENGTH        => l_nCurrentFieldLen,;
+                                                             HB_ORM_SCHEMA_FIELD_DECIMALS      => l_nCurrentFieldDec,;
+                                                             HB_ORM_SCHEMA_FIELD_NULLABLE      => l_lCurrentFieldNullable,;
+                                                             HB_ORM_SCHEMA_FIELD_AUTOINCREMENT => l_lCurrentFieldAutoIncrement,;
+                                                             HB_ORM_SCHEMA_FIELD_ARRAY         => l_lCurrentFieldArray,;
+                                                             HB_ORM_SCHEMA_FIELD_DEFAULT       => l_cCurrentFieldDefault})
+                    l_cSQLScriptPreUpdate          += l_cSQLScriptFieldChanges[1]
+                    l_cSQLScriptFieldChangesCycle1 += l_cSQLScriptFieldChanges[2]
+                    l_cSQLScriptFieldChangesCycle2 += l_cSQLScriptFieldChanges[3]
+                    l_cSQLScriptPostUpdate         += l_cSQLScriptFieldChanges[4]
                 endif
 
-                l_iArrayPos -= 1
-                if l_iArrayPos > 0
-                    l_aFieldDefinition := l_aFieldDefinitions[l_iArrayPos]
-                endif
-            enddo
+            endif
 
         endfor
 
         if !empty(l_cSQLScriptFieldChangesCycle1) .or. !empty(l_cSQLScriptFieldChangesCycle2)
-            do case
-            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-                l_cFormattedTableName := ::FormatIdentifier(l_cTableName)
-            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-                l_cFormattedTableName := ::FormatIdentifier(l_cSchemaAndTableName)
-            endcase
+            // do case
+            // case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+            //     l_cFormattedTableName := ::FormatIdentifier(l_cTableName)
+            // case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+            //     l_cFormattedTableName := ::FormatIdentifier(l_cNamespaceAndTableName)
+            // endcase
+            l_cFormattedTableName := ::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableName))
+
             if !empty(l_cSQLScriptFieldChangesCycle1)
                 l_cSQLScript += [ALTER TABLE ]+l_cFormattedTableName+[ ]+substr(l_cSQLScriptFieldChangesCycle1,2)+[;]+CRLF   //Drop the leading "," in l_cSQLScriptFieldChangesCycle1
             endif
@@ -1054,45 +1133,24 @@ for each l_hTableDefinition in par_hSchemaDefinition
         endif
 
         if !hb_IsNIL(l_hIndexes)
-            for each l_hIndexDefinition in l_hIndexes
-                // l_cIndexName              := hb_orm_RootIndexName(l_cSchemaAndTableName,l_hIndexDefinition:__enumKey())
-                l_cIndexName              := hb_orm_RootIndexName(l_cTableName,l_hIndexDefinition:__enumKey())
+            for each l_hIndex in l_hIndexes
+                l_cIndexName       := hb_orm_RootIndexName(l_cTableName,l_hIndex:__enumKey())
+                l_hIndexDefinition := l_hIndex:__enumValue()
+                if !(lower(l_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so.
+                    if hb_IsNIL(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_INDEX])
+                        l_hCurrentIndexDefinition := NIL
+                    else
+                        l_hCurrentIndexDefinition := hb_HGetDef(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_INDEX],l_cIndexName,NIL)
+                    endif
+                    if hb_IsNIL(l_hCurrentIndexDefinition)
+                        //Missing Index
+                        hb_orm_SendToDebugView("Table: "+l_cNamespaceAndTableName+" Add Index: "+l_cIndexName)
+                        l_cSQLScript += ::AddIndex(l_cNamespaceName,l_cTableName,l_hFields,l_cIndexName,l_hIndexDefinition)  //Passing l_hFields to help with index expressions
+                    else
+                        // _M_ Compare the index definition
+                    endif
 
-                l_aIndexDefinitions       := l_hIndexDefinition:__enumValue()
-
-                if ValType(l_aIndexDefinitions[1]) == "A"
-                    l_iArrayPos        := len(l_aIndexDefinitions)
-                    l_aIndexDefinition := l_aIndexDefinitions[l_iArrayPos]
-                else
-                    l_iArrayPos        := 1
-                    l_aIndexDefinition := l_aIndexDefinitions
                 endif
-                do while l_iArrayPos > 0
-                    
-                    if l_cBackendType $ hb_DefaultValue(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_BACKEND_TYPES],"MP")
-                        if !(lower(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so.
-                            
-                            if hb_IsNIL(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_INDEX])
-                                l_aCurrentIndexDefinition := NIL
-                            else
-                                l_aCurrentIndexDefinition := hb_HGetDef(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_INDEX],l_cIndexName,NIL)
-                            endif
-                            if hb_IsNIL(l_aCurrentIndexDefinition)
-                                //Missing Index
-                                hb_orm_SendToDebugView("Table: "+l_cSchemaAndTableName+" Add Index: "+l_cIndexName)
-                                l_cSQLScript += ::AddIndex(l_cSchemaName,l_cTableName,l_hFields,l_cIndexName,l_aIndexDefinition)  //Passing l_hFields to help with index expressions
-                            else
-                                // _M_ Compare the index definition
-                            endif
-
-                        endif
-                    endif
-
-                    l_iArrayPos -= 1
-                    if l_iArrayPos > 0
-                        l_aIndexDefinition := l_aIndexDefinitions[l_iArrayPos]
-                    endif
-                enddo
 
             endfor
         endif
@@ -1100,7 +1158,11 @@ for each l_hTableDefinition in par_hSchemaDefinition
     endif
 endfor
 
-if !empty(l_cSQLScript) .or. !empty(l_cSQLScriptPreUpdate) .or. !empty(l_cSQLScriptPostUpdate) .or. !empty(l_hListOfSchemaName)
+
+if !empty(l_cSQLScript) .or. ;
+   !empty(l_cSQLScriptPreUpdate) .or. ;
+   !empty(l_cSQLScriptPostUpdate) .or. ;
+   !empty(l_hListOfNamespaceName) 
     if !empty(l_cSQLScriptPreUpdate)
         l_cSQLScript := l_cSQLScriptPreUpdate+CRLF+l_cSQLScript
     endif
@@ -1116,26 +1178,26 @@ if !empty(l_cSQLScript) .or. !empty(l_cSQLScriptPreUpdate) .or. !empty(l_cSQLScr
         //When you get a connection to PostgreSQL it is always to a particular database. To access a different database, you must get a new connection.
 
         if !empty(l_cSQLScript)  // No need to create schemas unless anything else should also be done
-            for each l_cCurrentSchemaName in l_hListOfSchemaName
-                l_cSchemaName := l_cCurrentSchemaName:__enumKey()
-                if !hb_IsNil(l_cCurrentSchemaName)
-                    if !(l_cSchemaName == l_cCurrentSchemaName)
-                        l_cSQLScriptCreateOrUpdateSchemaName += ::UpdateSchemaName(l_cSchemaName,l_cCurrentSchemaName)+CRLF
+            for each l_cCurrentNamespaceName in l_hListOfNamespaceName
+                l_cNamespaceName := l_cCurrentNamespaceName:__enumKey()
+                if !hb_IsNil(l_cCurrentNamespaceName)
+                    if !(l_cNamespaceName == l_cCurrentNamespaceName)
+                        l_cSQLScriptCreateOrUpdateNamespaceName += ::UpdateNamespaceName(l_cNamespaceName,l_cCurrentNamespaceName)+CRLF
                     endif
                 endif
-                l_cSQLScriptCreateOrUpdateSchemaName += [CREATE SCHEMA IF NOT EXISTS ]+::FormatIdentifier(l_cSchemaName)+[;]+CRLF
+                l_cSQLScriptCreateOrUpdateNamespaceName += [CREATE SCHEMA IF NOT EXISTS ]+::FormatIdentifier(l_cNamespaceName)+[;]+CRLF
             endfor
         endif
 
-        if !empty(l_cSQLScriptCreateOrUpdateSchemaName)
-            l_cSQLScript := l_cSQLScriptCreateOrUpdateSchemaName+l_cSQLScript
+        if !empty(l_cSQLScriptCreateOrUpdateNamespaceName)
+            l_cSQLScript := l_cSQLScriptCreateOrUpdateNamespaceName+l_cSQLScript
         endif
     endcase
 endif
 
 return l_cSQLScript
 //-----------------------------------------------------------------------------------------------------------------
-method MigrateSchema(par_hSchemaDefinition) class hb_orm_SQLConnect
+method MigrateSchema(par_hTableSchemaDefinition) class hb_orm_SQLConnect
 local l_cSQLScript
 local l_nResult := 0   // 0 = Nothing Migrated, 1 = Migrated, -1 = Error Migrating
 local l_cLastError := ""
@@ -1143,8 +1205,7 @@ local l_aInstructions
 local l_cStatement
 local l_nCounter := 0
 
-l_cSQLScript := ::GenerateMigrateSchemaScript(par_hSchemaDefinition)
-
+l_cSQLScript := ::GenerateMigrateSchemaScript(par_hTableSchemaDefinition)
 if !empty(l_cSQLScript)
     l_nResult := 1
     l_aInstructions := hb_ATokens(l_cSQLScript,.t.)
@@ -1162,348 +1223,329 @@ if !empty(l_cSQLScript)
         endif
     endfor
     ::UpdateSchemaCache()
-    ::LoadSchema()
+    ::LoadSchema("MigrateSchema")
 endif
 
-::UpdateORMSchemaTableNumber()  // Will call this routine even if no tables where modified.
+::UpdateORMNamespaceTableNumber()  // Will call this routine even if no tables where modified.
 
 return {l_nResult,l_cSQLScript,l_cLastError}
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-method AddTable(par_cSchemaName,par_cTableName,par_hStructure,par_lUnlogged) class hb_orm_SQLConnect                 // Fix if needed a single file structure
+method AddTable(par_cNamespaceName,par_cTableName,par_hStructure,par_lUnlogged) class hb_orm_SQLConnect                 // Fix if needed a single file structure
 local l_aField
 local l_cFieldName
-local l_aFieldStructures,l_aFieldStructure
+local l_hFieldDefinition
 local l_cSQLCommand := ""
 local l_cSQLFields := ""
 local l_cFieldType
 local l_nFieldDec
 local l_nFieldLen
-local l_cFieldAttributes
-local l_lFieldAllowNull
+local l_lFieldNullable
 local l_lFieldAutoIncrement
 local l_lFieldArray
 local l_cFieldDefault
-local l_nNumberOfFieldDefinitionParameters
 local l_cDefaultString := ""
 local l_cSQLExtra := ""
 local l_cFormattedTableName
 local l_cFormattedFieldName
-local l_cBackendType := ""
-local l_iArrayPos
 local l_cAdditionalSQLCommand :=""
 local l_cFieldTypeSuffix
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
-    l_cBackendType        := "M"
+    l_cFormattedTableName := ::FormatIdentifier(iif(empty(par_cNamespaceName) .or. lower(par_cNamespaceName) == "public","",par_cNamespaceName+".")+par_cTableName)
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cFormattedTableName := ::FormatIdentifier(par_cSchemaName+"."+par_cTableName)
-    l_cBackendType        := "P"
+    l_cFormattedTableName := ::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)
 endcase
 
 for each l_aField in par_hStructure
-    l_cFieldName          := l_aField:__enumKey()
-    l_aFieldStructures    := l_aField:__enumValue()
+    l_cFieldName       := l_aField:__enumKey()
+    l_hFieldDefinition := l_aField:__enumValue()
 
-    if ValType(l_aFieldStructures[1]) == "A"
-        l_iArrayPos        := len(l_aFieldStructures)
-        l_aFieldStructure   := l_aFieldStructures[l_iArrayPos]
-    else
-        l_iArrayPos        := 1
-        l_aFieldStructure   := l_aFieldStructures
+    l_cFieldType          := l_hFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
+    l_nFieldLen           := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+    l_nFieldDec           := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
+    l_cFieldDefault       := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DEFAULT,"")
+    l_lFieldNullable      := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
+    l_lFieldAutoIncrement := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.)
+    l_lFieldArray         := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
+
+    if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
+        l_lFieldAutoIncrement := .t.
     endif
-    do while l_iArrayPos > 0
+    if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
+        l_lFieldAutoIncrement := .f.
+    endif
+    if l_lFieldAutoIncrement .and. l_lFieldNullable  //Auto-Increment fields may not be null (and not have a default)
+        l_lFieldNullable := .f.
+    endif
 
-        if l_cBackendType $ hb_DefaultValue(l_aFieldStructure[HB_ORM_SCHEMA_FIELD_BACKEND_TYPES],"MP")
-            l_nNumberOfFieldDefinitionParameters := len(l_aFieldStructure)
-            l_cFieldType          := l_aFieldStructure[HB_ORM_SCHEMA_FIELD_TYPE]
-            l_nFieldLen           := iif(l_nNumberOfFieldDefinitionParameters < 2, 0 ,hb_DefaultValue(l_aFieldStructure[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 ))
-            l_nFieldDec           := iif(l_nNumberOfFieldDefinitionParameters < 3, 0 ,hb_DefaultValue(l_aFieldStructure[HB_ORM_SCHEMA_FIELD_DECIMALS]      , 0 ))
-            l_cFieldAttributes    := iif(l_nNumberOfFieldDefinitionParameters < 4, "",hb_DefaultValue(l_aFieldStructure[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]    , ""))
-            l_cFieldDefault       := iif(len(l_aFieldStructure) >= HB_ORM_SCHEMA_FIELD_DEFAULT,hb_DefaultValue(l_aFieldStructure[HB_ORM_SCHEMA_FIELD_DEFAULT],""),"")
-            l_lFieldAllowNull     := ("N" $ l_cFieldAttributes)
-            l_lFieldAutoIncrement := ("+" $ l_cFieldAttributes)
-            l_lFieldArray         := ("A" $ l_cFieldAttributes)
+    l_cFieldDefault := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault,l_cFieldType,l_nFieldDec)
 
-            if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
-                l_lFieldAutoIncrement := .t.
-            endif
-            if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
-                l_lFieldAutoIncrement := .f.
-            endif
-            if l_lFieldAutoIncrement .and. l_lFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
-                l_lFieldAllowNull := .f.
-            endif
+    if !empty(l_cSQLFields)
+        l_cSQLFields += ","
+    endif
 
-            l_cFieldDefault := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault,l_cFieldType,l_nFieldDec)
+    l_cFormattedFieldName := ::FormatIdentifier(l_cFieldName)
+    l_cSQLFields += l_cFormattedFieldName + [ ]
 
-            // l_cFieldAttributes := iif(l_lFieldAllowNull,"N","")+iif(l_lFieldAutoIncrement,"+","")  Not needed since the AddTable will also deal with all the fields and not call AddField()
-
-            if !empty(l_cSQLFields)
-                l_cSQLFields += ","
-            endif
-
-            l_cFormattedFieldName := ::FormatIdentifier(l_cFieldName)
-            l_cSQLFields += l_cFormattedFieldName + [ ]
-
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        do case
+        case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
             do case
-            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-                do case
-                case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
-                    do case
-                    case l_cFieldType == "I"
-                        l_cSQLFields += [INT]
-                    case l_cFieldType == "IB"
-                        l_cSQLFields += [BIGINT]
-                    case l_cFieldType == "IS"
-                        l_cSQLFields += [SMALLINT]
-                    case l_cFieldType == "N"
-                        l_cSQLFields += [DECIMAL(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]
-                        if l_lFieldAutoIncrement
-                            l_lFieldAutoIncrement := .f.
-                            hb_orm_SendToDebugView("May not make numeric field auto-increment. Table: "+par_cTableName+" - Field: "+l_cFieldName)
-                        endif
-                    endcase
-
-                    if l_lFieldAutoIncrement
-                        l_cSQLFields += [ NOT NULL AUTO_INCREMENT]
-                        l_cSQLExtra  += [,PRIMARY KEY (]+l_cFormattedFieldName+[) USING BTREE]
-                    else
-                        l_cDefaultString := "0"
-                    endif
-
-                case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
-                    do case
-                    case l_cFieldType == "C"
-                        l_cSQLFields += [CHAR(]+trans(l_nFieldLen)+[)]
-                    case l_cFieldType == "CV"
-                        l_cSQLFields += [VARCHAR]+iif(empty(l_nFieldLen),[],[(]+trans(l_nFieldLen)+[)])
-                    case l_cFieldType == "B"
-                        l_cSQLFields += [BINARY(]+trans(l_nFieldLen)+[)]
-                    case l_cFieldType == "BV"
-                        l_cSQLFields += [VARBINARY]+iif(empty(l_nFieldLen),[],[(]+trans(l_nFieldLen)+[)])
-                    case l_cFieldType == "M"
-                        l_cSQLFields += [LONGTEXT]
-                    case l_cFieldType == "R"
-                        l_cSQLFields += [LONGBLOB]
-                    endcase
-
-                    l_cDefaultString := "''"
-
-                case l_cFieldType == "L"
-                    l_cSQLFields += [TINYINT(1)]
-                    l_cDefaultString := "0"
-                    
-                case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
-                    do case
-                    case l_cFieldType == "D"
-                        l_cSQLFields += [DATE]
-                        l_cDefaultString   := ['0000-00-00']
-                    case l_cFieldType == "TOZ"
-                        if vfp_between(l_nFieldDec,0,6)
-                            l_cSQLFields += [TIME(]+trans(l_nFieldDec)+[) COMMENT 'Type=TOZ']
-                        else
-                            l_cSQLFields += [TIME COMMENT 'Type=TOZ']
-                        endif
-                        l_cDefaultString   := ['00:00:00']
-                    case l_cFieldType == "TO"
-                        if vfp_between(l_nFieldDec,0,6)
-                            l_cSQLFields += [TIME(]+trans(l_nFieldDec)+[)]
-                        else
-                            l_cSQLFields += [TIME]
-                        endif
-                        l_cDefaultString   := ['00:00:00']
-                    case l_cFieldType == "DTZ"
-                        if vfp_between(l_nFieldDec,0,6)
-                            l_cSQLFields += [TIMESTAMP(]+trans(l_nFieldDec)+[)]
-                        else
-                            l_cSQLFields += [TIMESTAMP]
-                        endif
-                        l_cDefaultString   := ['0000-00-00 00:00:00']
-                    case l_cFieldType == "DT" .or. l_cFieldType == "T"
-                        if vfp_between(l_nFieldDec,0,6)
-                            l_cSQLFields += [DATETIME(]+trans(l_nFieldDec)+[)]
-                        else
-                            l_cSQLFields += [DATETIME]
-                        endif
-                        l_cDefaultString   := ['0000-00-00 00:00:00']
-                    endcase
-
-                // case l_cFieldType == "TS"
-                //     l_cSQLFields += [TIMESTAMP NOT NULL DEFAULT current_timestamp]
-                    
-                case l_cFieldType == "Y"
-                    l_cSQLFields += [DECIMAL(13,4) COMMENT 'Type=Y']
-                    l_cDefaultString := "0"
-
-                case l_cFieldType == "UUI"
-                    l_cSQLFields += [CHAR(36) COMMENT 'Type=UUI']
-                    l_cDefaultString := "'00000000-0000-0000-0000-000000000000'"
-
-                case l_cFieldType == "JS"
-                    l_cSQLFields += [LONGTEXT COMMENT 'Type=JS']
-                    l_cDefaultString := "'{}'"
-                    
-                case l_cFieldType == "OID"
-                    l_cSQLFields += [BIGINT COMMENT 'Type=OID']
-                    l_cDefaultString := "0"
-
-                otherwise
-                    
-                endcase
-
-                if !empty(l_cDefaultString)
-                    if l_lFieldAllowNull
-                        if empty(l_cFieldDefault)
-                            l_cSQLFields += [ NULL]
-                        else
-                            l_cSQLFields += [ NULL DEFAULT ]+l_cFieldDefault
-                        endif
-                    else
-                        if empty(l_cFieldDefault)
-                            l_cSQLFields += [ NOT NULL DEFAULT ]+l_cDefaultString
-                        else
-                            l_cSQLFields += [ NOT NULL DEFAULT ]+l_cFieldDefault
-                        endif
-                    endif
+            case l_cFieldType == "I"
+                l_cSQLFields += [INT]
+            case l_cFieldType == "IB"
+                l_cSQLFields += [BIGINT]
+            case l_cFieldType == "IS"
+                l_cSQLFields += [SMALLINT]
+            case l_cFieldType == "N"
+                l_cSQLFields += [DECIMAL(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]
+                if l_lFieldAutoIncrement
+                    l_lFieldAutoIncrement := .f.
+                    hb_orm_SendToDebugView("May not make numeric field auto-increment. Table: "+par_cTableName+" - Field: "+l_cFieldName)
                 endif
-
-            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-                l_cFieldTypeSuffix := iif(l_lFieldArray,"[]","")
-
-                do case
-                case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
-                    do case
-                    case l_cFieldType == "I"
-                        l_cSQLFields += [integer]+l_cFieldTypeSuffix
-                    case l_cFieldType == "IB"
-                        l_cSQLFields += [bigint]+l_cFieldTypeSuffix
-                    case l_cFieldType == "IS"
-                        l_cSQLFields += [smallint]+l_cFieldTypeSuffix
-                    case l_cFieldType == "N"
-                        l_cSQLFields += [numeric(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]+l_cFieldTypeSuffix
-                        if l_lFieldAutoIncrement
-                            l_lFieldAutoIncrement := .f.
-                            hb_orm_SendToDebugView("May not make numeric field auto-increment. Table: "+par_cTableName+" - Field: "+l_cFieldName)
-                        endif
-                    endcase
-
-                    if l_lFieldAutoIncrement
-                        l_cSQLFields += [ NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 ), PRIMARY KEY (]+l_cFormattedFieldName+[)]
-                    else
-                        l_cDefaultString := "0"
-                    endif
-
-
-                case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
-                    do case
-                    case l_cFieldType == "C"
-                        l_cSQLFields += [character(]+trans(l_nFieldLen)+[)]+l_cFieldTypeSuffix
-                    case l_cFieldType == "CV"
-                        l_cSQLFields += [character varying]+iif(empty(l_nFieldLen),[],[(]+trans(l_nFieldLen)+[)])+l_cFieldTypeSuffix
-                    case l_cFieldType == "B"
-                        l_cSQLFields += [bytea]+l_cFieldTypeSuffix
-                        l_cAdditionalSQLCommand += [COMMENT ON COLUMN ]+l_cFormattedTableName+"."+l_cFormattedFieldName+[ IS 'Type=B|Length=]+trans(l_nFieldLen)+[';]+CRLF
-                    case l_cFieldType == "BV"
-                        l_cSQLFields += [bytea]+l_cFieldTypeSuffix
-                        l_cAdditionalSQLCommand += [COMMENT ON COLUMN ]+l_cFormattedTableName+"."+l_cFormattedFieldName+[ IS 'Type=BV|Length=]+trans(l_nFieldLen)+[';]+CRLF
-                    case l_cFieldType == "M"
-                        l_cSQLFields += [text]+l_cFieldTypeSuffix
-                    case l_cFieldType == "R"
-                        l_cSQLFields += [bytea]+l_cFieldTypeSuffix
-                        
-                    endcase
-
-                    l_cDefaultString := "''"
-
-                case l_cFieldType == "L"
-                    l_cSQLFields += [boolean]+l_cFieldTypeSuffix
-
-                    l_cDefaultString := "FALSE"
-                    
-                case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
-                    do case
-                    case l_cFieldType == "D"
-                        l_cSQLFields += [date]+l_cFieldTypeSuffix
-                    case l_cFieldType == "TOZ"
-                        if vfp_between(l_nFieldDec,0,6)
-                            l_cSQLFields += [time(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
-                        else
-                            l_cSQLFields += [time with time zone]+l_cFieldTypeSuffix
-                        endif
-                    case l_cFieldType == "TO"
-                        if vfp_between(l_nFieldDec,0,6)
-                            l_cSQLFields += [time(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
-                        else
-                            l_cSQLFields += [time without time zone]+l_cFieldTypeSuffix
-                        endif
-                    case l_cFieldType == "DTZ"
-                        if vfp_between(l_nFieldDec,0,6)
-                            l_cSQLFields += [timestamp(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
-                        else
-                            l_cSQLFields += [timestamp with time zone]+l_cFieldTypeSuffix
-                        endif
-                    case l_cFieldType == "DT" .or. l_cFieldType == "T"
-                        if vfp_between(l_nFieldDec,0,6)
-                            l_cSQLFields += [timestamp(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
-                        else
-                            l_cSQLFields += [timestamp without time zone]+l_cFieldTypeSuffix
-                        endif
-                    endcase
-
-                    l_cDefaultString := "'-infinity'"
-
-                case l_cFieldType == "Y"
-                    l_cSQLFields += [money]+l_cFieldTypeSuffix
-
-                    l_cDefaultString := "0"
-                    
-                case l_cFieldType == "UUI"
-                    l_cSQLFields += [uuid]+l_cFieldTypeSuffix
-
-                    l_cDefaultString := "'00000000-0000-0000-0000-000000000000'::uuid"
-
-                case l_cFieldType == "JS"
-                    l_cSQLFields += [json]+l_cFieldTypeSuffix
-
-                    l_cDefaultString := "'{}'::json"
-                    
-                case l_cFieldType == "OID"
-                    l_cSQLFields += [oid]+l_cFieldTypeSuffix
-
-                    l_cDefaultString := ""
-                    
-                otherwise
-                    
-                endcase
-
-                if !empty(l_cDefaultString)
-                    if l_lFieldAllowNull
-                        if empty(l_cFieldDefault)
-                            // l_cSQLFields += []
-                        else
-                            l_cSQLFields += [ DEFAULT ]+l_cFieldDefault
-                        endif
-                    else
-                        if empty(l_cFieldDefault)
-                            l_cSQLFields += [ NOT NULL DEFAULT ]+l_cDefaultString
-                        else
-                            l_cSQLFields += [ NOT NULL DEFAULT ]+l_cFieldDefault
-                        endif
-                    endif
-                endif
-
             endcase
+
+            if l_lFieldAutoIncrement
+                l_cSQLFields += [ NOT NULL AUTO_INCREMENT]
+                l_cSQLExtra  += [,PRIMARY KEY (]+l_cFormattedFieldName+[) USING BTREE]
+            else
+                l_cDefaultString := "0"
+            endif
+
+        case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
+            do case
+            case l_cFieldType == "C"
+                l_cSQLFields += [CHAR(]+trans(l_nFieldLen)+[)]
+            case l_cFieldType == "CV"
+                l_cSQLFields += [VARCHAR]+iif(empty(l_nFieldLen),[],[(]+trans(l_nFieldLen)+[)])
+            case l_cFieldType == "B"
+                l_cSQLFields += [BINARY(]+trans(l_nFieldLen)+[)]
+            case l_cFieldType == "BV"
+                l_cSQLFields += [VARBINARY]+iif(empty(l_nFieldLen),[],[(]+trans(l_nFieldLen)+[)])
+            case l_cFieldType == "M"
+                l_cSQLFields += [LONGTEXT]
+            case l_cFieldType == "R"
+                l_cSQLFields += [LONGBLOB]
+            endcase
+
+            l_cDefaultString := "''"
+
+        case l_cFieldType == "L"
+            l_cSQLFields += [TINYINT(1)]
+            l_cDefaultString := "0"
+            
+        case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
+            do case
+            case l_cFieldType == "D"
+                l_cSQLFields += [DATE]
+                l_cDefaultString   := ['0000-00-00']
+            case l_cFieldType == "TOZ"
+                if vfp_between(l_nFieldDec,0,6)
+                    l_cSQLFields += [TIME(]+trans(l_nFieldDec)+[) COMMENT 'Type=TOZ']
+                else
+                    l_cSQLFields += [TIME COMMENT 'Type=TOZ']
+                endif
+                l_cDefaultString   := ['00:00:00']
+            case l_cFieldType == "TO"
+                if vfp_between(l_nFieldDec,0,6)
+                    l_cSQLFields += [TIME(]+trans(l_nFieldDec)+[)]
+                else
+                    l_cSQLFields += [TIME]
+                endif
+                l_cDefaultString   := ['00:00:00']
+            case l_cFieldType == "DTZ"
+                if vfp_between(l_nFieldDec,0,6)
+                    l_cSQLFields += [TIMESTAMP(]+trans(l_nFieldDec)+[)]
+                else
+                    l_cSQLFields += [TIMESTAMP]
+                endif
+                l_cDefaultString   := ['0000-00-00 00:00:00']
+            case l_cFieldType == "DT" .or. l_cFieldType == "T"
+                if vfp_between(l_nFieldDec,0,6)
+                    l_cSQLFields += [DATETIME(]+trans(l_nFieldDec)+[)]
+                else
+                    l_cSQLFields += [DATETIME]
+                endif
+                l_cDefaultString   := ['0000-00-00 00:00:00']
+            endcase
+
+        // case l_cFieldType == "TS"
+        //     l_cSQLFields += [TIMESTAMP NOT NULL DEFAULT current_timestamp]
+            
+        case l_cFieldType == "Y"
+            l_cSQLFields += [DECIMAL(13,4) COMMENT 'Type=Y']
+            l_cDefaultString := "0"
+
+        case l_cFieldType == "UUI"
+            l_cSQLFields += [CHAR(36) COMMENT 'Type=UUI']
+            l_cDefaultString := "'00000000-0000-0000-0000-000000000000'"
+
+        case l_cFieldType == "JSB"
+            l_cSQLFields += [LONGTEXT COMMENT 'Type=JSB']
+            l_cDefaultString := "'{}'"
+            
+        case l_cFieldType == "JS"
+            l_cSQLFields += [LONGTEXT COMMENT 'Type=JS']
+            l_cDefaultString := "'{}'"
+            
+        case l_cFieldType == "OID"
+            l_cSQLFields += [BIGINT COMMENT 'Type=OID']
+            l_cDefaultString := "0"
+
+        otherwise
+            
+        endcase
+
+        if !empty(l_cDefaultString)
+            if l_lFieldNullable
+                if empty(l_cFieldDefault)
+                    l_cSQLFields += [ NULL]
+                else
+                    l_cSQLFields += [ NULL DEFAULT ]+l_cFieldDefault
+                endif
+            else
+                if empty(l_cFieldDefault)
+                    l_cSQLFields += [ NOT NULL DEFAULT ]+l_cDefaultString
+                else
+                    l_cSQLFields += [ NOT NULL DEFAULT ]+l_cFieldDefault
+                endif
+            endif
         endif
 
-        l_iArrayPos -= 1
-        if l_iArrayPos > 0
-            l_aFieldStructure := l_aFieldStructures[l_iArrayPos]
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        l_cFieldTypeSuffix := iif(l_lFieldArray,"[]","")
+
+        do case
+        case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
+            do case
+            case l_cFieldType == "I"
+                l_cSQLFields += [integer]+l_cFieldTypeSuffix
+            case l_cFieldType == "IB"
+                l_cSQLFields += [bigint]+l_cFieldTypeSuffix
+            case l_cFieldType == "IS"
+                l_cSQLFields += [smallint]+l_cFieldTypeSuffix
+            case l_cFieldType == "N"
+                l_cSQLFields += [numeric(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]+l_cFieldTypeSuffix
+                if l_lFieldAutoIncrement
+                    l_lFieldAutoIncrement := .f.
+                    hb_orm_SendToDebugView("May not make numeric field auto-increment. Table: "+par_cTableName+" - Field: "+l_cFieldName)
+                endif
+            endcase
+
+            if l_lFieldAutoIncrement
+                l_cSQLFields += [ NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 ), PRIMARY KEY (]+l_cFormattedFieldName+[)]
+            else
+                l_cDefaultString := "0"
+            endif
+
+
+        case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
+            do case
+            case l_cFieldType == "C"
+                l_cSQLFields += [character(]+trans(l_nFieldLen)+[)]+l_cFieldTypeSuffix
+            case l_cFieldType == "CV"
+                l_cSQLFields += [character varying]+iif(empty(l_nFieldLen),[],[(]+trans(l_nFieldLen)+[)])+l_cFieldTypeSuffix
+            case l_cFieldType == "B"
+                l_cSQLFields += [bytea]+l_cFieldTypeSuffix
+                l_cAdditionalSQLCommand += [COMMENT ON COLUMN ]+l_cFormattedTableName+"."+l_cFormattedFieldName+[ IS 'Type=B|Length=]+trans(l_nFieldLen)+[';]+CRLF
+            case l_cFieldType == "BV"
+                l_cSQLFields += [bytea]+l_cFieldTypeSuffix
+                l_cAdditionalSQLCommand += [COMMENT ON COLUMN ]+l_cFormattedTableName+"."+l_cFormattedFieldName+[ IS 'Type=BV|Length=]+trans(l_nFieldLen)+[';]+CRLF
+            case l_cFieldType == "M"
+                l_cSQLFields += [text]+l_cFieldTypeSuffix
+            case l_cFieldType == "R"
+                l_cSQLFields += [bytea]+l_cFieldTypeSuffix
+                
+            endcase
+
+            l_cDefaultString := "''"
+
+        case l_cFieldType == "L"
+            l_cSQLFields += [boolean]+l_cFieldTypeSuffix
+
+            l_cDefaultString := "FALSE"
+            
+        case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
+            do case
+            case l_cFieldType == "D"
+                l_cSQLFields += [date]+l_cFieldTypeSuffix
+            case l_cFieldType == "TOZ"
+                if vfp_between(l_nFieldDec,0,6)
+                    l_cSQLFields += [time(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
+                else
+                    l_cSQLFields += [time with time zone]+l_cFieldTypeSuffix
+                endif
+            case l_cFieldType == "TO"
+                if vfp_between(l_nFieldDec,0,6)
+                    l_cSQLFields += [time(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
+                else
+                    l_cSQLFields += [time without time zone]+l_cFieldTypeSuffix
+                endif
+            case l_cFieldType == "DTZ"
+                if vfp_between(l_nFieldDec,0,6)
+                    l_cSQLFields += [timestamp(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
+                else
+                    l_cSQLFields += [timestamp with time zone]+l_cFieldTypeSuffix
+                endif
+            case l_cFieldType == "DT" .or. l_cFieldType == "T"
+                if vfp_between(l_nFieldDec,0,6)
+                    l_cSQLFields += [timestamp(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
+                else
+                    l_cSQLFields += [timestamp without time zone]+l_cFieldTypeSuffix
+                endif
+            endcase
+
+            l_cDefaultString := "'-infinity'"
+
+        case l_cFieldType == "Y"
+            l_cSQLFields += [money]+l_cFieldTypeSuffix
+
+            l_cDefaultString := "0"
+            
+        case l_cFieldType == "UUI"
+            l_cSQLFields += [uuid]+l_cFieldTypeSuffix
+
+            l_cDefaultString := "'00000000-0000-0000-0000-000000000000'::uuid"
+
+        case l_cFieldType == "JSB"
+            l_cSQLFields += [jsonb]+l_cFieldTypeSuffix
+
+            l_cDefaultString := "'{}'::jsonb"
+            
+        case l_cFieldType == "JS"
+            l_cSQLFields += [json]+l_cFieldTypeSuffix
+
+            l_cDefaultString := "'{}'::json"
+            
+        case l_cFieldType == "OID"
+            l_cSQLFields += [oid]+l_cFieldTypeSuffix
+
+            l_cDefaultString := ""
+            
+        otherwise
+            
+        endcase
+
+        if !empty(l_cDefaultString)
+            if l_lFieldNullable
+                if empty(l_cFieldDefault)
+                    // l_cSQLFields += []
+                else
+                    l_cSQLFields += [ DEFAULT ]+l_cFieldDefault
+                endif
+            else
+                if empty(l_cFieldDefault)
+                    l_cSQLFields += [ NOT NULL DEFAULT ]+l_cDefaultString
+                else
+                    l_cSQLFields += [ NOT NULL DEFAULT ]+l_cFieldDefault
+                endif
+            endif
         endif
 
-    enddo
+    endcase
 
 endfor
 
@@ -1520,21 +1562,21 @@ endcase
 
 return l_cSQLCommand+l_cAdditionalSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method UpdateSchemaName(par_cSchemaName,par_cCurrentSchemaName) class hb_orm_SQLConnect
+method UpdateNamespaceName(par_cNamespaceName,par_cCurrentNamespaceName) class hb_orm_SQLConnect
 local l_cSQLCommand := ""
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    // Schemas don't exists in MySQL Engine. If a schema name changed, the UpdateTableName will be impacted instead.
+    // Schemas don't exists in MySQL Engine. If a namespace name changed, the UpdateTableName will be impacted instead.
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cSQLCommand += [ALTER SCHEMA ]+::FormatIdentifier(par_cCurrentSchemaName)+[ RENAME TO ]+::FormatIdentifier(par_cSchemaName)+[;]
+    l_cSQLCommand += [ALTER SCHEMA ]+::FormatIdentifier(par_cCurrentNamespaceName)+[ RENAME TO ]+::FormatIdentifier(par_cNamespaceName)+[;]
 
 endcase
 
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method UpdateTableName(par_cSchemaName,par_cTableName,par_cCurrentSchemaName,par_cCurrentTableName) class hb_orm_SQLConnect
+method UpdateTableName(par_cNamespaceName,par_cTableName,par_cCurrentNamespaceName,par_cCurrentTableName) class hb_orm_SQLConnect
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
 local l_cSQLCommand := ""
 local l_cTableNameFrom
@@ -1542,22 +1584,22 @@ local l_cTableNameTo
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    if empty(par_cCurrentSchemaName)
+    if empty(par_cCurrentNamespaceName)
         l_cTableNameFrom := par_cCurrentTableName
     else
-        l_cTableNameFrom := par_cCurrentSchemaName+"."+par_cCurrentTableName
+        l_cTableNameFrom := par_cCurrentNamespaceName+"."+par_cCurrentTableName
     endif
 
-    if empty(par_cSchemaName)
+    if empty(par_cNamespaceName)
         l_cTableNameTo   := par_cTableName
     else
-        l_cTableNameTo   := par_cSchemaName+"."+par_cTableName
+        l_cTableNameTo   := par_cNamespaceName+"."+par_cTableName
     endif
 
     l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(l_cTableNameFrom)+[ RENAME TO ]+::FormatIdentifier(l_cTableNameTo)+[;]
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cTableNameFrom := par_cSchemaName+"."+par_cCurrentTableName   // In Postgresql the Schema name would have already be renamed if needed.
+    l_cTableNameFrom := par_cNamespaceName+"."+par_cCurrentTableName   // In Postgresql the Namespace name would have already be renamed if needed.
     l_cTableNameTo   := par_cTableName
     l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(l_cTableNameFrom)+[ RENAME TO ]+::FormatIdentifier(l_cTableNameTo)+[;]
 
@@ -1565,7 +1607,7 @@ endcase
 
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method UpdateFieldName(par_cSchemaName,par_cTableName,par_cFieldName,par_cCurrentFieldName) class hb_orm_SQLConnect
+method UpdateFieldName(par_cNamespaceName,par_cTableName,par_cFieldName,par_cCurrentFieldName) class hb_orm_SQLConnect
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
 local l_cSQLCommand := ""
 
@@ -1573,50 +1615,54 @@ do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     //_M_
     // l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
-    if empty(par_cSchemaName)
+    if empty(par_cNamespaceName)
         l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(par_cTableName)+[ RENAME COLUMN ]+::FormatIdentifier(par_cCurrentFieldName)+[ TO ]+::FormatIdentifier(par_cFieldName)+[;]
     else
-        l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(par_cSchemaName+"."+par_cTableName)+[ RENAME COLUMN ]+::FormatIdentifier(par_cCurrentFieldName)+[ TO ]+::FormatIdentifier(par_cFieldName)+[;]
+        l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)+[ RENAME COLUMN ]+::FormatIdentifier(par_cCurrentFieldName)+[ TO ]+::FormatIdentifier(par_cFieldName)+[;]
     endif
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     //ALTER TABLE table_name RENAME COLUMN column_name TO new_column_name;
-    l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(par_cSchemaName+"."+par_cTableName)+[ RENAME COLUMN ]+::FormatIdentifier(par_cCurrentFieldName)+[ TO ]+::FormatIdentifier(par_cFieldName)+[;]
+    l_cSQLCommand += [ALTER TABLE ]+::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)+[ RENAME COLUMN ]+::FormatIdentifier(par_cCurrentFieldName)+[ TO ]+::FormatIdentifier(par_cFieldName)+[;]
 
 endcase
 
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method UpdateField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition,par_aCurrentFieldDefinition) class hb_orm_SQLConnect
+method UpdateField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition,par_hCurrentFieldDefinition) class hb_orm_SQLConnect
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
 local l_cSQLCommandPreUpdate := ""
 local l_cSQLCommandCycle1    := ""
 local l_cSQLCommandCycle2    := ""
-local l_cFieldType,       l_nFieldLen,       l_nFieldDec,       l_cFieldAttributes,       l_lFieldAllowNull,       l_lFieldAutoIncrement,       l_lFieldArray       ,l_cFieldDefault
-local                                                           l_cCurrentFieldAttributes,l_lCurrentFieldAllowNull,l_lCurrentFieldAutoIncrement,l_lCurrentFieldArray,l_cCurrentFieldDefault
+local l_cFieldType,       l_nFieldLen,       l_nFieldDec,       l_lFieldNullable,       l_lFieldAutoIncrement,       l_lFieldArray       ,l_cFieldDefault
+local l_cCurrentFieldType,                   l_nCurrentFieldDec,l_lCurrentFieldNullable,l_lCurrentFieldAutoIncrement                     ,l_cCurrentFieldDefault
 local l_cFormattedFieldName := ::FormatIdentifier(par_cFieldName)
 local l_cFormattedTableName
 local l_cAdditionalSQLCommands := ""
 local l_cFieldTypeSuffix
 local l_cDefaultString := ""
 
-l_cFieldType                 := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
-l_nFieldLen                  := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]
-l_nFieldDec                  := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]
-l_cFieldAttributes           := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]
-l_cFieldDefault              := iif(len(par_aFieldDefinition) >= HB_ORM_SCHEMA_FIELD_DEFAULT,hb_DefaultValue(par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DEFAULT],""),"")
-l_lFieldAllowNull            := ("N" $ l_cFieldAttributes)
-l_lFieldAutoIncrement        := ("+" $ l_cFieldAttributes)
-l_lFieldArray                := ("A" $ l_cFieldAttributes)
+l_cFieldType                 := par_hFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
+l_nFieldLen                  := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+l_nFieldDec                  := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
+l_cFieldDefault              := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DEFAULT,"")
+l_lFieldNullable             := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
+l_lFieldAutoIncrement        := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.)
+l_lFieldArray                := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
 
-l_cCurrentFieldAttributes    := par_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]
-l_cCurrentFieldDefault       := iif(len(par_aCurrentFieldDefinition) >= HB_ORM_SCHEMA_FIELD_DEFAULT,hb_DefaultValue(par_aCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_DEFAULT],""),"")
-l_lCurrentFieldAllowNull     := ("N" $ l_cCurrentFieldAttributes)
-l_lCurrentFieldAutoIncrement := ("+" $ l_cCurrentFieldAttributes)
+l_cCurrentFieldType          := par_hCurrentFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
+l_nCurrentFieldDec           := hb_HGetDef(par_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
+l_cCurrentFieldDefault       := hb_HGetDef(par_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_DEFAULT,"")
+l_lCurrentFieldNullable      := hb_HGetDef(par_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
+l_lCurrentFieldAutoIncrement := hb_HGetDef(par_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.)
+
+l_cFieldDefault        := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault       ,l_cFieldType       ,l_nFieldDec)
+l_cCurrentFieldDefault := ::NormalizeFieldDefaultForCurrentEngineType(l_cCurrentFieldDefault,l_cCurrentFieldType,l_nCurrentFieldDec)
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
+    // l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
+    l_cFormattedTableName := ::FormatIdentifier(iif(empty(par_cNamespaceName) .or. lower(par_cNamespaceName) == "public","",par_cNamespaceName+".")+par_cTableName)
 
     // MySQL has issues of DROP DEFAULT before a field is set to allow NULL
     l_cSQLCommandCycle2 += [,CHANGE COLUMN ]+l_cFormattedFieldName+[ ]+l_cFormattedFieldName+[ ]
@@ -1642,7 +1688,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             l_cSQLCommandCycle2 += [ NOT NULL AUTO_INCREMENT]
             l_cSQLCommandCycle2 += [,ADD PRIMARY KEY (]+l_cFormattedFieldName+[)]
         else
-            if l_lFieldAllowNull
+            if l_lFieldNullable
             else
                 //do not allow NULL
                 l_cSQLCommandPreUpdate += [UPDATE ]+l_cFormattedTableName+[ SET ]+l_cFormattedFieldName+[ = 0  WHERE ]+l_cFormattedFieldName+[ IS NULL;]
@@ -1717,6 +1763,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSQLCommandCycle2 += [CHAR(36) COMMENT 'Type=UUI']
         l_cDefaultString := "'00000000-0000-0000-0000-000000000000'"
 
+    case l_cFieldType == "JSB"
+        l_cSQLCommandCycle2 += [LONGTEXT COMMENT 'Type=JSB']
+        l_cDefaultString := "'{}'"
+
     case l_cFieldType == "JS"
         l_cSQLCommandCycle2 += [LONGTEXT COMMENT 'Type=JS']
         l_cDefaultString := "'{}'"
@@ -1728,9 +1778,9 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     otherwise
     
     endcase
-
+    
     if !empty(l_cDefaultString)
-        if l_lFieldAllowNull
+        if l_lFieldNullable
             l_cSQLCommandCycle2 += [ NULL]
             if empty(l_cFieldDefault)
                 l_cSQLCommandCycle1 += [,ALTER COLUMN ]+l_cFormattedFieldName+[ DROP DEFAULT]
@@ -1739,7 +1789,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             endif
         else
             l_cSQLCommandCycle2 += [ NOT NULL]
-            if empty(l_cFieldDefault)
+            if empty(l_cFieldDefault) // .or. !(l_cFieldType == l_cCurrentFieldType)
                 l_cSQLCommandCycle2 += [ DEFAULT ]+l_cDefaultString
             else
                 l_cSQLCommandCycle2 += [ DEFAULT ]+l_cFieldDefault
@@ -1748,7 +1798,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     endif
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cFormattedTableName := ::FormatIdentifier(par_cSchemaName+"."+par_cTableName)
+    l_cFormattedTableName := ::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)
 
     l_cSQLCommandCycle1 += [,ALTER COLUMN ]+l_cFormattedFieldName+[ ]
 
@@ -1767,7 +1817,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cSQLCommandCycle1 += [TYPE numeric(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]+l_cFieldTypeSuffix
             if l_lFieldAutoIncrement
                 l_lFieldAutoIncrement := .f.
-                hb_orm_SendToDebugView("May not make numeric field auto-increment. Table: "+par_cSchemaName+"."+par_cTableName+" - Field: "+par_cFieldName)
+                hb_orm_SendToDebugView("May not make numeric field auto-increment. Table: "+par_cNamespaceName+"."+par_cTableName+" - Field: "+par_cFieldName)
             endif
         endcase
 
@@ -1785,11 +1835,18 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
         if l_lFieldAutoIncrement
             // Will always name the constraints in lower case
-            l_cSQLCommandCycle1 += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_pkey PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
+
+            if used("hb_orm_ListOfPrimaryKeyConstraints")
+                if !vfp_seek(padr(upper(par_cNamespaceName+'*'+par_cTableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
+                    // It does not matter what the constraint name is.
+                    l_cSQLCommandCycle1 += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_pkey PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
+                endif
+            endif
+
         else
             do case
-            case l_lFieldAllowNull = l_lCurrentFieldAllowNull
-            case l_lFieldAllowNull
+            case l_lFieldNullable = l_lCurrentFieldNullable
+            case l_lFieldNullable
                 // //Was NOT NULL
             otherwise    // Stop NULL
                 l_cSQLCommandPreUpdate += [UPDATE ]+l_cFormattedTableName+[ SET ]+l_cFormattedFieldName+[ = 0  WHERE ]+l_cFormattedFieldName+[ IS NULL;]
@@ -1861,6 +1918,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSQLCommandCycle1 += [TYPE uuid]+l_cFieldTypeSuffix
         l_cDefaultString := "'00000000-0000-0000-0000-000000000000'::uuid"
 
+    case l_cFieldType == "JSB"
+        l_cSQLCommandCycle1 += [TYPE jsonb]+l_cFieldTypeSuffix
+        l_cDefaultString := "'{}'::jsonb"
+
     case l_cFieldType == "JS"
         l_cSQLCommandCycle1 += [TYPE json]+l_cFieldTypeSuffix
         l_cDefaultString := "'{}'::json"
@@ -1875,16 +1936,37 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     if !empty(l_cDefaultString)
         do case
-        case l_lFieldAllowNull = l_lCurrentFieldAllowNull
-            if !(l_cFieldDefault == l_cCurrentFieldDefault)
+        case !(l_cFieldType == l_cCurrentFieldType)   // Field Type changed
+            if l_lFieldNullable
                 if empty(l_cFieldDefault)
                     l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ DROP DEFAULT]
                 else
                     l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ SET DEFAULT ]+l_cFieldDefault
                 endif
+                l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ DROP NOT NULL]
+            else
+                if empty(l_cFieldDefault)
+                    l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ SET DEFAULT ]+l_cDefaultString
+                else
+                    l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ SET DEFAULT ]+l_cFieldDefault
+                endif
+                l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ SET NOT NULL]
             endif
 
-        case l_lFieldAllowNull
+        case l_lFieldNullable = l_lCurrentFieldNullable    //Nullability not changed.
+            if !(l_cFieldDefault == l_cCurrentFieldDefault)
+                if empty(l_cFieldDefault)
+                    if l_lFieldNullable
+                        l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ DROP DEFAULT]
+                    else
+                        l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ SET DEFAULT ]+l_cDefaultString
+                    endif
+                else
+                    l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ SET DEFAULT ]+l_cFieldDefault
+                endif
+            endif
+
+        case l_lFieldNullable
             //Was NOT NULL
             if empty(l_cFieldDefault)
                 l_cSQLCommandCycle1 += [,ALTER COLUMN ] + l_cFormattedFieldName + [ DROP DEFAULT]
@@ -1908,23 +1990,22 @@ endcase
 
 return {l_cSQLCommandPreUpdate,l_cSQLCommandCycle1,l_cSQLCommandCycle2,l_cAdditionalSQLCommands}
 //-----------------------------------------------------------------------------------------------------------------
-method AddField(par_cSchemaName,par_cTableName,par_cFieldName,par_aFieldDefinition) class hb_orm_SQLConnect
+method AddField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition) class hb_orm_SQLConnect
 local l_cSQLCommand := ""
 local l_cAdditionalSQLCommands := ""
-local l_cFieldType,l_lFieldArray,l_nFieldLen,l_nFieldDec,l_cFieldAttributes,l_lFieldAllowNull,l_lFieldAutoIncrement,l_cFieldDefault
+local l_cFieldType,l_lFieldArray,l_nFieldLen,l_nFieldDec,l_lFieldNullable,l_lFieldAutoIncrement,l_cFieldDefault
 local l_cFieldTypeSuffix
 local l_cFormattedTableName
 local l_cFormattedFieldName := ::FormatIdentifier(par_cFieldName)
 local l_cDefaultString := ""
 
-l_cFieldType          := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
-l_nFieldLen           := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]
-l_nFieldDec           := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]
-l_cFieldAttributes    := par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]
-l_cFieldDefault       := iif(len(par_aFieldDefinition) >= HB_ORM_SCHEMA_FIELD_DEFAULT,hb_DefaultValue(par_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DEFAULT],""),"")
-l_lFieldAllowNull     := ("N" $ l_cFieldAttributes)
-l_lFieldAutoIncrement := ("+" $ l_cFieldAttributes)
-l_lFieldArray         := ("A" $ l_cFieldAttributes)
+l_cFieldType          := par_hFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE]
+l_nFieldLen           := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+l_nFieldDec           := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
+l_cFieldDefault       := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DEFAULT,"")
+l_lFieldNullable      := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
+l_lFieldAutoIncrement := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.)
+l_lFieldArray         := hb_HGetDef(par_hFieldDefinition,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
 
 l_cFieldDefault := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault,l_cFieldType,l_nFieldDec)
 
@@ -2023,6 +2104,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSQLCommand += [CHAR(36) COMMENT 'Type=UUI']
         l_cDefaultString := "'00000000-0000-0000-0000-000000000000'"
 
+    case l_cFieldType == "JSB"
+        l_cSQLCommand += [LONGTEXT COMMENT 'Type=JSB']
+        l_cDefaultString := "'{}'"
+
     case l_cFieldType == "JS"
         l_cSQLCommand += [LONGTEXT COMMENT 'Type=JS']
         l_cDefaultString := "'{}'"
@@ -2036,7 +2121,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     endcase
 
     if !empty(l_cDefaultString)
-        if l_lFieldAllowNull
+        if l_lFieldNullable
             if empty(l_cFieldDefault)
                 l_cSQLCommand += [ NULL]
             else
@@ -2054,7 +2139,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     //_M_  How to deal with default values for not null and array types?
 
-    l_cFormattedTableName := ::FormatIdentifier(par_cSchemaName+"."+par_cTableName)
+    l_cFormattedTableName := ::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)
 
     l_cSQLCommand += [,ADD COLUMN ]+l_cFormattedFieldName+[ ]
 
@@ -2073,13 +2158,19 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cSQLCommand += [numeric(]+trans(l_nFieldLen)+[,]+trans(l_nFieldDec)+[)]+l_cFieldTypeSuffix
             if l_lFieldAutoIncrement
                 l_lFieldAutoIncrement := .f.
-                hb_orm_SendToDebugView("May not make numeric field auto-increment. Table: "+par_cSchemaName+"."+par_cTableName+" - Field: "+par_cFieldName)
+                hb_orm_SendToDebugView("May not make numeric field auto-increment. Table: "+par_cNamespaceName+"."+par_cTableName+" - Field: "+par_cFieldName)
             endif
         endcase
 
         if l_lFieldAutoIncrement
             l_cSQLCommand += [ NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 )]
-            l_cSQLCommand += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_pkey PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
+
+            if used("hb_orm_ListOfPrimaryKeyConstraints")
+                if !vfp_seek(padr(upper(par_cNamespaceName+'*'+par_cTableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
+                    l_cSQLCommand += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_pkey PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
+                endif
+            endif
+
         else
             l_cDefaultString := "0"
         endif
@@ -2146,6 +2237,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSQLCommand += [uuid]+l_cFieldTypeSuffix
         l_cDefaultString := "'00000000-0000-0000-0000-000000000000'::uuid"
 
+    case l_cFieldType == "JSB"
+        l_cSQLCommand += [jsonb]+l_cFieldTypeSuffix
+        l_cDefaultString := "'{}'::jsonb"
+
     case l_cFieldType == "JS"
         l_cSQLCommand += [json]+l_cFieldTypeSuffix
         l_cDefaultString := "'{}'::json"
@@ -2159,7 +2254,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     endcase
 
     if !empty(l_cDefaultString)
-        if l_lFieldAllowNull
+        if l_lFieldNullable
             if empty(l_cFieldDefault)
             else
                 l_cSQLCommand += [ DEFAULT ]+l_cFieldDefault
@@ -2177,7 +2272,7 @@ endcase
 
 return {"",l_cSQLCommand,"",l_cAdditionalSQLCommands}
 //-----------------------------------------------------------------------------------------------------------------
-method AddIndex(par_cSchemaName,par_cTableName,par_hFields,par_cIndexName,par_aIndexDefinition) class hb_orm_SQLConnect
+method AddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_hIndexDefinition) class hb_orm_SQLConnect
 local l_cSQLCommand := ""
 local l_cIndexNameOnFile
 local l_cIndexExpression
@@ -2187,20 +2282,34 @@ local l_cFormattedTableName
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cIndexNameOnFile   := lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
-    l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
+// altd()
+
+    l_cIndexNameOnFile := lower(par_cIndexName)+"_idx"
+    do case
+    case empty(par_cNamespaceName)
+        // l_cIndexNameOnFile    := lower(par_cTableName+"_"+par_cIndexName)+"_idx"
+        l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
+    case lower(par_cNamespaceName) == "public"
+        // l_cIndexNameOnFile    := lower(par_cTableName+"_"+par_cIndexName)+"_idx"
+        l_cFormattedTableName := ::FormatIdentifier(par_cTableName)
+    otherwise
+        // l_cIndexNameOnFile   := lower(par_cNamespaceName+"_"+par_cTableName+"_"+par_cIndexName)+"_idx"
+        l_cFormattedTableName := ::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)
+    endif
+    
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     // Since "Two indexes in the same schema cannot have the same name."
-    // l_cIndexNameOnFile   := lower(par_cSchemaName)+"_"+lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
-    l_cIndexNameOnFile   := lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
-    l_cFormattedTableName := ::FormatIdentifier(par_cSchemaName+"."+par_cTableName)
+    // l_cIndexNameOnFile   := lower(par_cNamespaceName)+"_"+lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
+    l_cIndexNameOnFile    := lower(par_cTableName+"_"+par_cIndexName)+"_idx"
+    l_cFormattedTableName := ::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)
+    
 endcase
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cIndexExpression := ::FixCasingInFieldExpression(par_hFields,par_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION])
-    l_lIndexUnique     := par_aIndexDefinition[HB_ORM_SCHEMA_INDEX_UNIQUE]
-    l_cIndexType       := par_aIndexDefinition[HB_ORM_SCHEMA_INDEX_ALGORITHM]
+    l_cIndexExpression := ::FixCasingInFieldExpression(par_hFields,par_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION])
+    l_lIndexUnique     := hb_HGetDef(par_hIndexDefinition,HB_ORM_SCHEMA_INDEX_UNIQUE,.f.)
+    l_cIndexType       := hb_HGetDef(par_hIndexDefinition,HB_ORM_SCHEMA_INDEX_ALGORITHM,"")
     if empty(l_cIndexType)
         l_cIndexType := "BTREE"
     endif
@@ -2209,9 +2318,9 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 	l_cSQLCommand += [ ADD ]+iif(l_lIndexUnique,"UNIQUE ","")+[INDEX `]+l_cIndexNameOnFile+[` (]+l_cIndexExpression+[) USING ]+l_cIndexType+[;]+CRLF
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cIndexExpression := ::FixCasingInFieldExpression(par_hFields,par_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION])
-    l_lIndexUnique     := par_aIndexDefinition[HB_ORM_SCHEMA_INDEX_UNIQUE]
-    l_cIndexType       := par_aIndexDefinition[HB_ORM_SCHEMA_INDEX_ALGORITHM]
+    l_cIndexExpression := ::FixCasingInFieldExpression(par_hFields,par_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION])
+    l_lIndexUnique     := hb_HGetDef(par_hIndexDefinition,HB_ORM_SCHEMA_INDEX_UNIQUE,.f.)
+    l_cIndexType       := hb_HGetDef(par_hIndexDefinition,HB_ORM_SCHEMA_INDEX_ALGORITHM,"")
     if empty(l_cIndexType)
         l_cIndexType := "BTREE"
     endif
@@ -2230,8 +2339,9 @@ method GenerateCurrentSchemaHarbourCode(par_cFileName) class hb_orm_SQLConnect
 
 local l_hTableDefinition,l_aTableDefinition,l_cTableName,l_lUnlogged
 local l_hFields,l_hIndexes
-local l_hFieldDefinition,l_cFieldName,l_aFieldDefinition
-local l_hIndexDefinition,l_cIndexName,l_aIndexDefinition
+local l_hField,l_hIndex
+local l_cFieldName,l_hFieldDefinition
+local l_cIndexName,l_hIndexDefinition
 local l_cSourceCode := ""
 local l_cSourceCodeFields,l_cSourceCodeIndexes
 local l_nMaxNameLength
@@ -2239,18 +2349,18 @@ local l_cIndent := space(3)
 local l_cIndentHashElement
 // local l_aListOfTablesToNoProcess := {"SchemaCacheLog"}
 local l_cIndexExpression
-local l_cFieldType,l_nFieldLen,l_nFieldDec,l_cFieldAttributes,l_lFieldAllowNull,l_lFieldAutoIncrement,l_lFieldArray,l_cFieldDefault
-local l_nLengthPostgreSQLHBORMSchemaName := Len(::PostgreSQLHBORMSchemaName)
+local l_cFieldType,l_nFieldLen,l_nFieldDec,l_lFieldNullable,l_lFieldAutoIncrement,l_lFieldArray,l_cFieldDefault
+local l_nLengthp_HBORMNamespace := Len(::p_HBORMNamespace)
 local l_nNumberOfFields
 local l_nNumberOfIndexes
 
 ::UpdateSchemaCache()
-::LoadSchema()
+::LoadSchema("GenerateCurrentSchemaHarbourCode")
 
-if len(::p_Schema) == 0
+if len(::p_TableSchema) == 0
     l_cSourceCode := "{=>}"
 else
-    for each l_hTableDefinition in ::p_Schema
+    for each l_hTableDefinition in ::p_TableSchema
         l_cTableName := l_hTableDefinition:__enumKey()
 
         l_cIndentHashElement := space(len([{"]+l_cTableName+["=>]))
@@ -2266,7 +2376,7 @@ else
                 loop
             endif
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-            if lower(left(l_cTableName,l_nLengthPostgreSQLHBORMSchemaName+1)) == lower(::PostgreSQLHBORMSchemaName)+"."
+            if lower(left(l_cTableName,l_nLengthp_HBORMNamespace+1)) == lower(::p_HBORMNamespace)+"."
                 loop
             endif
         endcase
@@ -2286,22 +2396,21 @@ else
         l_nMaxNameLength := 0
         AEval(hb_HKeys(l_hFields),{|l_cFieldName|l_nMaxNameLength:=max(l_nMaxNameLength,len(l_cFieldName))})  //Get length of max FieldName length
 
-        for each l_hFieldDefinition in l_hFields
+        for each l_hField in l_hFields
             l_nNumberOfFields++
 
-            l_cFieldName       := l_hFieldDefinition:__enumKey()
-            l_aFieldDefinition := l_hFieldDefinition:__enumValue()
+            l_cFieldName       := l_hField:__enumKey()
+            l_hFieldDefinition := l_hField:__enumValue()
 
             l_cSourceCodeFields += iif(empty(l_cSourceCodeFields) , CRLF+l_cIndent+"{" , ";"+CRLF+l_cIndent+"," )
             
-            l_cFieldType          := allt(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
-            l_nFieldLen           := hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_LENGTH]        , 0 )
-            l_nFieldDec           := hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DECIMALS]      , 0 )
-            l_cFieldAttributes    := hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]    , "")
-            l_cFieldDefault       := iif(len(l_aFieldDefinition) >= HB_ORM_SCHEMA_FIELD_DEFAULT,hb_DefaultValue(l_aFieldDefinition[HB_ORM_SCHEMA_FIELD_DEFAULT],""),"")
-            l_lFieldAllowNull     := ("N" $ l_cFieldAttributes)
-            l_lFieldAutoIncrement := ("+" $ l_cFieldAttributes)
-            l_lFieldArray         := ("A" $ l_cFieldAttributes)
+            l_cFieldType          := iif(l_hFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE] == "T","DT",l_hFieldDefinition[HB_ORM_SCHEMA_FIELD_TYPE])
+            l_nFieldLen           := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_LENGTH,0)
+            l_nFieldDec           := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DECIMALS,0)
+            l_cFieldDefault       := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_DEFAULT,"")
+            l_lFieldNullable      := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
+            l_lFieldAutoIncrement := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.)
+            l_lFieldArray         := hb_HGetDef(l_hFieldDefinition,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
 
             if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
                 l_lFieldAutoIncrement := .t.
@@ -2309,21 +2418,32 @@ else
             if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
                 l_lFieldAutoIncrement := .f.
             endif
-            if l_lFieldAutoIncrement .and. l_lFieldAllowNull  //Auto-Increment fields may not be null (and not have a default)
-                l_lFieldAllowNull := .f.
+            if l_lFieldAutoIncrement .and. l_lFieldNullable  //Auto-Increment fields may not be null (and not have a default)
+                l_lFieldNullable := .f.
             endif
-
-            l_cFieldAttributes := iif(l_lFieldAllowNull,"N","")+iif(l_lFieldAutoIncrement,"+","")+iif(l_lFieldArray,"A","")
 
             l_cSourceCodeFields += padr('"'+l_cFieldName+'"',l_nMaxNameLength+2)+"=>{"
-            l_cSourceCodeFields += ","  // Null Value for the HB_ORM_SCHEMA_INDEX_BACKEND_TYPES 
-            l_cSourceCodeFields += padl('"'+l_cFieldType+'"',5)+","+;
-                                str(l_nFieldLen,4)+","+;
-                                str(l_nFieldDec,3)+","+;
-                                iif(empty(l_cFieldAttributes),"",'"'+l_cFieldAttributes+'"')
-            if !empty(l_cFieldDefault)
-                l_cSourceCodeFields += ',"'+strtran(l_cFieldDefault,["],["+'"'+"])+'"'
+
+            l_cSourceCodeFields += '"'+HB_ORM_SCHEMA_FIELD_TYPE+'"=>"'+l_cFieldType+'"'
+            if nvl(l_nFieldLen,0) > 0
+                l_cSourceCodeFields += ',"'+HB_ORM_SCHEMA_FIELD_LENGTH+'"=>'+trans(nvl(l_nFieldLen,0))
             endif
+            if nvl(l_nFieldDec,0) > 0
+                l_cSourceCodeFields += ',"'+HB_ORM_SCHEMA_FIELD_DECIMALS+'"=>'+trans(nvl(l_nFieldDec,0))
+            endif
+            if !empty(l_cFieldDefault)
+                l_cSourceCodeFields += ',"'+HB_ORM_SCHEMA_FIELD_DEFAULT+'"=>"'+strtran(l_cFieldDefault,["],["+'"'+"])+'"'
+            endif
+            if l_lFieldNullable
+                l_cSourceCodeFields += ',"'+HB_ORM_SCHEMA_FIELD_NULLABLE+'"=>.t.'
+            endif
+            if l_lFieldAutoIncrement
+                l_cSourceCodeFields += ',"'+HB_ORM_SCHEMA_FIELD_AUTOINCREMENT+'"=>.t.'
+            endif
+            if l_lFieldArray
+                l_cSourceCodeFields += ',"'+HB_ORM_SCHEMA_FIELD_ARRAY+'"=>.t.'
+            endif
+
             l_cSourceCodeFields += "}"
 
         endfor
@@ -2342,23 +2462,25 @@ else
             
             AEval(hb_HKeys(l_hIndexes),{|l_cIndexName|l_nMaxNameLength:=max(l_nMaxNameLength,len(l_cIndexName))})  //Get length of max IndexName length
 
-            for each l_hIndexDefinition in l_hIndexes
+            for each l_hIndex in l_hIndexes
                 l_nNumberOfIndexes++
 
-                l_cIndexName       := l_hIndexDefinition:__enumKey()
-                l_aIndexDefinition := l_hIndexDefinition:__enumValue()
+                l_cIndexName       := l_hIndex:__enumKey()
+                l_hIndexDefinition := l_hIndex:__enumValue()
 
-                l_cIndexExpression := l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]
+                l_cIndexExpression := l_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]
                 l_cIndexExpression := strtran(l_cIndexExpression,["],[]) // remove PostgreSQL token delimiter. Will be added as needed when creating indexes.
                 l_cIndexExpression := strtran(l_cIndexExpression,['],[]) // remove MySQL token delimiter. Will be added as needed when creating indexes.
                 
                 l_cSourceCodeIndexes += iif(empty(l_cSourceCodeIndexes) , l_cIndent+"{" , ";"+CRLF+l_cIndent+",")
 
                 l_cSourceCodeIndexes += padr('"'+l_cIndexName+'"',l_nMaxNameLength+2)+"=>{"
-                l_cSourceCodeIndexes += "," // HB_ORM_SCHEMA_FIELD_BACKEND_TYPES
-                l_cSourceCodeIndexes += '"'+l_cIndexExpression+'",'+;
-                                    iif(l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_UNIQUE],".t.",".f.")+","+;
-                                    '"'+l_aIndexDefinition[HB_ORM_SCHEMA_INDEX_ALGORITHM]+'"'
+
+                l_cSourceCodeIndexes += '"'+HB_ORM_SCHEMA_INDEX_EXPRESSION+'"=>"'+l_cIndexExpression+'"'
+                if hb_HGetDef(l_hIndexDefinition,HB_ORM_SCHEMA_INDEX_UNIQUE,.f.)
+                    l_cSourceCodeIndexes += ',"'+HB_ORM_SCHEMA_INDEX_UNIQUE+'"=>.t.'
+                endif
+
                 l_cSourceCodeIndexes += "}"
 
             endfor
@@ -2372,7 +2494,7 @@ else
 
         l_cSourceCode += '"'+l_cTableName+'"=>{"Fields"=>;'
         if l_cSourceCodeIndexes == l_cIndent+"NIL"
-            l_cSourceCode += l_cSourceCodeFields+";"+CRLF+l_cIndentHashElement+',"Indexes"=>NIL'+iif(l_lUnlogged,[,"Unlogged"=>.T.],[])
+            l_cSourceCode += l_cSourceCodeFields+";"+CRLF+l_cIndentHashElement+iif(l_lUnlogged,[,"Unlogged"=>.T.],[])
         else
             l_cSourceCode += l_cSourceCodeFields+";"+CRLF+l_cIndentHashElement+',"Indexes"=>;'+CRLF
             l_cSourceCode += l_cSourceCodeIndexes
@@ -2483,8 +2605,8 @@ CREATE EVENT TRIGGER schema_log_ddl_drop_info ON sql_drop        EXECUTE PROCEDU
         l_cSQLCommand := Strtran(l_cSQLCommand,"SchemaCache"   ,"schemacache")
     endif
 
-    if !(::PostgreSQLHBORMSchemaName == "hborm")
-        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
+    if !(::p_HBORMNamespace == "hborm")
+        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
     endif
 
     l_Success := ::SQLExec("EnableSchemaChangeTracking",l_cSQLCommand)
@@ -2510,8 +2632,8 @@ DROP FUNCTION IF EXISTS hborm.schema_log_ddl;
 DROP FUNCTION IF EXISTS hborm.schema_log_ddl_drop;
     ENDTEXT
 
-    if !(::PostgreSQLHBORMSchemaName == "hborm")
-        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
+    if !(::p_HBORMNamespace == "hborm")
+        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
     endif
 
     l_Success := ::SQLExec("DisableSchemaChangeTracking",l_cSQLCommand)
@@ -2533,8 +2655,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_cSQLCommand := [DROP TABLE IF EXISTS hborm.]+::FixCasingOfSchemaCacheTables(["SchemaCacheLog"])+[;]
     
-    if !(::PostgreSQLHBORMSchemaName == "hborm")
-        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
+    if !(::p_HBORMNamespace == "hborm")
+        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
     endif
 
     l_Success := ::SQLExec("RemoveSchemaChangeTracking",l_cSQLCommand)
@@ -2552,25 +2674,25 @@ local l_nSelect := iif(used(),select(),0)
 local l_CacheFullNameField
 local l_CacheFullNameIndex
 local l_lResult := .f.
-local l_HBORMSchemaName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName)
-
-hb_Default(@par_lForce,.f.)
+local l_HBORMNamespaceName
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    l_HBORMNamespaceName := ::FormatIdentifier(::p_HBORMNamespace)
+    hb_Default(@par_lForce,.f.)
     // altd()
 
     if par_lForce
         //Add an Entry in SchemaCacheLog to notify to make a cache
-        l_cSQLCommand := [INSERT INTO ]+l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])+[ (action) VALUES ('No Change');]
+        l_cSQLCommand := [INSERT INTO ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])+[ (action) VALUES ('No Change');]
         ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
     endif
 
     l_cSQLCommand := [SELECT pk,]
     l_cSQLCommand += [       cachedschema::integer]
-    l_cSQLCommand += [ FROM  ]+l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+    l_cSQLCommand += [ FROM  ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
     l_cSQLCommand += [ ORDER BY pk DESC]
     l_cSQLCommand += [ LIMIT 1]
 
@@ -2580,13 +2702,13 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 //hb_orm_SendToDebugView("Will create a new Schema Cache")
 
 
-l_CacheFullNameField := l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
-l_CacheFullNameIndex := l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
+l_CacheFullNameField := l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
+l_CacheFullNameIndex := l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
 
 //====================================
-l_cSQLCommand := [DROP FUNCTION IF EXISTS ]+l_HBORMSchemaName+[.hb_orm_update_schema_cache;]+CRLF
+l_cSQLCommand := [DROP FUNCTION IF EXISTS ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache;]+CRLF
 //====================================
-l_cSQLCommand += [CREATE OR REPLACE FUNCTION ]+l_HBORMSchemaName+[.hb_orm_update_schema_cache(par_cache_full_name_field text,par_cache_full_name_index text) RETURNS boolean]
+l_cSQLCommand += [CREATE OR REPLACE FUNCTION ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache(par_cache_full_name_field text,par_cache_full_name_index text) RETURNS boolean]
 l_cSQLCommand += [ LANGUAGE plpgsql VOLATILE SECURITY DEFINER AS $BODY$]+CRLF
 l_cSQLCommand += [DECLARE]+CRLF
 l_cSQLCommand += [   v_SQLCommand text;]+CRLF
@@ -2599,14 +2721,14 @@ l_cSQLCommand += [EXECUTE format('DROP TABLE IF EXISTS %s', par_cache_full_name_
 l_cSQLCommand += [v_SQLCommand := $$]+CRLF
 
 l_cSQLCommand += [WITH unlogged_tables as ]+CRLF
-l_cSQLCommand += [(SELECT pg_namespace.nspname as schema_name,]+CRLF
+l_cSQLCommand += [(SELECT pg_namespace.nspname as namespace_name,]+CRLF
 l_cSQLCommand += [        pg_class.relname     as table_name]+CRLF
 l_cSQLCommand += [   FROM pg_class]+CRLF
 l_cSQLCommand += [   inner join pg_namespace on pg_namespace.oid = pg_class.relnamespace]+CRLF
 l_cSQLCommand += [   inner join pg_type      on pg_class.reltype = pg_type.oid]+CRLF
 l_cSQLCommand += [   where pg_class.relpersistence = 'u']+CRLF
 l_cSQLCommand += [   and   pg_type.typtype = 'c')]+CRLF
-l_cSQLCommand += [SELECT columns.table_schema::text        AS schema_name,]+CRLF
+l_cSQLCommand += [SELECT columns.table_schema::text        AS namespace_name,]+CRLF
 l_cSQLCommand += [       columns.table_name::text          AS table_name,]+CRLF
 l_cSQLCommand += [	   CASE ]+CRLF
 l_cSQLCommand += [	     WHEN unlogged_tables.table_name IS NULL THEN false]+CRLF
@@ -2637,7 +2759,7 @@ l_cSQLCommand += [ INNER JOIN pg_catalog.pg_statio_all_tables AS st ON columns.t
 l_cSQLCommand += [ INNER JOIN information_schema.tables             ON columns.table_schema = tables.table_schema AND columns.table_name = tables.table_name]+CRLF
 l_cSQLCommand += [ LEFT JOIN pg_catalog.pg_description pgd          ON pgd.objoid=st.relid AND pgd.objsubid=columns.ordinal_position]+CRLF
 l_cSQLCommand += [ LEFT JOIN information_schema.element_types       ON ((columns.table_catalog, columns.table_schema, columns.table_name, 'TABLE', columns.dtd_identifier) = (element_types.object_catalog, element_types.object_schema, element_types.object_name, element_types.object_type, element_types.collection_type_identifier))]+CRLF
-l_cSQLCommand += [ LEFT JOIN unlogged_tables                        ON unlogged_tables.schema_name = tables.table_schema AND unlogged_tables.table_name = tables.table_name]+CRLF
+l_cSQLCommand += [ LEFT JOIN unlogged_tables                        ON unlogged_tables.namespace_name = tables.table_schema AND unlogged_tables.table_name = tables.table_name]+CRLF
 l_cSQLCommand += [ WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))]+CRLF
 l_cSQLCommand += [ AND   tables.table_type = 'BASE TABLE']+CRLF
 l_cSQLCommand += [ ORDER BY tag1,tag2,field_position;]+CRLF
@@ -2649,7 +2771,7 @@ l_cSQLCommand += [EXECUTE v_SQLCommand;]+CRLF
 l_cSQLCommand += [EXECUTE format('DROP TABLE IF EXISTS %s', par_cache_full_name_index);]+CRLF
 // -------------------------------------------------------------------------------------
 l_cSQLCommand += [v_SQLCommand := $$]+CRLF
-l_cSQLCommand += [SELECT pg_indexes.schemaname      AS schema_name,]+CRLF
+l_cSQLCommand += [SELECT pg_indexes.schemaname      AS namespace_name,]+CRLF
 l_cSQLCommand += [       pg_indexes.tablename       AS table_name,]+CRLF
 l_cSQLCommand += [       pg_indexes.indexname       AS index_name,]+CRLF
 l_cSQLCommand += [       pg_indexes.indexdef        AS index_definition,]+CRLF
@@ -2668,16 +2790,16 @@ l_cSQLCommand += [RETURN v_lReturn;]+CRLF
 l_cSQLCommand += [END]+CRLF
 l_cSQLCommand += [$BODY$;]+CRLF
 //====================================
-l_cSQLCommand += [SELECT ]+l_HBORMSchemaName+[.hb_orm_update_schema_cache(']+l_CacheFullNameField+[',']+l_CacheFullNameIndex+[');]+CRLF
+l_cSQLCommand += [SELECT ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache(']+l_CacheFullNameField+[',']+l_CacheFullNameIndex+[');]+CRLF
 //====================================
-l_cSQLCommand += [DROP FUNCTION IF EXISTS ]+l_HBORMSchemaName+[.hb_orm_update_schema_cache;]+CRLF
+l_cSQLCommand += [DROP FUNCTION IF EXISTS ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache;]+CRLF
 //====================================
 
 // -------------------------------------------------------------------------------------
                 if ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
 
 
-                    l_cSQLCommand := [UPDATE ]+l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+                    l_cSQLCommand := [UPDATE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
                     l_cSQLCommand += [ SET cachedschema = TRUE]
                     l_cSQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
 
@@ -2685,7 +2807,7 @@ l_cSQLCommand += [DROP FUNCTION IF EXISTS ]+l_HBORMSchemaName+[.hb_orm_update_sc
                     
                         //Remove any previous cache
                         l_cSQLCommand := [SELECT pk]
-                        l_cSQLCommand += [ FROM ]+l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+                        l_cSQLCommand += [ FROM ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
                         l_cSQLCommand += [ WHERE cachedschema]
                         l_cSQLCommand += [ AND pk < ]+trans(SchemaCacheLogLast->pk)
                         l_cSQLCommand += [ ORDER BY pk]  // Oldest to newest
@@ -2696,14 +2818,14 @@ l_cSQLCommand += [DROP FUNCTION IF EXISTS ]+l_HBORMSchemaName+[.hb_orm_update_sc
                                 if recno() == reccount()  // Since last record is the latest beside the one just added, will exit the scan
                                     exit
                                 endif
-                                l_cSQLCommand := [UPDATE ]+l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+                                l_cSQLCommand := [UPDATE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
                                 l_cSQLCommand += [ SET cachedschema = FALSE]
                                 l_cSQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
                                 
                                 if ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
-                                    l_cSQLCommand := [DROP TABLE ]+l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
+                                    l_cSQLCommand := [DROP TABLE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
                                     ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
-                                    l_cSQLCommand := [DROP TABLE ]+l_HBORMSchemaName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
+                                    l_cSQLCommand := [DROP TABLE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
                                     ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
                                 endif
                             endscan
@@ -2742,18 +2864,39 @@ return l_lResult
 method FormatIdentifier(par_cName) class hb_orm_SQLConnect
 local l_cFormattedIdentifier
 local l_nPos
-local l_cSchemaName,l_cTableName
+local l_cNamespaceName,l_cTableName
+
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    // // Since a namespace name could be a prefix to the table name, detect its presence.
+    // l_nPos := at(".",par_cName)
+    // if l_nPos == 0  // no namespace was specified
+    //     if ::MySQLEngineConvertIdentifierToLowerCase
+    //         l_cFormattedIdentifier := "`"+lower(par_cName)+"`"
+    //     else
+    //         l_cFormattedIdentifier := "`"+par_cName+"`"
+    //     endif
+    // else
+    //     l_cNamespaceName := left(par_cName,l_nPos-1)
+    //     l_cTableName  := substr(par_cName,l_nPos+1)
+
+    //     if ::MySQLEngineConvertIdentifierToLowerCase
+    //         l_cFormattedIdentifier := "`"+lower(l_cNamespaceName)+"."+lower(l_cTableName)+"`"
+    //     else
+    //         l_cFormattedIdentifier := "`"+l_cNamespaceName+"."+l_cTableName+"`"
+    //     endif
+    // endif
+    //In MySQL there is no need to separate the Namespace name from the Table name
     if ::MySQLEngineConvertIdentifierToLowerCase
         l_cFormattedIdentifier := "`"+lower(par_cName)+"`"
     else
         l_cFormattedIdentifier := "`"+par_cName+"`"
     endif
+
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    // Since a Schema name could be a prefix to the table name, detect its presence.
+    // Since a namespace name could be a prefix to the table name, detect its presence.
     l_nPos := at(".",par_cName)
-    if l_nPos == 0  // no Schema name was specified
+    if l_nPos == 0  // no namespace name was specified
         do case
         case ::PostgreSQLIdentifierCasing == 0  // Case Insensitive (displayed as lower case) except reserved words always lower case
             if ::IsReservedWord(par_cName)
@@ -2769,15 +2912,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cFormattedIdentifier := par_cName
         endcase
     else
-        l_cSchemaName := left(par_cName,l_nPos-1)
+        l_cNamespaceName := left(par_cName,l_nPos-1)
         l_cTableName  := substr(par_cName,l_nPos+1)
 
         do case
         case ::PostgreSQLIdentifierCasing == 0  // Case Insensitive (displayed as lower case) except reserved words always lower case
-            if ::IsReservedWord(l_cSchemaName)
-                l_cFormattedIdentifier := '"'+lower(l_cSchemaName)+'".'
+            if ::IsReservedWord(l_cNamespaceName)
+                l_cFormattedIdentifier := '"'+lower(l_cNamespaceName)+'".'
             else
-                l_cFormattedIdentifier := l_cSchemaName+"."
+                l_cFormattedIdentifier := l_cNamespaceName+"."
             endif
             if ::IsReservedWord(l_cTableName)
                 l_cFormattedIdentifier += '"'+lower(l_cTableName)+'"'
@@ -2785,90 +2928,126 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_cFormattedIdentifier += l_cTableName
             endif
         case ::PostgreSQLIdentifierCasing == 1
-            l_cFormattedIdentifier := '"'+l_cSchemaName+'"."'+l_cTableName+'"'
+            l_cFormattedIdentifier := '"'+l_cNamespaceName+'"."'+l_cTableName+'"'
         case ::PostgreSQLIdentifierCasing == 2  // convert to lower case
-            l_cFormattedIdentifier := '"'+lower(l_cSchemaName)+'"."'+lower(l_cTableName)+'"'
+            l_cFormattedIdentifier := '"'+lower(l_cNamespaceName)+'"."'+lower(l_cTableName)+'"'
         otherwise  // Should not happen
-            l_cFormattedIdentifier := '"'+l_cSchemaName+'"."'+l_cTableName+'"'
+            l_cFormattedIdentifier := '"'+l_cNamespaceName+'"."'+l_cTableName+'"'
         endcase
 
     endif
+
 endcase
 
 return l_cFormattedIdentifier
 //-----------------------------------------------------------------------------------------------------------------
-method CaseTableName(par_cSchemaAndTableName) class hb_orm_SQLConnect
-local l_cSchemaAndTableName := hb_StrReplace(par_cSchemaAndTableName,{' '=>'','"'=>'',"'"=>""})
+method NormalizeTableNameInternal(par_cNamespaceAndTableName) class hb_orm_SQLConnect
+local l_cNamespaceAndTableName := hb_StrReplace(par_cNamespaceAndTableName,{' '=>'','"'=>'',"'"=>""})
+local l_nPos
+
+l_nPos := at(".",l_cNamespaceAndTableName)
+if empty(l_nPos)
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        l_cNamespaceAndTableName := "public."+l_cNamespaceAndTableName
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        l_cNamespaceAndTableName := ::GetCurrentNamespaceName()+"."+l_cNamespaceAndTableName
+    endcase
+endif
+
+return l_cNamespaceAndTableName
+//-----------------------------------------------------------------------------------------------------------------
+method NormalizeTableNamePhysical(par_cNamespaceAndTableName) class hb_orm_SQLConnect
+local l_cNamespaceAndTableName := hb_StrReplace(par_cNamespaceAndTableName,{' '=>'','"'=>'',"'"=>""})
+
+if ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    if left(l_cNamespaceAndTableName,len("public.")) == "public."
+        l_cNamespaceAndTableName := substr(l_cNamespaceAndTableName,len("public.")+1)
+    endif
+endif
+
+return l_cNamespaceAndTableName
+//-----------------------------------------------------------------------------------------------------------------
+method CaseTableName(par_cNamespaceAndTableName) class hb_orm_SQLConnect
+local l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
 local l_nHashPos
+
 //Fix The Casing of Table and Field based on he actual on file tables.
-l_nHashPos := hb_hPos(::p_Schema,l_cSchemaAndTableName)
+l_nHashPos := hb_hPos(::p_TableSchema,l_cNamespaceAndTableName)
 if l_nHashPos > 0
-    l_cSchemaAndTableName := hb_hKeyAt(::p_Schema,l_nHashPos) 
+    l_cNamespaceAndTableName := hb_hKeyAt(::p_TableSchema,l_nHashPos) 
 else
     // Report Failed to find Table by returning empty.
-    l_cSchemaAndTableName := ""
+    l_cNamespaceAndTableName := ""
 endif
-return l_cSchemaAndTableName
+return l_cNamespaceAndTableName
 //-----------------------------------------------------------------------------------------------------------------
-method CaseFieldName(par_cSchemaAndTableName,par_cFieldName) class hb_orm_SQLConnect
-// local l_cSchemaAndTableName := allt(par_cSchemaAndTableName)
-local l_cSchemaAndTableName := hb_StrReplace(par_cSchemaAndTableName,{' '=>'','"'=>'',"'"=>""})
-local l_cFieldName          := allt(par_cFieldName)
+method CaseFieldName(par_cNamespaceAndTableName,par_cFieldName) class hb_orm_SQLConnect
+local l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
+local l_cFieldName             := allt(par_cFieldName)
 local l_nHashPos
-l_nHashPos := hb_hPos(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+l_nHashPos := hb_hPos(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
 if l_nHashPos > 0
-    l_cFieldName := hb_hKeyAt(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+    l_cFieldName := hb_hKeyAt(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
 else
     // Report Failed to find Field by returning empty.
     l_cFieldName := ""
 endif
 return l_cFieldName
-
-
-//12345
 //-----------------------------------------------------------------------------------------------------------------
-method GetFieldInfo(par_cSchemaAndTableName,par_cFieldName) class hb_orm_SQLConnect    // Returns Array {SchemaName,TableName,FieldName,FieldType,FieldLen,FieldDec,FieldAllowNull,FieldAutoIncrement,FieldArray,FieldDefault}
-local l_aResult := {}
+method GetFieldInfo(par_cNamespaceAndTableName,par_cFieldName) class hb_orm_SQLConnect
+// Returns Hash Array {"NameSpace"=><NamespaceName>,
+//                     "TableName"=><TableName>,
+//                     "FieldName"=><FieldName>,
+//                     "FieldType"=><FieldType>,
+//                     "FieldLen"=><FieldLen>,
+//                     "FieldDec"=><FieldDec>,
+//                     "FieldNullable"=><FieldNullable>,
+//                     "FieldAutoIncrement"=><FieldAutoIncrement>,
+//                     "FieldArray"=><FieldArray>,
+//                     "FieldDefault"=><FieldDefault>}
+local l_hResult := {=>}
 
-local l_cSchemaAndTableName := hb_StrReplace(par_cSchemaAndTableName,{' '=>'','"'=>'',"'"=>""})
+local l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
 local l_cFieldName := allt(par_cFieldName)
-local l_cSchemaName
+local l_cNamespaceName
 local l_cTableName
-local l_aFieldInfo
+local l_hFieldInfo
 local l_nHashPos
 local l_nPos
 
-l_nHashPos := hb_hPos(::p_Schema,l_cSchemaAndTableName)
+l_nHashPos := hb_hPos(::p_TableSchema,l_cNamespaceAndTableName)
 if l_nHashPos > 0
-    l_cSchemaAndTableName := hb_hKeyAt(::p_Schema,l_nHashPos)   // To get the proper casing
-    l_nHashPos := hb_hPos(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+    l_cNamespaceAndTableName := hb_hKeyAt(::p_TableSchema,l_nHashPos)   // To get the proper casing
+    l_nHashPos := hb_hPos(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
     if l_nHashPos > 0
-        l_cFieldName  := hb_hKeyAt(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
-        l_aFieldInfo := hb_HValueAt(::p_Schema[l_cSchemaAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+        l_cFieldName  := hb_hKeyAt(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+        l_hFieldInfo := hb_HValueAt(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
 
-        l_nPos := at(".",l_cSchemaAndTableName)
+        l_nPos := at(".",l_cNamespaceAndTableName)
         if empty(l_nPos)
-            l_cSchemaName := ""
-            l_cTableName  := l_cSchemaAndTableName
+            l_cNamespaceName := ""
+            l_cTableName  := l_cNamespaceAndTableName
         else
-            l_cSchemaName := left(l_cSchemaAndTableName,l_nPos-1)
-            l_cTableName  := substr(l_cSchemaAndTableName,l_nPos+1)
+            l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
+            l_cTableName  := substr(l_cNamespaceAndTableName,l_nPos+1)
         endif
 
-        l_aResult := {l_cSchemaName,;
-                      l_cTableName,;
-                      l_cFieldName,;
-                      l_aFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],;
-                      l_aFieldInfo[HB_ORM_SCHEMA_FIELD_LENGTH],;
-                      l_aFieldInfo[HB_ORM_SCHEMA_FIELD_DECIMALS],;
-                      ("N" $ l_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]),;
-                      ("+" $ l_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]),;
-                      ("A" $ l_aFieldInfo[HB_ORM_SCHEMA_FIELD_ATTRIBUTES]),;
-                      iif(len(l_aFieldInfo) < HB_ORM_SCHEMA_FIELD_DEFAULT, NIL, l_aFieldInfo[HB_ORM_SCHEMA_FIELD_DEFAULT])}
+        l_hResult := {HB_ORM_GETFIELDINFO_NAMESPACE_NAME=>l_cNamespaceName,;
+                      HB_ORM_GETFIELDINFO_TABLENAME=>l_cTableName,;
+                      HB_ORM_GETFIELDINFO_FIELDNAME=>l_cFieldName,;
+                      HB_ORM_GETFIELDINFO_FIELDTYPE=>l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],;
+                      HB_ORM_GETFIELDINFO_FIELDLENGTH=>hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0),;
+                      HB_ORM_GETFIELDINFO_FIELDDECIMALS=>hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0),;
+                      HB_ORM_GETFIELDINFO_FIELDNULLABLE=>hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.),;
+                      HB_ORM_GETFIELDINFO_FIELDAUTOINCREMENT=>hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.),;
+                      HB_ORM_GETFIELDINFO_FIELDARRAY=>hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_ARRAY,.f.),;
+                      HB_ORM_GETFIELDINFO_FIELDDEFAULT=>hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_DEFAULT,"")}
+
     endif
 endif
 
-return l_aResult
+return l_hResult
 //-----------------------------------------------------------------------------------------------------------------
 // Following used to handle index expressions
 method FixCasingInFieldExpression(par_hFields,par_cExpression) class hb_orm_SQLConnect
@@ -2950,59 +3129,68 @@ endif
 
 return l_cResult
 //-----------------------------------------------------------------------------------------------------------------
-method DeleteTable(par_cSchemaAndTableName) class hb_orm_SQLConnect
+method DeleteTable(par_cNamespaceAndTableName) class hb_orm_SQLConnect
 local l_lResult := .t.
 local l_cSQLCommand
 local l_cLastError
-local l_cSchemaAndTableNameFixedCase
+local l_cNamespaceAndTableName          := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
+local l_cNamespaceAndTableNameFixedCase := ::CaseTableName(l_cNamespaceAndTableName)
 
-l_cSchemaAndTableNameFixedCase := ::CaseTableName(par_cSchemaAndTableName)
-if empty(l_cSchemaAndTableNameFixedCase)
-    hb_orm_SendToDebugView([Unable to delete field(s) in unknown table: "]+par_cSchemaAndTableName+["])
+if empty(l_cNamespaceAndTableNameFixedCase)
+    hb_orm_SendToDebugView([Unable to delete field(s) in unknown table: "]+par_cNamespaceAndTableName+["])
 else
-    l_cSQLCommand := [DROP TABLE IF EXISTS ]+::FormatIdentifier(l_cSchemaAndTableNameFixedCase)+[;]
+    l_cSQLCommand := [DROP TABLE IF EXISTS ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableNameFixedCase))+[;]
     if ::SQLExec("DeleteTable",l_cSQLCommand)
-        hb_HDel(::p_Schema,l_cSchemaAndTableNameFixedCase)
+        hb_HDel(::p_TableSchema,l_cNamespaceAndTableNameFixedCase)
     else
         l_lResult := .f.
         l_cLastError := ::GetSQLExecErrorMessage()
-        hb_orm_SendToDebugView([Failed Delete Table "]+par_cSchemaAndTableName+[".   Error Text=]+l_cLastError)
+        hb_orm_SendToDebugView([Failed Delete Table "]+par_cNamespaceAndTableName+[".   Error Text=]+l_cLastError)
     endif
 endif
 return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
-method DeleteIndex(par_cSchemaAndTableName,par_cIndexName) class hb_orm_SQLConnect
+method DeleteIndex(par_cNamespaceAndTableName,par_cIndexName) class hb_orm_SQLConnect
 local l_lResult := .t.
-local l_cSchemaAndTableNameFixedCase
+local l_cNamespaceAndTableName          := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
+local l_cNamespaceAndTableNameFixedCase := ::CaseTableName(l_cNamespaceAndTableName)
 local l_cLastError
 local l_cSQLCommand := ""
 local l_nHashPos
+local l_nPos
+local l_cNamespaceName
+local l_cTableName
 
-l_cSchemaAndTableNameFixedCase := ::CaseTableName(par_cSchemaAndTableName)
-if empty(l_cSchemaAndTableNameFixedCase)
-    hb_orm_SendToDebugView([Unable to delete index(s) in unknown table: "]+par_cSchemaAndTableName+["])
+if empty(l_cNamespaceAndTableNameFixedCase)
+    hb_orm_SendToDebugView([Unable to delete index(s) in unknown table: "]+par_cNamespaceAndTableName+["])
 
 else
     //Test if the index is present. Only hb_orm indexes can be removed.
-    l_nHashPos := hb_hPos(::p_Schema[par_cSchemaAndTableName][HB_ORM_SCHEMA_INDEX],lower(par_cIndexName))
+    l_nHashPos := hb_hPos(::p_TableSchema[par_cNamespaceAndTableName][HB_ORM_SCHEMA_INDEX],lower(par_cIndexName))
     if l_nHashPos > 0
         
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-            l_cSQLCommand  := [DROP INDEX `]+strtran(lower(par_cSchemaAndTableName),".","_")+"_"+lower(par_cIndexName)+"_idx"+[` ON ]+::FormatIdentifier(l_cSchemaAndTableNameFixedCase)+[;]
+            // l_cSQLCommand  := [DROP INDEX `]+strtran(lower(par_cNamespaceAndTableName),".","_")+"_"+lower(par_cIndexName)+"_idx"+[` ON ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableNameFixedCase))+[;]
+            l_cSQLCommand := [DROP INDEX `]+lower(par_cIndexName)+"_idx"+[` ON ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableNameFixedCase))+[;]
 
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-            l_cSQLCommand  := [DROP INDEX IF EXISTS ]+strtran(lower(par_cSchemaAndTableName),".","_")+"_"+lower(par_cIndexName)+"_idx"+[ CASCADE;]
+            l_nPos           := at(".",l_cNamespaceAndTableNameFixedCase)   // Will always be set, due to calling NormalizeTableNameInternal() before
+            l_cNamespaceName := left(l_cNamespaceAndTableNameFixedCase,l_nPos-1)
+            l_cTableName     := substr(l_cNamespaceAndTableNameFixedCase,l_nPos+1)
+
+            // l_cSQLCommand  := [DROP INDEX IF EXISTS ]+strtran(lower(par_cNamespaceAndTableName),".","_")+"_"+lower(par_cIndexName)+"_idx"+[ CASCADE;]
+            l_cSQLCommand := [DROP INDEX IF EXISTS ]+::FormatIdentifier(lower(l_cNamespaceName)+"."+lower(l_cTableName)+"_"+lower(par_cIndexName)+"_idx")+[ CASCADE;]
 
         endcase
 
         if !empty(l_cSQLCommand)
             if ::SQLExec("DeleteIndex",l_cSQLCommand)
-                hb_HDel(::p_Schema[par_cSchemaAndTableName][HB_ORM_SCHEMA_INDEX],lower(par_cIndexName))
+                hb_HDel(::p_TableSchema[par_cNamespaceAndTableName][HB_ORM_SCHEMA_INDEX],lower(par_cIndexName))
             else
                 l_lResult := .f.
                 l_cLastError := ::GetSQLExecErrorMessage()
-                hb_orm_SendToDebugView([Failed Delete index "]+par_cIndexName+[" for table "]+par_cSchemaAndTableName+[".   Error Text=]+l_cLastError)
+                hb_orm_SendToDebugView([Failed Delete index "]+par_cIndexName+[" for table "]+par_cNamespaceAndTableName+[".   Error Text=]+l_cLastError)
             endif
         endif
 
@@ -3012,9 +3200,10 @@ endif
 
 return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
-method DeleteField(par_cSchemaAndTableName,par_xFieldNames) class hb_orm_SQLConnect
+method DeleteField(par_cNamespaceAndTableName,par_xFieldNames) class hb_orm_SQLConnect
 local l_lResult := .t.
-local l_cSchemaAndTableNameFixedCase
+local l_cNamespaceAndTableName          := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
+local l_cNamespaceAndTableNameFixedCase := ::CaseTableName(l_cNamespaceAndTableName)
 local l_cLastError
 local l_aFieldNames,l_cFieldName,l_cFieldNameFixedCase
 local l_cSQLCommand
@@ -3023,9 +3212,8 @@ local l_SQLIfExist
 
 // par_xFieldNames can be an array of field names or a single field name
 
-l_cSchemaAndTableNameFixedCase := ::CaseTableName(par_cSchemaAndTableName)
-if empty(l_cSchemaAndTableNameFixedCase)
-    hb_orm_SendToDebugView([Unable to delete field(s) in unknown table: "]+par_cSchemaAndTableName+["])
+if empty(l_cNamespaceAndTableNameFixedCase)
+    hb_orm_SendToDebugView([Unable to delete field(s) in unknown table: "]+par_cNamespaceAndTableName+["])
 
 else
     if ValType(par_xFieldNames) == "A"
@@ -3038,7 +3226,7 @@ else
 
     if len(l_aFieldNames) > 0
 
-        l_SQLAlterTable := [ALTER TABLE ]+::FormatIdentifier(l_cSchemaAndTableNameFixedCase)
+        l_SQLAlterTable := [ALTER TABLE ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableNameFixedCase))
 
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -3049,9 +3237,9 @@ else
 
         l_cSQLCommand := []
         for each l_cFieldName in l_aFieldNames
-            l_cFieldNameFixedCase := ::CaseFieldName(l_cSchemaAndTableNameFixedCase,l_cFieldName)
+            l_cFieldNameFixedCase := ::CaseFieldName(l_cNamespaceAndTableNameFixedCase,l_cFieldName)
             if empty(l_cFieldNameFixedCase)
-                hb_orm_SendToDebugView([Unable to delete unknown field: "]+par_cSchemaAndTableName+[.]+l_cFieldName+["])
+                hb_orm_SendToDebugView([Unable to delete unknown field: "]+par_cNamespaceAndTableName+[.]+l_cFieldName+["])
             else
                 if !empty(l_cSQLCommand)
                     l_cSQLCommand += [,]
@@ -3064,15 +3252,15 @@ else
             l_cSQLCommand := l_SQLAlterTable + l_cSQLCommand + [;]
             if ::SQLExec("DeleteField",l_cSQLCommand)
                 for each l_cFieldName in l_aFieldNames
-                    l_cFieldNameFixedCase := ::CaseFieldName(l_cSchemaAndTableNameFixedCase,l_cFieldName)
+                    l_cFieldNameFixedCase := ::CaseFieldName(l_cNamespaceAndTableNameFixedCase,l_cFieldName)
                     if !empty(l_cFieldNameFixedCase)
-                        hb_HDel(::p_Schema[l_cSchemaAndTableNameFixedCase][HB_ORM_SCHEMA_FIELD],l_cFieldNameFixedCase)
+                        hb_HDel(::p_TableSchema[l_cNamespaceAndTableNameFixedCase][HB_ORM_SCHEMA_FIELD],l_cFieldNameFixedCase)
                     endif
                 endfor
             else
                 l_lResult := .f.
                 l_cLastError := ::GetSQLExecErrorMessage()
-                hb_orm_SendToDebugView([Failed Delete Field(s) in "]+par_cSchemaAndTableName+[".   Error Text=]+l_cLastError)
+                hb_orm_SendToDebugView([Failed Delete Field(s) in "]+par_cNamespaceAndTableName+[".   Error Text=]+l_cLastError)
             endif
         endif
 
@@ -3082,74 +3270,57 @@ endif
 
 return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
-method TableExists(par_cSchemaAndTableName) class hb_orm_SQLConnect  // Is schema and table name case insensitive
+method TableExists(par_cNamespaceAndTableName) class hb_orm_SQLConnect  // Is namespace and table name case insensitive
 local l_lResult
 local l_cSQLCommand
-local l_nPos,l_cSchemaName,l_cTableName
-
-l_nPos := at(".",par_cSchemaAndTableName)
-if l_nPos == 0
-    do case
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_cSchemaName := ""
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_cSchemaName := ::GetCurrentSchemaName()   // To search in the current Schema
-    endcase
-    l_cTableName  := par_cSchemaAndTableName
-else
-    l_cSchemaName := left(par_cSchemaAndTableName,l_nPos-1)
-    l_cTableName  := substr(par_cSchemaAndTableName,l_nPos+1)
-endif
+local l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
+local l_nPos,l_cNamespaceName,l_cTableName
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cSQLCommand  := [SELECT count(*) as count FROM information_schema.tables WHERE lower(table_schema) = ']+lower(::GetDatabase())+[' AND lower(table_name) = ']+lower(l_cTableName)+[';]
+    l_cSQLCommand  := [SELECT count(*) as count FROM information_schema.tables WHERE lower(table_schema) = ']+lower(::GetDatabase())+[' AND lower(table_name) = ']+lower(::NormalizeTableNamePhysical(l_cNamespaceAndTableName))+[';]
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cSQLCommand  := [SELECT count(*) AS count FROM information_schema.tables WHERE lower(table_schema) = ']+lower(l_cSchemaName)  +[' AND lower(table_name) = ']+lower(l_cTableName)+[';]
+    l_nPos           := at(".",l_cNamespaceAndTableName)   // Will always be set, due to calling NormalizeTableNameInternal() before
+    l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
+    l_cTableName     := substr(l_cNamespaceAndTableName,l_nPos+1)
+
+    l_cSQLCommand  := [SELECT count(*) AS count FROM information_schema.tables WHERE lower(table_schema) = ']+lower(l_cNamespaceName)  +[' AND lower(table_name) = ']+lower(l_cTableName)+[';]
 endcase
 
 if ::SQLExec("TableExists",l_cSQLCommand,"TableExistsResult")
     l_lResult := (TableExistsResult->count > 0)
 else
     l_lResult := .f.
-    hb_orm_SendToDebugView([Failed TableExists "]+par_cSchemaAndTableName+[".   Error Text=]+::GetSQLExecErrorMessage())
+    hb_orm_SendToDebugView([Failed TableExists "]+par_cNamespaceAndTableName+[".   Error Text=]+::GetSQLExecErrorMessage())
 endif
 
 CloseAlias("TableExistsResult")
 
 return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
-method FieldExists(par_cSchemaAndTableName,par_cFieldName) class hb_orm_SQLConnect
+method FieldExists(par_cNamespaceAndTableName,par_cFieldName) class hb_orm_SQLConnect
 local l_lResult
 local l_cSQLCommand
-local l_nPos,l_cSchemaName,l_cTableName
-
-l_nPos := at(".",par_cSchemaAndTableName)
-if l_nPos == 0
-    do case
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        l_cSchemaName := ""
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_cSchemaName := ::GetCurrentSchemaName()   // To search in the current Schema
-    endcase
-    l_cTableName  := par_cSchemaAndTableName
-else
-    l_cSchemaName := left(par_cSchemaAndTableName,l_nPos-1)
-    l_cTableName  := substr(par_cSchemaAndTableName,l_nPos+1)
-endif
+local l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
+local l_nPos,l_cNamespaceName,l_cTableName
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cSQLCommand  := [SELECT count(*) as count FROM information_schema.columns WHERE lower(table_schema) = ']+lower(::GetDatabase())+[' AND lower(table_name) = ']+lower(l_cTableName)+[' AND lower(column_name) = ']+lower(par_cFieldName)+[';]
+    l_cSQLCommand  := [SELECT count(*) as count FROM information_schema.columns WHERE lower(table_schema) = ']+lower(::GetDatabase())+[' AND lower(table_name) = ']+lower(::NormalizeTableNamePhysical(l_cNamespaceAndTableName))+[' AND lower(column_name) = ']+lower(par_cFieldName)+[';]
+
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cSQLCommand  := [SELECT count(*) AS count FROM information_schema.columns WHERE lower(table_schema) = ']+lower(l_cSchemaName)  +[' AND lower(table_name) = ']+lower(l_cTableName)+[' AND lower(column_name) = ']+lower(par_cFieldName)+[';]
+    l_nPos           := at(".",l_cNamespaceAndTableName)
+    l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
+    l_cTableName     := substr(l_cNamespaceAndTableName,l_nPos+1)
+
+    l_cSQLCommand  := [SELECT count(*) AS count FROM information_schema.columns WHERE lower(table_schema) = ']+lower(l_cNamespaceName)  +[' AND lower(table_name) = ']+lower(l_cTableName)+[' AND lower(column_name) = ']+lower(par_cFieldName)+[';]
 endcase
 
 if ::SQLExec("FieldExists",l_cSQLCommand,"FieldExistsResult")
     l_lResult := (FieldExistsResult->count > 0)
 else
     l_lResult := .f.
-    hb_orm_SendToDebugView([Failed TableExists "]+par_cSchemaAndTableName+[".   Error Text=]+::GetSQLExecErrorMessage())
+    hb_orm_SendToDebugView([Failed TableExists "]+par_cNamespaceAndTableName+[".   Error Text=]+::GetSQLExecErrorMessage())
 endif
 
 CloseAlias("FieldExistsResult")
@@ -3159,86 +3330,92 @@ return l_lResult
 method UpdateORMSupportSchema() class hb_orm_SQLConnect
 local l_lResult := .f.   // return .t. if overall schema changed
 local l_cSQLScript,l_ErrorInfo   // can be removed later, only used during code testing
-local l_PreviousSchemaName
-local l_Schema := ;
-    {"SchemaVersion"=>{"Fields"=>;
-      {"pk"     =>{, "I",  0,  0,"+"};
-      ,"name"   =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     ,"CV",254,  0,},;
-                   {HB_ORM_SCHEMA_POSTGRESQL_OBJECT, "M",  0,  0,}};
-      ,"version"=>{, "I",  0,  0,}};
-      ,"Indexes"=>NIL};
-     ,"SchemaAutoTrimLog"=>{"Fields"=>;
-      {"pk"           =>{                                , "IB",  0,  0,"+"};
-      ,"eventid"      =>{                                , "CV",HB_ORM_MAX_EVENTID_SIZE,0,"N"};
-      ,"datetime"     =>{                                ,"DTZ",  0,  0,};
-      ,"ip"           =>{                                , "CV", 43,  0,};
-      ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,};   /*{{Note: This field will only exists for PostgreSQL databases.}}*/
-      ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,},;  /*{{Note: Same field defined differently depending of backend server.}}*/
-                         {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,}};
-      ,"recordpk"     =>{                                , "IB",  0,  0,};
-      ,"fieldname"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,},;
-                         {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,}};
-      ,"fieldtype"    =>{                                ,  "C",  3,  0,};
-      ,"fieldlen"     =>{                                ,  "I",  0,  0,};
-      ,"fieldvaluer"  =>{                                ,  "R",  0,  0,"N"};
-      ,"fieldvaluem"  =>{                                ,  "M",  0,  0,"N"}};
-      ,"Indexes"=>NIL};
-     ,"SchemaAndDataErrorLog"=>{"Fields"=>;   // _M_ Maybe add a user defined "errornumber" to make easier to search.
-      {"pk"           =>{                                , "IB",  0,  0,"+"};
-      ,"eventid"      =>{                                , "CV",HB_ORM_MAX_EVENTID_SIZE,0,"N"};
-      ,"datetime"     =>{                                ,"DTZ",  0,  0,};
-      ,"ip"           =>{                                , "CV", 43,  0,};
-      ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,"N"};
-      ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,"N"},;
-                         {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,"N"}};
-      ,"recordpk"     =>{                                , "IB",  0,  0,"N"};
-      ,"errormessage" =>{                                ,  "M",  0,  0,"N"};
-      ,"appstack"     =>{                                ,  "M",  0,  0,"N"}};
-      ,"Indexes"=>NIL};
-     ,"SchemaTableNumber"=>{"Fields"=>;   // Used to get a single number for a table name, to be used with pg_advisory_lock()
-      {"pk"           =>{                                ,  "I",  0,  0,"+"};   // Will never have more than 2**32 tables.
-      ,"schemaname"   =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT ,  "M",  0,  0,};
-      ,"tablename"    =>{{HB_ORM_SCHEMA_MYSQL_OBJECT     , "CV",254,  0,},;
-                         {HB_ORM_SCHEMA_POSTGRESQL_OBJECT,  "M",  0,  0,}}};
-      ,"Indexes"=>;
-      {"schemaname" =>{HB_ORM_SCHEMA_POSTGRESQL_OBJECT,"schemaname",.f.,"BTREE"};   /*{{Note: This index will only exists for PostgreSQL databases.}}*/
-      ,"tablename"  =>{                               ,"tablename" ,.f.,"BTREE"}}};
+local l_PreviousNamespaceName
+local l_Schema
+
+l_Schema := ;
+    {"hborm.SchemaAndDataErrorLog"=>{"Fields"=>;
+        {"pk"            =>{"Type"=>"IB","AutoIncrement"=>.t.};
+        ,"eventid"       =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
+        ,"datetime"      =>{"Type"=>"DTZ"};
+        ,"ip"            =>{"Type"=>"CV","Length"=>43};
+        ,"namespacename" =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
+        ,"tablename"     =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
+        ,"recordpk"      =>{"Type"=>"IB","Nullable"=>.t.};
+        ,"errormessage"  =>{"Type"=>"M","Nullable"=>.t.};
+        ,"appstack"      =>{"Type"=>"M","Nullable"=>.t.}};
+                                };
+    ,"hborm.SchemaAutoTrimLog"=>{"Fields"=>;
+        {"pk"            =>{"Type"=>"IB","AutoIncrement"=>.t.};
+        ,"eventid"       =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
+        ,"datetime"      =>{"Type"=>"DTZ"};
+        ,"ip"            =>{"Type"=>"CV","Length"=>43};
+        ,"namespacename" =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
+        ,"tablename"     =>{"Type"=>"CV","Length"=>254};
+        ,"recordpk"      =>{"Type"=>"IB"};
+        ,"fieldname"     =>{"Type"=>"CV","Length"=>254};
+        ,"fieldtype"     =>{"Type"=>"C","Length"=>3};
+        ,"fieldlen"      =>{"Type"=>"I"};
+        ,"fieldvaluer"   =>{"Type"=>"R","Nullable"=>.t.};
+        ,"fieldvaluem"   =>{"Type"=>"M","Nullable"=>.t.}};
+                            };
+    ,"hborm.NamespaceTableNumber"=>{"Fields"=>;
+        {"pk"           =>{"Type"=>"I","AutoIncrement"=>.t.};   //Will never have more than 2**32 tables.
+        ,"namespacename"=>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
+        ,"tablename"    =>{"Type"=>"CV","Length"=>254}};
+                            ,"Indexes"=>;
+        {"namespacename"=>{"Expression"=>"namespacename"};
+        ,"tablename"    =>{"Expression"=>"tablename"}}};
+    ,"hborm.SchemaVersion"=>{"Fields"=>;
+        {"pk"     =>{"Type"=>"I","AutoIncrement"=>.t.};
+        ,"name"   =>{"Type"=>"CV","Length"=>254};
+        ,"version"=>{"Type"=>"I"}};
+                        };
     }
 
-l_PreviousSchemaName := ::SetCurrentSchemaName(::PostgreSQLHBORMSchemaName)
+l_PreviousNamespaceName := ::SetCurrentNamespaceName(::p_HBORMNamespace)
 
 if el_AUnpack(::MigrateSchema(l_Schema),,@l_cSQLScript,@l_ErrorInfo) <> 0
     // altd()
     l_lResult = .t.  // Will assume the schema change worked.
 endif
 
-::SetCurrentSchemaName(l_PreviousSchemaName)
+::SetCurrentNamespaceName(l_PreviousNamespaceName)
 
 return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
-method UpdateORMSchemaTableNumber() class hb_orm_SQLConnect
+method UpdateORMNamespaceTableNumber() class hb_orm_SQLConnect
 local l_cSQLCommand
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     TEXT TO VAR l_cSQLCommand
-INSERT INTO `SchemaTableNumber` (tablename)
-WITH
-ListOfTables AS (
+INSERT INTO `hborm.NamespaceTableNumber` (tablename)
+ WITH
+ ListOfTables AS (
     SELECT DISTINCT
            tables.table_name   as tablename
     FROM information_schema.tables
     WHERE tables.table_schema = '-DataBase-'
     AND   NOT (lower(left(tables.table_name,11)) = 'schemacache')
 )
-SELECT AllTables.tablename
+ SELECT AllTables.tablename
  FROM ListOfTables AS AllTables
- LEFT OUTER JOIN `SchemaTableNumber` AS TablesOnFile ON AllTables.tablename = TablesOnFile.tablename
+ LEFT OUTER JOIN `hborm.NamespaceTableNumber` AS TablesOnFile ON AllTables.tablename = TablesOnFile.tablename
  WHERE TablesOnFile.tablename IS NULL
     ENDTEXT
 
-    if ::MySQLEngineConvertIdentifierToLowerCase == .t.
-        l_cSQLCommand := strtran(l_cSQLCommand,"SchemaTableNumber","schematablenumber")
+    if ::MySQLEngineConvertIdentifierToLowerCase
+        l_cSQLCommand := strtran(l_cSQLCommand,"NamespaceTableNumber","NamespaceTableNumber")
+    endif
+
+    if !(::p_HBORMNamespace == "hborm")
+        // l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
+        if ::MySQLEngineConvertIdentifierToLowerCase
+            l_cSQLCommand := strtran(l_cSQLCommand,"hborm",lower(::p_HBORMNamespace))
+        else
+            l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::p_HBORMNamespace)
+        endif
     endif
 
     l_cSQLCommand := strtran(l_cSQLCommand,"-DataBase-",::GetDatabase())
@@ -3248,46 +3425,46 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 WITH
  ListOfTables AS (
     SELECT DISTINCT
-           columns.table_schema::text as schemaname,
+           columns.table_schema::text as namespacename,
            columns.table_name::text   as tablename
     FROM information_schema.columns
     INNER JOIN information_schema.tables ON columns.table_schema = tables.table_schema AND columns.table_name = tables.table_name
     WHERE NOT (lower(left(columns.table_name,11)) = 'schemacache' OR lower(columns.table_schema) in ('information_schema','pg_catalog'))
  AND   tables.table_type = 'BASE TABLE'
 ),
- ListOfMissingTablesInSchemaTableNumber AS (
-    SELECT AllTables.schemaname,
+ ListOfMissingTablesInNamespaceTableNumber AS (
+    SELECT AllTables.namespacename,
            AllTables.tablename
     FROM ListOfTables AS AllTables
-    LEFT OUTER JOIN hborm."SchemaTableNumber" AS TablesOnFile ON AllTables.schemaname = TablesOnFile.schemaname and AllTables.tablename = TablesOnFile.tablename
+    LEFT OUTER JOIN hborm."NamespaceTableNumber" AS TablesOnFile ON AllTables.namespacename = TablesOnFile.namespacename and AllTables.tablename = TablesOnFile.tablename
     WHERE TablesOnFile.tablename IS NULL
 )
- INSERT INTO hborm."SchemaTableNumber" ("schemaname","tablename") SELECT schemaname,tablename FROM ListOfMissingTablesInSchemaTableNumber;
+ INSERT INTO hborm."NamespaceTableNumber" ("namespacename","tablename") SELECT namespacename,tablename FROM ListOfMissingTablesInNamespaceTableNumber;
     ENDTEXT
 
     if ::PostgreSQLIdentifierCasing != 1  //HB_ORM_POSTGRESQL_CASE_SENSITIVE
-        l_cSQLCommand := Strtran(l_cSQLCommand,["SchemaTableNumber"],[schematablenumber])
+        l_cSQLCommand := Strtran(l_cSQLCommand,["NamespaceTableNumber"],[NamespaceTableNumber])
     endif
 
-    if !(::PostgreSQLHBORMSchemaName == "hborm")
-        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::PostgreSQLHBORMSchemaName))
+    if !(::p_HBORMNamespace == "hborm")
+        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
     endif
 
 endcase
 
-::SQLExec("UpdateORMSchemaTableNumber",l_cSQLCommand)
+::SQLExec("UpdateORMNamespaceTableNumber",l_cSQLCommand)
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method GetSchemaDefinitionVersion(par_cSchemaDefinitionName) class hb_orm_SQLConnect                         // Since calling ::MigrateSchema() is cumulative with different hSchemaDefinition, each can be named and have a different version.
+method GetSchemaDefinitionVersion(par_cSchemaDefinitionName) class hb_orm_SQLConnect                         // Since calling ::MigrateSchema() is cumulative with different hTableSchemaDefinition, each can be named and have a different version.
 local l_Version := -1  //To report if failed to retrieve the version number.
 local l_cSQLCommand
 local l_cFormattedTableName
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    if ::TableExists("SchemaVersion")
-        l_cFormattedTableName := ::FormatIdentifier("SchemaVersion")
+    if ::TableExists(::p_HBORMNamespace+".SchemaVersion")
+        l_cFormattedTableName := ::FormatIdentifier(::p_HBORMNamespace+[.]+"SchemaVersion")
 
         l_cSQLCommand := [SELECT pk,version]
         l_cSQLCommand += [ FROM ]+l_cFormattedTableName
@@ -3303,8 +3480,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     endif
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    if ::TableExists(::PostgreSQLHBORMSchemaName+".SchemaVersion")
-        l_cFormattedTableName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName+[.]+"SchemaVersion")
+    if ::TableExists(::p_HBORMNamespace+".SchemaVersion")
+        l_cFormattedTableName := ::FormatIdentifier(::p_HBORMNamespace+[.]+"SchemaVersion")
 
         l_cSQLCommand := [SELECT pk,version]
         l_cSQLCommand += [ FROM ]+l_cFormattedTableName
@@ -3325,14 +3502,14 @@ CloseAlias("SchemaVersion")
 
 return l_Version
 //-----------------------------------------------------------------------------------------------------------------
-method SetSchemaDefinitionVersion(par_cSchemaDefinitionName,par_iVersion) class hb_orm_SQLConnect                         // Since calling ::MigrateSchema() is cumulative with different hSchemaDefinition, each can be named and have a different version.
+method SetSchemaDefinitionVersion(par_cSchemaDefinitionName,par_iVersion) class hb_orm_SQLConnect                         // Since calling ::MigrateSchema() is cumulative with different hTableSchemaDefinition, each can be named and have a different version.
 local l_lResult := .f.
 local l_cSQLCommand := ""
 local l_cFormattedTableName
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cFormattedTableName := ::FormatIdentifier("SchemaVersion")
+    l_cFormattedTableName := ::FormatIdentifier(::p_HBORMNamespace+[.]+"SchemaVersion")
 
     l_cSQLCommand := [SELECT pk,version]
     l_cSQLCommand += [ FROM ]+l_cFormattedTableName
@@ -3348,10 +3525,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             l_cSQLCommand += [);]
         else
             if SchemaVersion->pk == 0  // To fix an initial bug in the hb_orm
-                ::LoadSchema()
+                ::LoadSchema("SetSchemaDefinitionVersion - 1")
                 ::DeleteField(l_cFormattedTableName,"pk")  // the pk field will be readded correctly.
-                ::UpdateORMSupportSchema()
-                ::LoadSchema()  // Only called again since the ORM schema changed
+                ::UpdateORMSupportSchema()  //"MySQL"
+                ::LoadSchema("SetSchemaDefinitionVersion - 2")  // Only called again since the ORM schema changed
                 ::SQLExec("SetSchemaDefinitionVersion",l_cSQLCommand,"SchemaVersion")
             endif
 
@@ -3372,7 +3549,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     endif
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cFormattedTableName := ::FormatIdentifier(::PostgreSQLHBORMSchemaName+[.]+"SchemaVersion")
+    l_cFormattedTableName := ::FormatIdentifier(::p_HBORMNamespace+[.]+"SchemaVersion")
 
     l_cSQLCommand := [SELECT pk,version]
     l_cSQLCommand += [ FROM ]+l_cFormattedTableName
@@ -3388,10 +3565,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cSQLCommand += [);]
         else
             if SchemaVersion->pk == 0  // To fix an initial bug in the hb_orm
-                ::LoadSchema()
+                ::LoadSchema("SetSchemaDefinitionVersion - 3")
                 ::DeleteField(l_cFormattedTableName,"pk")  // the pk field will be readded correctly.
-                ::UpdateORMSupportSchema()
-                ::LoadSchema()  // Only called again since the ORM schema changed
+                ::UpdateORMSupportSchema()  //"PostgreSQL"
+                ::LoadSchema("SetSchemaDefinitionVersion - 4")  // Only called again since the ORM schema changed
                 ::SQLExec("SetSchemaDefinitionVersion",l_cSQLCommand,"SchemaVersion")
             endif
 
@@ -3431,21 +3608,117 @@ endif
 return l_cTableName
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-static function hb_orm_RootIndexName(par_cTableName,par_cIndexNameOnFile)
-// local l_cIndexName := strtran(lower(par_cIndexNameOnFile),".","_")  // Had to also convert the "." to "_" to deal with MySQL lack of schema, and the orm prefixing table name with what the schema name would have been.
+function hb_orm_RootIndexName(par_cTableName,par_cIndexNameOnFile)
+// local l_cIndexName := strtran(lower(par_cIndexNameOnFile),".","_")  // Had to also convert the "." to "_" to deal with MySQL lack of schema, and the orm prefixing table name with what the namespace name would have been.
 // local l_cTableName := strtran(par_cTableName,".","_")
 
 local l_cIndexName := lower(par_cIndexNameOnFile)
 local l_cTableName := par_cTableName
 
-if (left(l_cIndexName,len(l_cTableName)+1) == lower(l_cTableName)+"_") .and. right(l_cIndexName,4) == "_idx"
+do case
+case (left(l_cIndexName,len(l_cTableName)+1) == lower(l_cTableName)+"_") .and. right(l_cIndexName,4) == "_idx"  // A PostgreSQL way to make a unique index name
     l_cIndexName := substr(l_cIndexName,len(l_cTableName)+2,len(par_cIndexNameOnFile)-len(l_cTableName)-1-4)
-endif
+
+case right(l_cIndexName,4) == "_idx"  // A MySQL to make a unique index name
+    l_cIndexName := left(l_cIndexName,len(l_cIndexName)-4)
+
+endcase
+
 return l_cIndexName
-//SchemaAndTable
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-method SanitizeFieldDefaultFromDefaultBehavior(par_cSQLEngineType,par_cFieldType,par_cFieldAttributes,par_cFieldDefault) class hb_orm_SQLConnect
+method NormalizeFieldDefaultForCurrentEngineType(par_cFieldDefault,par_cFieldType,par_nFieldDec) class hb_orm_SQLConnect
+local l_cFieldDefault := par_cFieldDefault
+
+//Auto Adjust Field Default definition for Engine Type
+do case
+case hb_IsNIL(l_cFieldDefault)
+
+case par_cFieldType == "L"
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        do case
+        case !empty(el_inlist(upper(l_cFieldDefault),"FALSE",".F.","F","WHARF-FALSE"))
+            l_cFieldDefault = "0"
+        case !empty(el_inlist(upper(l_cFieldDefault),"TRUE",".T.","T","WHARF-TRUE"))
+            l_cFieldDefault = "1"
+        endcase
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        do case
+        case !empty(el_inlist(upper(l_cFieldDefault),"0","FALSE",".F.","F","WHARF-FALSE"))
+            l_cFieldDefault = "false"
+        case !empty(el_inlist(upper(l_cFieldDefault),"1","TRUE",".T.","T","WHARF-TRUE"))
+            l_cFieldDefault = "true"
+        endcase
+    endcase
+
+case par_cFieldType == "UUI"
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        do case
+        case !empty(el_inlist(upper(l_cFieldDefault),"UUI","UUID","UUI()","UUID()","WHARF-UUID()"))
+            l_cFieldDefault = "uuid()"
+        endcase
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        do case
+        case !empty(el_inlist(upper(l_cFieldDefault),"UUI","UUID","UUI()","UUID()","WHARF-UUID()"))
+            l_cFieldDefault = "gen_random_uuid()"
+        endcase
+    endcase
+
+case !empty(el_inlist(par_cFieldType,"TOZ","TO","DTZ","DT"))
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        do case
+        case !empty(el_inlist(upper(l_cFieldDefault),"NOW","NOW()","WHARF-NOW()"))
+            if par_nFieldDec == 0
+                l_cFieldDefault = "current_timestamp()"
+            else
+                l_cFieldDefault = "current_timestamp("+Trans(par_nFieldDec)+")"
+            endif
+        endcase
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        do case
+        case !empty(el_inlist(upper(l_cFieldDefault),"NOW","NOW()","WHARF-NOW()"))
+            l_cFieldDefault := "now()"
+        endcase
+    endcase
+
+case !empty(el_inlist(par_cFieldType,"D"))
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        do case
+        case !empty(el_inlist(upper(l_cFieldDefault),"TODAY","TODAY()","WHARF-TODAY()"))
+            l_cFieldDefault = "current_date()"
+        endcase
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        do case
+        case !empty(el_inlist(upper(l_cFieldDefault),"TODAY","TODAY()","WHARF-TODAY()"))
+            l_cFieldDefault := "current_date()"
+        endcase
+    endcase
+
+// //_M_  Add on 
+// //https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-serial/
+
+// case !empty(el_inlist(par_cFieldType,"I","IB","IS","N"))
+//     do case
+//     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+//         do case
+//         case !empty(el_inlist(upper(l_cFieldDefault),"AUTOINCREMENT", "AUTOINCREMENT()","WHARF-AUTOINCREMENT()"))
+//             // l_cFieldDefault = "current_date()"
+//         endcase
+//     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+//         do case
+//         case !empty(el_inlist(upper(l_cFieldDefault),"AUTOINCREMENT", "AUTOINCREMENT()","WHARF-AUTOINCREMENT()"))
+//             // l_cFieldDefault := "current_date()"
+//         endcase
+//     endcase
+endcase
+
+return l_cFieldDefault
+//-----------------------------------------------------------------------------------------------------------------
+method SanitizeFieldDefaultFromDefaultBehavior(par_cSQLEngineType,par_cFieldType,par_lFieldNullable,par_cFieldDefault) class hb_orm_SQLConnect
 local l_cFieldDefault := par_cFieldDefault
 local l_nPos
 
@@ -3461,6 +3734,11 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
+
+    // case par_cFieldType == "L"  //Not tested yet (2023/12/13)
+    //     if par_cFieldDefault == "false" .or. par_cFieldDefault == ""
+    //         l_cFieldDefault := NIL
+    //     endif
 
     case !empty(el_inlist(par_cFieldType,"C","CV"))
         if par_cFieldDefault == "''"
@@ -3490,14 +3768,14 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             l_cFieldDefault := NIL
         endif
         
-    case par_cFieldType == "JS"
+    case !empty(el_inlist(par_cFieldType,"JS","JSB"))
         if !empty(el_inlist(par_cFieldDefault,"'{}'","''"))
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
         
-    case "N" $ par_cFieldAttributes   // Any other datatype and Nullable field
+    case par_lFieldNullable
         if par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
@@ -3592,18 +3870,13 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cFieldDefault := NIL
         endif
 
-    case par_cFieldType == "L"
-        if par_cFieldDefault == "false"
-            l_cFieldDefault := NIL
-        endif
-        
     case par_cFieldType == "UUI"
         if !empty(el_inlist(par_cFieldDefault,"'00000000-0000-0000-0000-000000000000'::uuid","'00000000-0000-0000-0000-000000000000'","''"))
             l_cFieldDefault := NIL
         endif
         
-    case par_cFieldType == "JS"
-        if !empty(el_inlist(par_cFieldDefault,"'{}'::json","'{}'","''"))
+    case !empty(el_inlist(par_cFieldType,"JS","JSB"))
+        if !empty(el_inlist(par_cFieldDefault,"'{}'::json","'{}'::jsonb","'{}'","''"))
             l_cFieldDefault := NIL
         endif
         
@@ -3616,7 +3889,7 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::oid"))
         endif
 
-    case "N" $ par_cFieldAttributes   // Any other datatype and Nullable field
+    case par_lFieldNullable
 
     endcase
 
@@ -3629,62 +3902,5 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     endif
 
 endcase
-return l_cFieldDefault
-//-----------------------------------------------------------------------------------------------------------------
-method NormalizeFieldDefaultForCurrentEngineType(par_cFieldDefault,par_cFieldType,par_nFieldDec) class hb_orm_SQLConnect
-local l_cFieldDefault := par_cFieldDefault
-
-//Auto Adjust Field Default definition for Engine Type
-do case
-case hb_IsNIL(l_cFieldDefault)
-
-case par_cFieldType == "L"
-    do case
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"FALSE",".F.","F"))
-            l_cFieldDefault = "0"
-        case !empty(el_inlist(upper(l_cFieldDefault),"TRUE",".T.","T"))
-            l_cFieldDefault = "1"
-        endcase
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"0","FALSE",".F.","F"))
-            l_cFieldDefault = "false"
-        case !empty(el_inlist(upper(l_cFieldDefault),"1","TRUE",".T.","T"))
-            l_cFieldDefault = "true"
-        endcase
-    endcase
-
-case par_cFieldType == "UUI"
-    do case
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"UUI","UUID","UUI()","UUID()"))
-            l_cFieldDefault = "uuid()"
-        endcase
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"UUI","UUID","UUI()","UUID()"))
-            l_cFieldDefault = "gen_random_uuid()"
-        endcase
-    endcase
-
-case !empty(el_inlist(upper(l_cFieldDefault),"NOW()","NOW"))
-    do case
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-        if par_nFieldDec == 0
-            l_cFieldDefault = "current_timestamp()"
-        else
-            l_cFieldDefault = "current_timestamp("+Trans(par_nFieldDec)+")"
-        endif
-
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        l_cFieldDefault := "now()"
-
-    endcase
-
-endcase
-
 return l_cFieldDefault
 //-----------------------------------------------------------------------------------------------------------------
