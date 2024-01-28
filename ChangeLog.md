@@ -1,5 +1,18 @@
 # Harbour ORM - Change Log
 
+## 01/28/2024 V 4.1
+* Foreign key constraint names are now always lower case. This will make it easier when columns casing are changed.
+* Fixed SQL_CRUD example to handle following new requirements:
+  * You must call at least once the method LoadWharfConfiguration(<WharfHashKey>). The ORM now requires definitions created by DataWharf.
+  * You probably want to call the method SetForeignKeyNullAndZeroParity(.t.). This will convert any 0 use in foreign keys to nulls.
+* Allowed to SetHarbourORMNamespace("nohborm"), meaning with to not create a Harbour_ORM working Postgres schema (Namespace). This will disable to use of a Harbour ORM Namespace used for structure cache and logs. Should only be used if the purpose is to only update structure and not really have CRUD actions. Used by DataWharf's "Deployment Tools" feature.
+* Renamed several method by adding prefix GMSS (Generate Migrate Schema Script).
+* During the schema migrations, previously created hb_orm indexes (suffix "_idx") no longer defined will be deleted. The self cleaning of indexes does not impact actual data, and therefore is safe to happen. During schema migration, namespaces, tables and columns are never deleted, only added or altered.
+* New method GenerateMigrateForeignKeyConstraintsScript().
+* Renamed method AddUpdateWharfForeignKeyConstraints() to MigrateForeignKeyConstraints()
+* Discontinued the method GenerateCurrentSchemaHarbourCode() since Harbour Code should always be generated from DataWharf, since it has more field properties that are lost in a deployment. It also was missing Postgresql Enumeration definitions.
+
+
 ## 01/05/2024 V 4.0   IMPORTANT COMPATIBILITY NOTE
 * Stop assigning values to "PostgreSQLHBORMSchemaName" and instead call the following two new methods: SetHarbourORMNamespace(par_cName) and GetHarbourORMNamespace(). This will now also apply to MySQL/MariaDB.
 * Support for JSONB PostgreSQL field types.

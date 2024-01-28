@@ -212,6 +212,7 @@ method Connect() class hb_orm_SQLConnect   // Return -1 on error, 0 if already c
 local l_SQLHandle := -1
 local l_cConnectionString := ""
 local l_cPreviousDefaultRDD
+local l_lNoCache := (::p_HBORMNamespace == "nohborm")
 
 ::ConnectionCounter++
 ::p_ConnectionNumber := ::ConnectionCounter
@@ -279,30 +280,31 @@ if l_SQLHandle > 0
         if !empty(::p_ApplicationName)
             ::SQLExec("cbcb115d-7bda-4118-aa61-9340faab98fa","set application_name = '"+strtran(::p_ApplicationName,['],[])+"';")
         endif
-        if !::TableExists(::p_HBORMNamespace+".SchemaCacheLog")
-            ::EnableSchemaChangeTracking()
-            ::UpdateSchemaCache(.t.)
-        else
-            if ::TableExists(::p_HBORMNamespace+".SchemaVersion")
-                if ::GetSchemaDefinitionVersion("orm trigger version") != HB_ORM_TRIGGERVERSION
+        if !l_lNoCache
+            if !::TableExists(::p_HBORMNamespace+".SchemaCacheLog")
                 ::EnableSchemaChangeTracking()
-                ::SetSchemaDefinitionVersion("orm trigger version" ,HB_ORM_TRIGGERVERSION)
+                ::UpdateSchemaCache(.t.)
+            else
+                if ::TableExists(::p_HBORMNamespace+".SchemaVersion")
+                    if ::GetSchemaDefinitionVersion("orm trigger version") != HB_ORM_TRIGGERVERSION
+                    ::EnableSchemaChangeTracking()
+                    ::SetSchemaDefinitionVersion("orm trigger version" ,HB_ORM_TRIGGERVERSION)
+                    endif
                 endif
+                ::UpdateSchemaCache()
             endif
-            ::UpdateSchemaCache()
         endif
-    // case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    //     l_cBackendType := "MySQL"
-    // case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MSSQL
-    //     l_cBackendType := "MSSQL"
+
     endcase
 
     //Load the entire schema
     ::LoadSchema("Connect")
 
-    //AutoFix ORM supporting tables
-    if ::UpdateORMSupportSchema()  //l_cBackendType
-        ::LoadSchema("Connect, after UpdateORMSupportSchema")  // Only called again the the ORM schema changed
+    if !l_lNoCache
+        //AutoFix ORM supporting tables
+        if ::UpdateORMSupportSchema()  //l_cBackendType
+            ::LoadSchema("Connect, after UpdateORMSupportSchema")  // Only called again the the ORM schema changed
+        endif
     endif
 
 else
@@ -1015,7 +1017,7 @@ else
     //No Cache Entry
     if empty(l_hDefinition)
         // Find out if we are getting or setting a Foreign Key at is Nullable and if 0 is equivalent to NULL
-        l_hReference = hb_HGetDef(::p_WharfConfig,"TableSchema",NIL)    //Find the TableSchema definitions
+        l_hReference = hb_HGetDef(::p_WharfConfig,"Tables",NIL)    //Find the equivalent of the p_TableSchema definitions
         if !hb_IsNil(l_hReference)
             l_hReference := hb_HGetDef(l_hReference,par_cNamespaceAndTableName,NIL)       //Find the Table definition
             if !hb_IsNil(l_hReference)
@@ -1083,7 +1085,7 @@ else
     //No Cache Entry
     if empty(l_aColumns)
         // Find out if we are getting or setting a Foreign Key at is Nullable and if 0 is equivalent to NULL
-        l_hReference = hb_HGetDef(::p_WharfConfig,"TableSchema",NIL)    //Find the TableSchema definitions
+        l_hReference = hb_HGetDef(::p_WharfConfig,"Tables",NIL)    //Find the equivalent of the p_TableSchema definitions
         if !hb_IsNil(l_hReference)
             l_hReference := hb_HGetDef(l_hReference,par_cNamespaceAndTableName,NIL)       //Find the Table definition
             if !hb_IsNil(l_hReference)
@@ -1256,302 +1258,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 endcase
 
 return nil
-//-----------------------------------------------------------------------------------------------------------------
-// Remove any Foreign Key Constraint that and with "_fkc"
-method RemoveWharfForeignKeyConstraints(par_hTableSchemaDefinition) class hb_orm_SQLConnect
 
-local l_hTableDefinition
-local l_cNamespaceAndTableName
-local l_nPos
-local l_cNamespaceName
-local l_cTableName
-local l_hFields
-local l_hField
-local l_cFieldName
-local l_hFieldDefinition
-local l_cFieldUsedAs
-local l_cParentNamespaceAndTable
-local l_cParentNamespaceName
-local l_cParentTableName
-local l_cSQLCommand
-local l_lForeignKeyOptional
 
-if ::UpdateSchemaCache()
-    ::LoadSchema("RemoveWharfForeignKeyConstraints")
-endif
 
-do case
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
-    hb_orm_SendToDebugView("DeleteAllOrphanRecords - In Loop")
-    for each l_hTableDefinition in par_hTableSchemaDefinition
-        l_cNamespaceAndTableName := l_hTableDefinition:__enumKey()
 
-        l_nPos := at(".",l_cNamespaceAndTableName)
-        if empty(l_nPos)
-            l_cNamespaceName := "public"
-            l_cTableName     := l_cNamespaceAndTableName
-        else
-            l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
-            l_cTableName     := substr(l_cNamespaceAndTableName,l_nPos+1)
-        endif
-        if l_cNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
-            l_cNamespaceName := ::p_HBORMNamespace
-        endif
-        // l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
 
-        l_hFields := l_hTableDefinition[HB_ORM_SCHEMA_FIELD]
 
-        for each l_hField in l_hFields
-            l_cFieldName       := l_hField:__enumKey()
-            l_hFieldDefinition := l_hField:__enumValue()
-            l_cFieldUsedAs     := hb_HGetDef(l_hFieldDefinition,"UsedAs","")
-            if l_cFieldUsedAs == "Foreign"
-                l_cParentNamespaceAndTable := hb_HGetDef(l_hFieldDefinition,"ParentTable","")
-
-                if !empty(l_cParentNamespaceAndTable)
-
-                    l_lForeignKeyOptional := hb_HGetDef(l_hFieldDefinition,"ForeignKeyOptional",.f.)
-
-                    l_nPos := at(".",l_cParentNamespaceAndTable)
-                    if empty(l_nPos)
-                        l_cParentNamespaceName := "public"
-                        l_cParentTableName     := l_cParentNamespaceAndTable
-                    else
-                        l_cParentNamespaceName := left(l_cParentNamespaceAndTable,l_nPos-1)
-                        l_cParentTableName     := substr(l_cParentNamespaceAndTable,l_nPos+1)
-                    endif
-                    if l_cParentNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
-                        l_cParentNamespaceName := ::p_HBORMNamespace
-                    endif
-
-                    l_cSQLCommand := [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc"] //+CRLF
-                    if ! ::SQLExec("0350f45e-a7ab-49d4-8dd0-93b069b24a2f",l_cSQLCommand)
-                        hb_orm_SendToDebugView("RemoveWharfForeignKeyConstraints - Failed on Table: "+l_cTableName)
-                    endif
-
-                endif
-
-            endif
-
-        endfor
-
-    endfor
-
-endcase
-
-return nil
-//-----------------------------------------------------------------------------------------------------------------
-// Add any Foreign Key Constraint that and with "_fkc"
-method AddUpdateWharfForeignKeyConstraints(par_hTableSchemaDefinition) class hb_orm_SQLConnect
-
-local l_hTableDefinition
-local l_cNamespaceAndTableName
-local l_nPos
-local l_cNamespaceName
-local l_cTableName
-local l_hFields
-local l_hField
-local l_cFieldName
-local l_hFieldDefinition
-local l_cFieldUsedAs
-local l_cParentNamespaceAndTable
-local l_cParentNamespaceName
-local l_cParentTableName
-local l_cParentTablePrimaryKey
-local l_cSQLCommand
-local l_lForeignKeyOptional
-local l_cOnDelete
-local l_cSQLForeignKeyConstraints
-local l_oCursor
-local l_cConstraintAction
-local l_cCurrentOnUpdateConstraintAction
-local l_cCurrentOnDeleteConstraintAction
-local l_lAddConstraints
-local l_hPrimaryKeys
-
-if ::UpdateSchemaCache()
-    ::LoadSchema("AddUpdateWharfForeignKeyConstraints")
-endif
-
-l_hPrimaryKeys := ::GetListOfPrimaryKeysForAllTables(par_hTableSchemaDefinition)
-
-do case
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-
-// confupdtype char
-//     Foreign key update action code: a = no action, r = restrict, c = cascade, n = set null, d = set default
-
-// confdeltype char
-//     Foreign key deletion action code: a = no action, r = restrict, c = cascade, n = set null, d = set default
-
-    l_cSQLForeignKeyConstraints := [select ]
-    l_cSQLForeignKeyConstraints += [    con."ChildNamespace" as "ChildNamespace",]
-    l_cSQLForeignKeyConstraints += [    con."ChildTable"     as "ChildTable",]
-    l_cSQLForeignKeyConstraints += [    att2.attname         as "ChildColumn", ]
-    l_cSQLForeignKeyConstraints += [    ns.nspname           as "ParentNamespace",]
-    l_cSQLForeignKeyConstraints += [    cl.relname           as "ParentTable", ]
-    l_cSQLForeignKeyConstraints += [    att.attname          as "ParentColumn",]
-    l_cSQLForeignKeyConstraints += [    con.conname          as "ConstraintName",]
-    l_cSQLForeignKeyConstraints += [    con."UpdateAction"   as "UpdateAction",]
-    l_cSQLForeignKeyConstraints += [    con."DeleteAction"   as "DeleteAction"]
-    l_cSQLForeignKeyConstraints += [from]
-    l_cSQLForeignKeyConstraints += [   (select ]
-    l_cSQLForeignKeyConstraints += [        unnest(con1.conkey)  as "parent", ]
-    l_cSQLForeignKeyConstraints += [        unnest(con1.confkey) as "child", ]
-    l_cSQLForeignKeyConstraints += [        con1.confrelid, ]
-    l_cSQLForeignKeyConstraints += [        con1.conrelid,]
-    l_cSQLForeignKeyConstraints += [        con1.conname,]
-    l_cSQLForeignKeyConstraints += [        con1.confupdtype as "UpdateAction",]
-    l_cSQLForeignKeyConstraints += [        con1.confdeltype as "DeleteAction",]
-    l_cSQLForeignKeyConstraints += [        cl.relname     as "ChildTable",]
-    l_cSQLForeignKeyConstraints += [        ns.nspname     as "ChildNamespace"]
-    l_cSQLForeignKeyConstraints += [    from ]
-    l_cSQLForeignKeyConstraints += [        pg_class cl]
-    l_cSQLForeignKeyConstraints += [        join pg_namespace ns on cl.relnamespace = ns.oid]
-    l_cSQLForeignKeyConstraints += [        join pg_constraint con1 on con1.conrelid = cl.oid]
-    l_cSQLForeignKeyConstraints += [    where con1.contype = 'f']
-    l_cSQLForeignKeyConstraints += [	and   ns.nspname not in ('cyanaudit')]
-    // l_cSQLForeignKeyConstraints += [--        cl.relname = 'child_table']
-    // l_cSQLForeignKeyConstraints += [--        and ns.nspname = 'child_schema']
-    l_cSQLForeignKeyConstraints += [   ) con]
-    l_cSQLForeignKeyConstraints += [   join pg_attribute att  on att.attrelid = con.confrelid and att.attnum = con.child]
-    l_cSQLForeignKeyConstraints += [   join pg_class     cl   on cl.oid = con.confrelid]
-    l_cSQLForeignKeyConstraints += [   join pg_namespace ns   on cl.relnamespace = ns.oid]
-    l_cSQLForeignKeyConstraints += [   join pg_attribute att2 on att2.attrelid = con.conrelid and att2.attnum = con.parent]
-
-    if ! ::SQLExec("419ada7d-7e90-4c30-9c95-0d5c15ccdfd7",l_cSQLForeignKeyConstraints,"hb_orm_ListOfForeignKeyConstraints")
-        hb_orm_SendToDebugView("AddUpdateWharfForeignKeyConstraints - Failed on ListOfForeignKeyConstraints")
-    else
-        l_oCursor := hb_orm_Cursor():Init():Associate("hb_orm_ListOfForeignKeyConstraints")
-
-        with object l_oCursor
-            :Index("tag1","padr(upper(ChildNamespace+'*'+ChildTable+'*'+ChildColumn+'*'),240)")
-            :CreateIndexes()
-        endwith
-
-        for each l_hTableDefinition in par_hTableSchemaDefinition
-            l_cNamespaceAndTableName := l_hTableDefinition:__enumKey()
-
-            l_nPos := at(".",l_cNamespaceAndTableName)
-            if empty(l_nPos)
-                l_cNamespaceName := "public"
-                l_cTableName     := l_cNamespaceAndTableName
-            else
-                l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
-                l_cTableName     := substr(l_cNamespaceAndTableName,l_nPos+1)
-            endif
-            if l_cNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
-                l_cNamespaceName := ::p_HBORMNamespace
-            endif
-            // l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
-
-            l_hFields := l_hTableDefinition[HB_ORM_SCHEMA_FIELD]
-
-            for each l_hField in l_hFields
-                l_cFieldName       := l_hField:__enumKey()
-                l_hFieldDefinition := l_hField:__enumValue()
-                l_cFieldUsedAs     := hb_HGetDef(l_hFieldDefinition,"UsedAs","")
-                if l_cFieldUsedAs == "Foreign"
-                    l_cParentNamespaceAndTable := hb_HGetDef(l_hFieldDefinition,"ParentTable","")
-
-                    if !empty(l_cParentNamespaceAndTable)
-
-                        l_lForeignKeyOptional := hb_HGetDef(l_hFieldDefinition,"ForeignKeyOptional",.f.)
-                        l_cOnDelete           := hb_HGetDef(l_hFieldDefinition,"OnDelete","")
-                        do case
-                        case l_cOnDelete == "Protect"
-                            l_cConstraintAction := "RESTRICT"
-                        case l_cOnDelete == "Cascade"
-                            l_cConstraintAction := "CASCADE"
-                        case l_cOnDelete == "BreakLink"
-                            l_cConstraintAction := "SET NULL"
-                        otherwise
-                            l_cConstraintAction := ""
-                        endcase
-
-                        if !empty(l_cConstraintAction)
-
-                            l_nPos := at(".",l_cParentNamespaceAndTable)
-                            if empty(l_nPos)
-                                l_cParentNamespaceName := "public"
-                                l_cParentTableName     := l_cParentNamespaceAndTable
-                            else
-                                l_cParentNamespaceName := left(l_cParentNamespaceAndTable,l_nPos-1)
-                                l_cParentTableName     := substr(l_cParentNamespaceAndTable,l_nPos+1)
-                            endif
-                            if l_cParentNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
-                                l_cParentNamespaceName := ::p_HBORMNamespace
-                            endif
-
-                            l_cParentTablePrimaryKey := hb_HGetDef(l_hPrimaryKeys,l_cParentNamespaceName+"."+l_cParentTableName,"")
-                            if empty(l_cParentTablePrimaryKey)
-                                hb_orm_SendToDebugView("AddUpdateWharfForeignKeyConstraints - Failed to find Primary key of Table: "+l_cParentNamespaceName+"."+l_cParentTableName)
-                            else
-
-                                if vfp_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
-                                    //Compare if the constraint is the same
-                                    l_lAddConstraints := .f.
-
-                                    l_cCurrentOnUpdateConstraintAction := alltrim(hb_orm_ListOfForeignKeyConstraints->UpdateAction)
-                                    l_cCurrentOnDeleteConstraintAction := alltrim(hb_orm_ListOfForeignKeyConstraints->DeleteAction)
-
-                                    do case
-                                    case l_cConstraintAction == "RESTRICT" .and. !(l_cCurrentOnDeleteConstraintAction == "r")   // r = restrict
-                                        l_lAddConstraints := .t.
-                                    case l_cConstraintAction == "CASCADE"  .and. !(l_cCurrentOnDeleteConstraintAction == "c")   // c = cascade
-                                        l_lAddConstraints := .t.
-                                    case l_cConstraintAction == "SET NULL" .and. !(l_cCurrentOnDeleteConstraintAction == "n")   // n = set null
-                                        l_lAddConstraints := .t.
-                                    case !(hb_orm_ListOfForeignKeyConstraints->ParentColumn == l_cParentTablePrimaryKey)
-                                        l_lAddConstraints := .t.
-                                    case !(hb_orm_ListOfForeignKeyConstraints->ParentNamespace == l_cParentNamespaceName)
-                                        l_lAddConstraints := .t.
-                                    case !(hb_orm_ListOfForeignKeyConstraints->ParentTable == l_cParentTableName)
-                                        l_lAddConstraints := .t.
-                                    case !(l_cCurrentOnUpdateConstraintAction == "c")
-                                        // We are always going to make the OnUpdate to CASCADE, meaning if the primary key is changed, it will be updated in all the related child tables.
-                                        l_lAddConstraints := .t.
-                                    endcase
-
-                                    if l_lAddConstraints   //Remove the Constraints since it is different, will re-add it.
-                                        l_cSQLCommand := [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc"]  //+CRLF
-                                        if ! ::SQLExec("0350f45e-a7ab-49d4-8dd0-93b069b24a2e",l_cSQLCommand)
-                                            hb_orm_SendToDebugView("AddUpdateWharfForeignKeyConstraints - Failed on Table: "+l_cTableName)
-                                        endif
-                                    endif
-                                else
-                                    l_lAddConstraints := .t.
-                                endif
-
-                                if l_lAddConstraints
-                                    l_cSQLCommand := [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" ADD CONSTRAINT "]+l_cFieldName+[_fkc" FOREIGN KEY ("]+l_cFieldName+[") REFERENCES "]+l_cParentNamespaceName+["."]+l_cParentTableName+[" ("]+l_cParentTablePrimaryKey+[") ON DELETE ]+l_cConstraintAction+[ ON UPDATE CASCADE] //+CRLF
-                                    if ::SQLExec("0350f45e-a7ab-49d4-8dd0-93b069b24a2f",l_cSQLCommand)
-                                        hb_orm_SendToDebugView("AddUpdateWharfForeignKeyConstraints - Table: "+l_cTableName)
-                                    else
-                                        hb_orm_SendToDebugView("AddUpdateWharfForeignKeyConstraints - Failed on Table: "+l_cTableName)
-                                    endif
-                                endif
-                            endif
-                        endif
-                    endif
-
-                endif
-
-            endfor
-
-        endfor
-    endif
-
-    CloseAlias("hb_orm_ListOfForeignKeyConstraints")
-
-endcase
-
-return nil
 //-----------------------------------------------------------------------------------------------------------------
 // Find and replace any Zero in Integer type foreign key columns. Used to prepare data to handle foreign key constraints.
 method ForeignKeyConvertAllZeroToNull(par_hTableSchemaDefinition) class hb_orm_SQLConnect

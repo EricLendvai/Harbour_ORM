@@ -1589,7 +1589,6 @@ for each l_cByte in @par_cExpression
     
 endfor
 
-//1234567
 l_cResult := strtran(l_cResult," "+INPOSSIBLEZERONULLEQUAL+" 0"," IS NULL ")   //Logic to replace with a blank before the operator. A potential extra blank after "NULL" to avoid concatenating with a literal.
 l_cResult := strtran(l_cResult,    INPOSSIBLEZERONULLEQUAL+" 0"," IS NULL ")   //In case there was no blank before the operator
 l_cResult := strtran(l_cResult,INPOSSIBLEZERONULLEQUAL,"=")

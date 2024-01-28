@@ -34,15 +34,19 @@ class hb_orm_SQLConnect
         classdata ReservedWordsMySQL      init {"ACCESSIBLE","ADD","ALL","ALTER","ANALYZE","AND","AS","ASC","ASENSITIVE","BEFORE","BETWEEN","BIGINT","BINARY","BLOB","BOTH","BY","CALL","CASCADE","CASE","CHANGE","CHAR","CHARACTER","CHECK","COLLATE","COLUMN","CONDITION","CONSTRAINT","CONTINUE","CONVERT","CREATE","CROSS","CUBE","CUME_DIST","CURRENT_DATE","CURRENT_TIME","CURRENT_TIMESTAMP","CURRENT_USER","CURSOR","DATABASE","DATABASES","DAY_HOUR","DAY_MICROSECOND","DAY_MINUTE","DAY_SECOND","DEC","DECIMAL","DECLARE","DEFAULT","DELAYED","DELETE","DENSE_RANK","DESC","DESCRIBE","DETERMINISTIC","DISTINCT","DISTINCTROW","DIV","DOUBLE","DROP","DUAL","EACH","ELSE","ELSEIF","EMPTY","ENCLOSED","ESCAPED","EXCEPT","EXISTS","EXIT","EXPLAIN","FALSE","FETCH","FIRST_VALUE","FLOAT","FLOAT4","FLOAT8","FOR","FORCE","FOREIGN","FROM","FULLTEXT","FUNCTION","GENERATED","GET","GRANT","GROUP","GROUPING","GROUPS","HAVING","HIGH_PRIORITY","HOUR_MICROSECOND","HOUR_MINUTE","HOUR_SECOND","IF","IGNORE","IN","INDEX","INFILE","INNER","INOUT","INSENSITIVE","INSERT","INT","INT1","INT2","INT3","INT4","INT8","INTEGER","INTERVAL","INTO","IO_AFTER_GTIDS","IO_BEFORE_GTIDS","IS","ITERATE","JOIN","JSON_TABLE","KEY","KEYS","KILL","LAG","LAST_VALUE","LATERAL","LEAD","LEADING","LEAVE","LEFT","LIKE","LIMIT","LINEAR","LINES","LOAD","LOCALTIME","LOCALTIMESTAMP","LOCK","LONG","LONGBLOB","LONGTEXT","LOOP","LOW_PRIORITY","MASTER_BIND","MASTER_SSL_VERIFY_SERVER_CERT","MATCH","MAXVALUE","MEDIUMBLOB","MEDIUMINT","MEDIUMTEXT","MIDDLEINT","MINUTE_MICROSECOND","MINUTE_SECOND","MOD","MODIFIES","NATURAL","NOT","NO_WRITE_TO_BINLOG","NTH_VALUE","NTILE","NULL","NUMERIC","OF","ON","OPTIMIZE","OPTIMIZER_COSTS","OPTION","OPTIONALLY","OR","ORDER","OUT","OUTER","OUTFILE","OVER","PARTITION","PERCENT_RANK","PRECISION","PRIMARY","PROCEDURE","PURGE","RANGE","RANK","READ","READS","READ_WRITE","REAL","RECURSIVE","REFERENCES","REGEXP","RELEASE","RENAME","REPEAT","REPLACE","REQUIRE","RESIGNAL","RESTRICT","RETURN","REVOKE","RIGHT","RLIKE","ROW","ROWS","ROW_NUMBER","SCHEMA","SCHEMAS","SECOND_MICROSECOND","SELECT","SENSITIVE","SEPARATOR","SET","SHOW","SIGNAL","SMALLINT","SPATIAL","SPECIFIC","SQL","SQLEXCEPTION","SQLSTATE","SQLWARNING","SQL_BIG_RESULT","SQL_CALC_FOUND_ROWS","SQL_SMALL_RESULT","SSL","STARTING","STORED","STRAIGHT_JOIN","SYSTEM","TABLE","TERMINATED","THEN","TINYBLOB","TINYINT","TINYTEXT","TO","TRAILING","TRIGGER","TRUE","UNDO","UNION","UNIQUE","UNLOCK","UNSIGNED","UPDATE","USAGE","USE","USING","UTC_DATE","UTC_TIME","UTC_TIMESTAMP","VALUES","VARBINARY","VARCHAR","VARCHARACTER","VARYING","VIRTUAL","WHEN","WHERE","WHILE","WINDOW","WITH","WRITE","XOR","YEAR_MONTH","ZEROFILL"}
         classdata ReservedWordsPostgreSQL init {"ALL","ANALYSE","ANALYZE","AND","ANY","ARRAY","AS","ASC","ASYMMETRIC","BINARY","BOTH","CASE","CAST","CHECK","COLLATE","COLLATION","COLUMN","CONCURRENTLY","CONSTRAINT","CREATE","CROSS","CURRENT_CATALOG","CURRENT_DATE","CURRENT_ROLE","CURRENT_SCHEMA","CURRENT_TIME","CURRENT_TIMESTAMP","CURRENT_USER","DEFAULT","DEFERRABLE","DESC","DISTINCT","DO","ELSE","END","EXCEPT","FALSE","FETCH","FOR","FOREIGN","FREEZE","FROM","FULL","GRANT","GROUP","HAVING","ILIKE","IN","INITIALLY","INNER","INTERSECT","INTO","IS","ISNULL","JOIN","LATERAL","LEADING","LEFT","LIKE","LIMIT","LOCALTIME","LOCALTIMESTAMP","NATURAL","NOT","NOTNULL","NULL","OFFSET","ON","ONLY","OR","ORDER","OUTER","OVERLAPS","PLACING","PRIMARY","REFERENCES","RETURNING","RIGHT","SELECT","SESSION_USER","SIMILAR","SOME","SYMMETRIC","TABLE","TABLESAMPLE","THEN","TO","TRAILING","TRUE","UNION","UNIQUE","USER","USING","VARIADIC","VERBOSE","WHEN","WHERE","WINDOW","WITH"}
 
-        method AddTable(par_cNamespaceName,par_cTableName,par_hStructure,par_lUnlogged)
-        method AddField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition)
-        method AddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_hIndexDefinition)
-        method UpdateNamespaceName(par_cNamespaceName,par_cCurrentNamespaceName)
-        method UpdateTableName(par_cNamespaceName,par_cTableName,par_cCurrentNamespaceName,par_cCurrentTableName)
-        method UpdateFieldName(par_cNamespaceName,par_cTableName,par_cFieldName,par_cCurrentFieldName)
-        method UpdateField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition,par_hCurrentFieldDefinition)
+        //Acronym: GMSS = Generate Migrate Schema Script
+        method GMSSAddTable(par_cNamespaceName,par_cTableName,par_hStructure,par_lUnlogged)
+        method GMSSAddField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition)
+        method GMSSAddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_hIndexDefinition)
+        method GMSSDeleteIndex(par_cNamespaceName,par_cTableName,par_cIndexName)
+        method GMSSUpdateNamespaceName(par_cNamespaceName,par_cCurrentNamespaceName)
+        method GMSSUpdateTableName(par_cNamespaceName,par_cTableName,par_cCurrentNamespaceName,par_cCurrentTableName)
+        method GMSSUpdateFieldName(par_cNamespaceName,par_cTableName,par_cFieldName,par_cCurrentFieldName)
+        method GMSSUpdateField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition,par_hCurrentFieldDefinition)
         method FixCasingOfSchemaCacheTables(par_cTableName)
         method GetListOfPrimaryKeysForAllTables(par_hTableSchemaDefinition)             // Returns a Hash with the table name (with Namespace) as keys.
+        method GetPostgresTableSchemaQuery()
+        method GetPostgresIndexSchemaQuery()
 
     exported:
         data p_TableSchema init {=>}                                     //List of Tables Names. Each element is a hash with "Fields" and "Indexes" array elements ["Hash of Field Definition","Hash of Index Definitions"]. Named it with a leading "p_" to be threaded as internal.
@@ -87,9 +91,8 @@ class hb_orm_SQLConnect
                                         //Will load the definition of all tables in all namespaces (PostgreSQL)
 
         // The following are Namespace Aware. If no NamespaceName is defined for any tables, the current namespace will be used.
-        method GenerateMigrateSchemaScript(par_hTableSchemaDefinition)  // Will never drop tables, field and indexes. Call DeleteTable() DeleteIndex() DeleteField() methods as needed.
-        method MigrateSchema(par_hTableSchemaDefinition)                // Will Call GenerateMigrateSchemaScript() and UpdateSchemaCache() and UpdateORMNamespaceTableNumber()
-        method GenerateCurrentSchemaHarbourCode(par_cFileName)     // For All namespaces
+        method GenerateMigrateSchemaScript(par_hTableSchemaDefinition,par_hEnumerationDefinition)  // Will never drop tables, field and indexes. Call DeleteTable() DeleteIndex() DeleteField() methods as needed.
+        method MigrateSchema(par_hTableSchemaDefinition,par_hEnumerationDefinition)                // Will Call GenerateMigrateSchemaScript() and UpdateSchemaCache() and UpdateORMNamespaceTableNumber()
 
         method EnableSchemaChangeTracking()   // Currently only PostgreSQL aware
         method DisableSchemaChangeTracking()  // Currently only PostgreSQL aware
@@ -143,16 +146,17 @@ class hb_orm_SQLConnect
         method SetHarbourORMNamespace(par_cName)
         method GetHarbourORMNamespace() inline ::p_HBORMNamespace
 
-        method SetForeignKeyNullAndZeroParity(par_lMode)                                // If should make Zero values stored as Null when used for Foreign Keys
+        method SetForeignKeyNullAndZeroParity(par_lMode)                                   // If should make Zero values stored as Null when used for Foreign Keys
         method GetForeignKeyNullAndZeroParity() inline ::p_ForeignKeyNullAndZeroParity
-        method LoadWharfConfiguration(par_hConfig)                                      // Register a DataWharf Configuration
-        method GetColumnConfiguration(par_cNamespaceAndTableName,par_cFieldName)        // Get Column Configuration
-        method GetColumnsConfiguration(par_cNamespaceAndTableName)                      // Returns an array of column names
+        method LoadWharfConfiguration(par_hConfig)                                         // Register a DataWharf Configuration
+        method GetColumnConfiguration(par_cNamespaceAndTableName,par_cFieldName)           // Get Column Configuration
+        method GetColumnsConfiguration(par_cNamespaceAndTableName)                         // Returns an array of column names
 
-        method DeleteAllOrphanRecords(par_hTableSchemaDefinition)                       // Destructive delete of any orphans in all the tables in par_hTableSchemaDefinition
-        method RemoveWharfForeignKeyConstraints(par_hTableSchemaDefinition)             // Remove any Foreign Key Constraint that and with "_fkc"
-        method AddUpdateWharfForeignKeyConstraints(par_hTableSchemaDefinition)          // Add/Update if missing any Foreign Key Constraint that and with "_fkc"
-        method ForeignKeyConvertAllZeroToNull(par_hTableSchemaDefinition)               // Find and replace any Zero in Integer type foreign key columns. Used to prepare data to handle foreign key constraints.
+        method DeleteAllOrphanRecords(par_hTableSchemaDefinition)                          // Destructive delete of any orphans in all the tables in par_hTableSchemaDefinition
+        method RemoveWharfForeignKeyConstraints(par_hTableSchemaDefinition)                // Remove any Foreign Key Constraint that and with "_fkc"
+        method GenerateMigrateForeignKeyConstraintsScript(par_hTableSchemaDefinition)             // Generate the Script to Add/Update if missing any Foreign Key Constraint that and with "_fkc"
+        method MigrateForeignKeyConstraints(par_hTableSchemaDefinition)                           // Add/Update if missing any Foreign Key Constraint that and with "_fkc"
+        method ForeignKeyConvertAllZeroToNull(par_hTableSchemaDefinition)                  // Find and replace any Zero in Integer type foreign key columns. Used to prepare data to handle foreign key constraints.
 
     DESTRUCTOR destroy()
         

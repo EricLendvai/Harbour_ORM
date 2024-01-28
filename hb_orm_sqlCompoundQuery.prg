@@ -28,7 +28,7 @@ method UseConnection(par_oSQLConnection) class hb_orm_SQLCompoundQuery
 ::p_SQLEngineType             := ::p_oSQLConnection:GetSQLEngineType()
 ::p_ConnectionNumber          := ::p_oSQLConnection:GetConnectionNumber()
 ::p_Database                  := ::p_oSQLConnection:GetDatabase()
-::p_NamespaceName                := ::p_oSQLConnection:GetCurrentNamespaceName()   // Will "Freeze" the current connection p_NamespaceName
+::p_NamespaceName             := ::p_oSQLConnection:GetCurrentNamespaceName()   // Will "Freeze" the current connection p_NamespaceName
 ::p_PrimaryKeyFieldName       := ::p_oSQLConnection:GetPrimaryKeyFieldName()
 ::p_CreationTimeFieldName     := ::p_oSQLConnection:GetCreationTimeFieldName()
 ::p_ModificationTimeFieldName := ::p_oSQLConnection:GetModificationTimeFieldName()

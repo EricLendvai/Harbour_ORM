@@ -76,6 +76,7 @@ They are 3 VSCode workspace files (.code-workspace) in this repo. One for the co
 - All indexes managed by the orm are lower case and named as follows: "&lt;tablename&gt;&lowbar;&lt;indexname&gt;&lowbar;idx"   
 You may create any other indexes that is not named with a leading "&lt;tablename&gt;_" and ending "_idx".
 - Varchar types must have a max length. Zero is not allowed due to MySQL specification.
+- All foreign key constraint managed by the orm "_fkc"
 
 ## MySQL Peculiarities
 - No support for multiple PostgreSQL equivalent to "Namespace" (PostgreSQL Schema)
@@ -126,3 +127,12 @@ This package can be used to query SQL backends and create the equivalent of read
 - See article [SQL Server Access with Habour ORM - Early Access](https://harbour.wiki/index.asp?page=PublicArticles&mode=show&id=210209161211&sig=5547899699).
 - View Documentation.md file for user oriented documentation
 - Vew DevelopmentNotes.md file if you are interested in the internal of this orm or would like to contribute.
+
+## Self maintained ORM Tables
+The ORM will create and maintain a few tables to assist in its execution. In Postgres they will be stored in the Namespace (Postgres schema) "hborm" or whatever name is specified if the connection method SetHarbourORMNamespace(par_cName) is used.
+- NamespaceTableNumber : Used to accommodate using pg_advisory_lock(key bigint) used in Lock() and Unlock() methods.
+- SchemaAndDataErrorLog : Log of failed SQL command executions.
+- SchemaAutoTrimLog : Log of tables/records/columns that had their content trimmed due to the column's length being too small.
+- SchemaCacheLog : List of schema caches. SchemaCacheFields_<number> and SchemaCacheIndexes_<number> will match records in SchemaCacheLog.
+- SchemaVersion : Last revisions number of named items.
+- (UD) SQLCommandLog : List of all commands that are executed by the ORM, any SELECT, UPDATE, DELETE ...
