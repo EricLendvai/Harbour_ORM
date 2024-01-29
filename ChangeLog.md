@@ -1,5 +1,10 @@
 # Harbour ORM - Change Log
 
+Please note: upcoming update the Harbour_ORM will require the use of DataWharf to configure the p_WharfConfig connection property.    
+
+## 01/28/2024 V 4.2
+* Added support to UsedAs in p_WharfConfig Column configurations.
+
 ## 01/28/2024 V 4.1
 * Foreign key constraint names are now always lower case. This will make it easier when columns casing are changed.
 * Fixed SQL_CRUD example to handle following new requirements:

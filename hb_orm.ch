@@ -1,7 +1,7 @@
 //Copyright (c) 2024 Eric Lendvai MIT License
 
 #ifndef HB_ORM_BUILDVERSION
-#define HB_ORM_BUILDVERSION "4.1"
+#define HB_ORM_BUILDVERSION "4.2"
 
 #define HB_ORM_TRIGGERVERSION 2
 
@@ -29,6 +29,7 @@
 #define HB_ORM_SCHEMA_FIELD "Fields"
 #define HB_ORM_SCHEMA_INDEX "Indexes"
 
+#define HB_ORM_SCHEMA_FIELD_USEDAS         "UsedAs"
 #define HB_ORM_SCHEMA_FIELD_TYPE           "Type"
 #define HB_ORM_SCHEMA_FIELD_ENUMNAME       "Enumeration"
 #define HB_ORM_SCHEMA_FIELD_LENGTH         "Length"
