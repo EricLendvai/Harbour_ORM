@@ -3,9 +3,9 @@
 #To enabled progressing recompilation uncomment the following line
 -inc
 
--L${HB_VFP_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
-hb_vfp.hbc
-hb_vfp.hbx
+-L${HB_EL_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
+hb_el.hbc
+hb_el.hbx
 
 -workdir=build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2/
 

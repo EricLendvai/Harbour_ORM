@@ -13,12 +13,12 @@
         "harbour.compilerExecutable": "/src/harbour/bin/linux/gcc/harbour",
         "harbour.extraOptions": "-i/src/harbour/include/",
         "harbour.extraIncludePaths":["/src/harbour/include/",
-                                     "/src/Harbour_VFP/"],
+                                     "/src/Harbour_EL/"],
         "harbour.warningLevel":1,
         "harbour.decorator":true
     }
 
-    ,"mounts": ["source=C:\\Harbour_VFP,target=/src/Harbour_VFP,type=bind,consistency=default"]
+    ,"mounts": ["source=C:\\Harbour_EL,target=/src/Harbour_EL,type=bind,consistency=default"]
 
     // Add the IDs of extensions you want installed when the container is created.
     ,"extensions": [

@@ -17,8 +17,8 @@
 
 #The following method only uses non debug and no source code!
 
--L${HB_VFP_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
-hb_vfp.hbc
+-L${HB_EL_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
+hb_el.hbc
 
 -L${HB_ORM_ROOT}/build/lin64/${HB_COMPILER}/${BuildMode}
 hb_orm.hbc

@@ -10,7 +10,7 @@
         "harbour.extraOptions": "-i/src/harbour/include/",
         "harbour.extraIncludePaths":["/src/harbour/include/",
                                      "/src/Harbour_ORM/",
-                                     "/src/Harbour_VFP/"],
+                                     "/src/Harbour_EL/"],
         "harbour.warningLevel":1,
         "harbour.decorator":true,
         "local-history.path": "/src/VSCode_History/Harbour_ORM",

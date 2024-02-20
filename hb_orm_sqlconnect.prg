@@ -619,7 +619,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSQLCommand += [']+allt(l_cFieldType)+[',]     // Field type
         l_cSQLCommand += trans(l_nFieldLen)+[,]
         
-        if !empty(el_inlist(l_cFieldType,"B","BV","R"))
+        if el_IsInlist(l_cFieldType,"B","BV","R")
             //Binary
             l_cSQLCommand += [NULL,]
             l_cSQLCommand += [x']+hb_StrToHex(l_cValue)+[']
@@ -696,7 +696,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSQLCommand += [']+allt(l_cFieldType)+[',]     // Field type
         l_cSQLCommand += trans(l_nFieldLen)+[,]
 
-        if !empty(el_inlist(l_cFieldType,"B","BV","R"))
+        if el_IsInlist(l_cFieldType,"B","BV","R")
             //Binary
             l_cSQLCommand += [NULL,]
             // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cValue,"\x")+[']
@@ -1311,7 +1311,7 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
         l_hFieldDefinition := l_hField:__enumValue()
         l_cFieldUsedAs     := hb_HGetDef(l_hFieldDefinition,"UsedAs","")
         l_cFieldType       := hb_HGetDef(l_hFieldDefinition,"Type","")
-        if l_cFieldUsedAs == "Foreign" .and. vfp_Inlist(l_cFieldType,"I","IB")
+        if l_cFieldUsedAs == "Foreign" .and. el_IsInlist(l_cFieldType,"I","IB")
             l_cSQLCommand := [UPDATE ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableName))+[ SET ]+::FormatIdentifier(l_cFieldName)+[ = NULL WHERE ]+::FormatIdentifier(l_cFieldName)+[ = 0]
             if !::SQLExec("0ffbf06e-4e79-4b23-9a89-073a56cfed08",l_cSQLCommand)
                 //_M_ report error

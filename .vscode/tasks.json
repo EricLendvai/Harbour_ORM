@@ -42,7 +42,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_EL_ROOT":"C:\\Harbour_EL",
                         "LIBName":"hb_orm",
                         "BuildMode":"debug",
                         "HB_COMPILER":"${input:CCompiler}"
@@ -64,7 +64,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/src/Harbour_VFP",
+                        "HB_EL_ROOT":"/src/Harbour_EL",
                         "LIBName":"hb_orm",
                         "BuildMode":"debug",
                         "HB_COMPILER":"gcc"
@@ -89,7 +89,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_EL_ROOT":"C:\\Harbour_EL",
                         "LIBName":"hb_orm",
                         "BuildMode":"release",
                         "HB_COMPILER":"${input:CCompiler}"
@@ -111,7 +111,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/src/Harbour_VFP",
+                        "HB_EL_ROOT":"/src/Harbour_EL",
                         "LIBName":"hb_orm",
                         "BuildMode":"release",
                         "HB_COMPILER":"gcc"

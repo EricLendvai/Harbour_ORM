@@ -9,29 +9,21 @@
                 "command": "${command:remote-containers.reopenInContainer}",
                 "options": {
                     "statusbar": {"label" : "<Open Container - Go to Ubuntu>","hide" : false}
-                },
-                "presentation": {
-                    "echo": true,
-                    "reveal": "always",
-                    "focus": true,
-                    "panel": "shared",
-                    "showReuseMessage": false,
-                    "clear": true
                 }
             },
             "linux": {
                 "command": "${command:remote-containers.reopenLocally}",
                 "options": {
                     "statusbar": {"label" : "<Close Container - Go to Windows>","hide" : false}
-                },
-                "presentation": {
-                    "echo": true,
-                    "reveal": "always",
-                    "focus": true,
-                    "panel": "shared",
-                    "showReuseMessage": false,
-                    "clear": true
                 }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
             }
         },
         {
@@ -52,13 +44,13 @@
         },
         {
             "label": "CompileDebug",
+            "type": "shell",
             "windows":{
-                "type": "shell",
-                "command": "${workspaceFolder}\\BuildEXE.bat",
+                "command": "${workspaceFolder}\\..\\BuildTools\\BuildEXE.bat",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_EL_ROOT":"C:\\Harbour_EL",
                         "HB_ORM_ROOT":"C:\\Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"debug",
@@ -67,23 +59,14 @@
                         "HB_COMPILER":"mingw64"
                     },
                     "statusbar": {"label" : "<Compile Debug>","hide" : false}
-                },
-                "presentation": {
-                    "echo": true,
-                    "reveal": "always",
-                    "focus": true,
-                    "panel": "shared",
-                    "showReuseMessage": false,
-                    "clear": true
                 }
             },
             "linux":{
-                "type": "shell",
-                "command": "${workspaceFolder}/BuildEXE.sh",
+                "command": "${workspaceFolder}/../BuildTools/BuildEXE.sh",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/src/Harbour_VFP",
+                        "HB_EL_ROOT":"/src/Harbour_EL",
                         "HB_ORM_ROOT":"/src/Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"debug",
@@ -91,26 +74,26 @@
                         "HB_COMPILER":"gcc"
                     },
                     "statusbar": {"label" : "<Compile Debug>","hide" : false}
-                },
-                "presentation": {
-                    "echo": true,
-                    "reveal": "always",
-                    "focus": true,
-                    "panel": "shared",
-                    "showReuseMessage": false,
-                    "clear": true
                 }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
             }
         },
         {
             "label": "CompileAndRunRelease",
+            "type": "shell",
             "windows":{
-                "type": "shell",
-                "command": "${workspaceFolder}\\BuildEXE.bat",
+                "command": "${workspaceFolder}\\..\\BuildTools\\BuildEXE.bat",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_EL_ROOT":"C:\\Harbour_EL",
                         "HB_ORM_ROOT":"C:\\Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"release",
@@ -118,23 +101,14 @@
                         "HB_COMPILER":"${input:CCompiler}"
                     },
                     "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
-                },
-                "presentation": {
-                    "echo": true,
-                    "reveal": "always",
-                    "focus": true,
-                    "panel": "shared",
-                    "showReuseMessage": false,
-                    "clear": true
                 }
             },
             "linux":{
-                "type": "shell",
-                "command": "${workspaceFolder}/BuildEXE.sh",
+                "command": "${workspaceFolder}/../BuildTools/BuildEXE.sh",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/src/Harbour_VFP",
+                        "HB_EL_ROOT":"/src/Harbour_EL",
                         "HB_ORM_ROOT":"/src/Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"release",
@@ -142,26 +116,26 @@
                         "HB_COMPILER":"gcc"
                     },
                     "statusbar": {"label" : "<Compile Release and Run>","hide" : false}
-                },
-                "presentation": {
-                    "echo": true,
-                    "reveal": "always",
-                    "focus": true,
-                    "panel": "shared",
-                    "showReuseMessage": false,
-                    "clear": true
                 }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
             }
         },
         {
             "label": "CompileRelease",
+            "type": "shell",
             "windows":{
-                "type": "shell",
-                "command": "${workspaceFolder}\\BuildEXE.bat",
+                "command": "${workspaceFolder}\\..\\BuildTools\\BuildEXE.bat",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"C:\\Harbour_VFP",
+                        "HB_EL_ROOT":"C:\\Harbour_EL",
                         "HB_ORM_ROOT":"C:\\Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"release",
@@ -169,23 +143,14 @@
                         "HB_COMPILER":"${input:CCompiler}"
                     },
                     "statusbar": {"label" : "<Compile Release>","hide" : false}
-                },
-                "presentation": {
-                    "echo": true,
-                    "reveal": "always",
-                    "focus": true,
-                    "panel": "shared",
-                    "showReuseMessage": false,
-                    "clear": true
                 }
             },
             "linux":{
-                "type": "shell",
-                "command": "${workspaceFolder}/BuildEXE.sh",
+                "command": "${workspaceFolder}/../BuildTools/BuildEXE.sh",
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_VFP_ROOT":"/src/Harbour_VFP",
+                        "HB_EL_ROOT":"/src/Harbour_EL",
                         "HB_ORM_ROOT":"/src/Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"release",
@@ -193,77 +158,82 @@
                         "HB_COMPILER":"gcc"
                     },
                     "statusbar": {"label" : "<Compile Release>","hide" : false}
-                },
-                "presentation": {
-                    "echo": true,
-                    "reveal": "always",
-                    "focus": true,
-                    "panel": "shared",
-                    "showReuseMessage": false,
-                    "clear": true
                 }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
             }
         },
         {
             "label": "RunReleaseMingw64",
+            "type": "shell",
             "windows":{
-                "type": "shell",
                 "command": "${workspaceFolder}\\build\\win64\\mingw64\\release\\Cursors.exe",
                 "options": {
                     "statusbar": {"label" : "<Run Release Mingw64>","hide" : false}
-                },
-                "presentation": {"reveal": "never"}
+                }
             },
             "linux":{
-                "type": "shell",
                 "command": "${workspaceFolder}/build/lin64/gcc/release/Cursors.exe",
                 "options": {
                     "statusbar": {"label" : "<Run Release gcc>","hide" : false}
-                },
-                "presentation": {"reveal": "never"}
+                }
+            },
+            // "presentation": {"reveal": "never"}
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
             }
         },
         {
             "label": "Run Release msvc64",
+            "type": "shell",
             "windows":{
-                "type": "shell",
                 "command": "${workspaceFolder}\\build\\win64\\msvc64\\release\\Cursors.exe",
                 "options": {
                     "statusbar": {"label" : "<Run Release msvc64>","hide" : false}
-                },
-                "presentation": {"reveal": "never"}
+                }
             },
             "linux":{
-                "type": "shell",
                 "command": "${workspaceFolder}/build/lin64/gcc/release/Cursors.exe",
                 "options": {
                     "statusbar": {"label" : "<Run Release gcc>","hide" : true}
-                },
-                "presentation": {"reveal": "never"}
+                }
+            },
+            // "presentation": {"reveal": "never"}
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
             }
         },
         {
             "label": "DelAllPPO",
+            "type": "shell",
+            "isBackground": true,
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "statusbar": {"label" : "<Del All PPO>","hide" : false}
+            },
             "windows":{
-                "type": "shell",
-                "command": "del *.ppo",
-                "isBackground": true,
-                "options": {
-                    "cwd": "${workspaceFolder}",
-                    "statusbar": {"label" : "<Del All PPO>","hide" : false}
-                },
-                "presentation": {"reveal": "never"}
+                "command": "del *.ppo"
             },
             "linux":{
-                "type": "shell",
-                "command": "rm *.ppo",
-                "isBackground": true,
-                "options": {
-                    "cwd": "${workspaceFolder}",
-                    "statusbar": {"label" : "<Del All PPO>","hide" : false}
-                },
-                "presentation": {"reveal": "never"}
-            }
+                "command": "rm *.ppo"
+            },
+            "presentation": {"reveal": "never"}
         }
     ],
     "inputs": [

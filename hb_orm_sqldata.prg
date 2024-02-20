@@ -43,7 +43,7 @@ method Echo(par_cText) class hb_orm_SQLData
 // endfor
 
 //Bogus call to force the linker
-//VFP_GETCOMPATIBILITYPACKVERSION()
+//el_GetVersion()
 
 return par_cText
 //-----------------------------------------------------------------------------------------------------------------
@@ -255,7 +255,7 @@ case pcount() == 1
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     do case
-    case !empty(el_inlist(upper(par_cValue),"NOW()","NOW"))
+    case el_IsInlist(upper(par_cValue),"NOW()","NOW")
         // Auto-determine the precision parameter of current_timestamp()
 
         l_hFieldInfo := ::p_oSQLConnection:GetFieldInfo(::p_NamespaceAndTableName,par_cName)
@@ -277,7 +277,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     do case
-    case !empty(el_inlist(upper(par_cValue),"NOW()","NOW"))
+    case el_IsInlist(upper(par_cValue),"NOW()","NOW")
         l_cValue := "now()"
     endcase
 endcase
@@ -928,6 +928,10 @@ if pcount() > 1 .and. "^" $ par_cExpression
         endfor
 
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+// if par_cExpression == "LinkedEntity.fk_Entity1 = ^ OR LinkedEntity.fk_Entity2 = ^"
+//     altd()
+// endif
+
         for l_nPos := 1 to len(par_cExpression)
             l_cChar := substr(par_cExpression,l_nPos,1)
             // l_cChar := par_cExpression[l_nPos]
@@ -1434,6 +1438,11 @@ for each l_cByte in @par_cExpression
 
     if l_cByte == INVALUEWITCH
         l_lValueMode := !l_lValueMode
+
+        if !l_lValueMode   // Finished to merge the text, so we should not remove blanks anymore
+            l_lLastFieldWasAForeignKeyZeroNullFoundOperator := .f.
+        endif
+
         loop
     endif
     if l_lValueMode
@@ -2414,7 +2423,7 @@ else
                         l_xFieldValue := FieldGet(l_nFieldCounter)
                         l_oRecord:AddField(l_cFieldName,l_xFieldValue)
                     endfor
-                    AAdd(l_xResult,l_oRecord)
+                    AAdd(l_xResult,l_oRecord)  //Should we use a copy object ?
 
                     dbSkip()
                 endwhile
@@ -3367,7 +3376,7 @@ else
         exit
     case "JSB" // jsonb string
         if l_cValueType == "C"
-            l_xValue := vfp_strtran(par_xValue,"::jsonb","",-1,-1,1)
+            l_xValue := el_StrTran(par_xValue,"::jsonb","",-1,-1,1)
             if len(l_xValue) == 0
                 l_cValue := "{}::jsonb"
             else
@@ -3381,7 +3390,7 @@ else
         exit
     case "JS" // json string
         if l_cValueType == "C"
-            l_xValue := vfp_strtran(par_xValue,"::json","",-1,-1,1)
+            l_xValue := el_StrTran(par_xValue,"::json","",-1,-1,1)
             if len(l_xValue) == 0
                 l_cValue := "{}::json"
             else
@@ -3395,7 +3404,7 @@ else
         exit
     case "UUI" // uuid
         if l_cValueType == "C"
-            l_xValue := vfp_strtran(par_xValue,"::uuid","",-1,-1,1)
+            l_xValue := el_StrTran(par_xValue,"::uuid","",-1,-1,1)
             if len(l_xValue) == 0
                 l_cValue := "''::uuid"
             else
@@ -3455,25 +3464,25 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     case par_cFieldType == "D"
         l_cCast := [date]
     case par_cFieldType == "TOZ"
-        if vfp_between(par_nFieldDec,0,6)
+        if el_between(par_nFieldDec,0,6)
             l_cCast := [time(]+trans(par_nFieldDec)+[) with time zone]
         else
             l_cCast := [time with time zone]
         endif
     case par_cFieldType == "TO"
-        if vfp_between(par_nFieldDec,0,6)
+        if el_between(par_nFieldDec,0,6)
             l_cCast := [time(]+trans(par_nFieldDec)+[) without time zone]
         else
             l_cCast := [time without time zone]
         endif
     case par_cFieldType == "DTZ"
-        if vfp_between(par_nFieldDec,0,6)
+        if el_between(par_nFieldDec,0,6)
             l_cCast := [timestamp(]+trans(par_nFieldDec)+[) with time zone]
         else
             l_cCast := [timestamp with time zone]
         endif
     case par_cFieldType == "DT" .or. par_cFieldType == "T"
-        if vfp_between(par_nFieldDec,0,6)
+        if el_between(par_nFieldDec,0,6)
             l_cCast := [timestamp(]+trans(par_nFieldDec)+[) without time zone]
         else
             l_cCast := [timestamp without time zone]

@@ -5,7 +5,7 @@
 REQUEST HB_CODEPAGE_UTF8EX
 
 #include "hb_orm.ch"
-#include "hb_vfp.ch"
+#include "hb_el.ch"
 
 //=================================================================================================================
 Function Main()
@@ -542,10 +542,10 @@ altd()
                 //     ?"Tag1 Index",">"+padr(trans(ListOfFiles->key)+'*'+upper(alltrim(ListOfFiles->file_name)),240)+"<"
                 // endscan
                 // ExportTableToHtmlFile("ListOfFiles",l_cOutputFolder+l_cRuntimePrefixStamp+"Postgresql_ListOfFiles","From Postgresql",,,.t.)
-                // ?"Seek test 001",vfp_seek(upper("LastExport.Zip"),"ListOfFiles","tag1"),ListOfFiles->key
-                // ?"Seek test 002 - tag1",vfp_seek(upper("2*LastExp")       ,"ListOfFiles","tag1"),ListOfFiles->key
-                // ?"Seek test 002 - tag2",vfp_seek(upper("2*LastExp")       ,"ListOfFiles","tag2"),ListOfFiles->key
-                // ?"Seek test 003",vfp_seek(upper("build")         ,"ListOfFiles","tag1"),ListOfFiles->key
+                // ?"Seek test 001",el_seek(upper("LastExport.Zip"),"ListOfFiles","tag1"),ListOfFiles->key
+                // ?"Seek test 002 - tag1",el_seek(upper("2*LastExp")       ,"ListOfFiles","tag1"),ListOfFiles->key
+                // ?"Seek test 002 - tag2",el_seek(upper("2*LastExp")       ,"ListOfFiles","tag2"),ListOfFiles->key
+                // ?"Seek test 003",el_seek(upper("build")         ,"ListOfFiles","tag1"),ListOfFiles->key
 
 
 

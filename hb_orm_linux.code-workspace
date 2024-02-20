@@ -10,7 +10,7 @@
         "harbour.extraOptions": "-i/src/harbour/include/",
         "harbour.extraIncludePaths":["/src/harbour/include/",
                                      "/src/Harbour_ORM/",
-                                     "/src/Harbour_VFP/"],
+                                     "/src/Harbour_EL/"],
         "harbour.warningLevel": 1,
         "cSpell.words": [],
         "cSpell.language": "en,en-US"

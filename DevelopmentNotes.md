@@ -9,7 +9,6 @@
 
 
 # Ideas and Todos for hb_orm_sqldata
-- Implement SQL UNIONs
 - Implement Cross SQL Backends global UDFs that includes most hb and vfp manipulation.
   like for example: left(),right(),strtran(),padr(),allt(),iif(),case(),between(),inlist(),nvl(),round(),dtot(),dow(),trans(),bitand(),space(),mline(),chr(),FormatAlphaNumericForIndexing(), ....
 - Add optional Field Flags attribute to Field() method

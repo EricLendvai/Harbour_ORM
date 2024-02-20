@@ -1,11 +1,11 @@
 //Copyright (c) 2024 Eric Lendvai MIT License
 
 #ifndef HB_ORM_BUILDVERSION
-#define HB_ORM_BUILDVERSION "4.2"
+#define HB_ORM_BUILDVERSION "4.4"
 
 #define HB_ORM_TRIGGERVERSION 2
 
-#include "hb_vfp.ch"
+#include "hb_el.ch"
 #include "hbclass.ch"
 
 #xtranslate CloseAlias(<cAlias>) => (select(<cAlias>))->(dbCloseArea())
@@ -20,12 +20,10 @@
 #define HB_ORM_ENGINETYPE_POSTGRESQL  2
 #define HB_ORM_ENGINETYPE_MSSQL       3
 
-#define HB_ORM_POSTGRESQL_CASE_INSENSITIVE     0
-#define HB_ORM_POSTGRESQL_CASE_SENSITIVE       1
-#define HB_ORM_POSTGRESQL_CASE_ALL_LOWER       2
+#define HB_ORM_POSTGRESQL_CASE_INSENSITIVE  0
+#define HB_ORM_POSTGRESQL_CASE_SENSITIVE    1
+#define HB_ORM_POSTGRESQL_CASE_ALL_LOWER    2
 
-// #define HB_ORM_SCHEMA_FIELD 1
-// #define HB_ORM_SCHEMA_INDEX 2
 #define HB_ORM_SCHEMA_FIELD "Fields"
 #define HB_ORM_SCHEMA_INDEX "Indexes"
 

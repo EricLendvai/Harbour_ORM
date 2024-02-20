@@ -2,6 +2,12 @@
 
 Please note: upcoming update the Harbour_ORM will require the use of DataWharf to configure the p_WharfConfig connection property.    
 
+## 02/19/2024 V 4.4
+* Switch from using Harbour_EL to Harbour_EL dependency.
+
+## 02/18/2024 V 4.3
+* Minor fix to support some special characters in column names.
+
 ## 01/28/2024 V 4.2
 * Added support to UsedAs in p_WharfConfig Column configurations.
 
@@ -77,7 +83,7 @@ Currently only 2 selects can be combined at one time and Count() method is not s
 * Simplified distribution of library by generating hb_orm.hbc file.
 
 ## 02/10/2023 v 3.6
-* Fixed make files in examples, to handle updated Harbour_VFP.
+* Fixed make files in examples, to handle updated Harbour_EL.
 
 ## 01/29/2023 v 3.5
 * Additional parameter in function hb_orm_PostgresqlEncodeUTF8String, allowing to add extra ascii characters to be escaped.

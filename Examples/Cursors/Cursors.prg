@@ -5,7 +5,7 @@
 //#include "inkey.ch"     // not needed since not using function inkey()
 
 #include "hb_orm.ch"
-#include "hb_vfp.ch"
+#include "hb_el.ch"
 
 //REQUEST HB_CODEPAGE_UTF8EX  // not needed. The hb_orm already loads it.
 
@@ -24,7 +24,7 @@ local l_MemoryOption := HB_MEM_USED
 local l_tTimeStamp1,l_tTimeStamp2
 
 hb_orm_SendToDebugView("[Harbour] Main")
-?VFP_GetCompatibilityPackVersion()
+?el_GetVersion()
 
  altd()
 //?"------------------------------------------------------"

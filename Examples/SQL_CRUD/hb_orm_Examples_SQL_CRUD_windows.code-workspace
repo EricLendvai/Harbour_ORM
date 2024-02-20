@@ -10,7 +10,7 @@
         "harbour.extraOptions": "-iC:\\Harbour\\include",
         "harbour.extraIncludePaths":["C:\\Harbour\\include\\",
                                      "C:\\Harbour_ORM\\",
-                                     "C:\\Harbour_VFP\\"],
+                                     "C:\\Harbour_EL\\"],
         "harbour.warningLevel":1,
         "harbour.decorator":true
     }

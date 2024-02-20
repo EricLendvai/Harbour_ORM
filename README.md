@@ -24,7 +24,7 @@ Set up your development environment, and use all the tools created in the articl
 
 Basic knowledge of VSCODE (Microsoft Visual Studio Code) is recommended. See article [Developing and Debugging Harbour Programs with VSCODE](https://harbour.wiki/index.asp?page=PublicArticles&mode=show&id=190401174818&sig=6893630672).
 
-This package uses the non-intrusive version of the package at https://github.com/EricLendvai/Harbour_VFP.
+This package uses the package at https://github.com/EricLendvai/Harbour_EL.
 
 Latest MySQL and PostgreSQL MS Windows ODBC drivers (Unicode).
 

@@ -1,7 +1,7 @@
 //Copyright (c) 2024 Eric Lendvai, MIT License
 
 #include "hb_orm.ch"
-#include "hb_vfp.ch"
+#include "hb_el.ch"
 
 #ifndef DONOTINCLUDE   //Will be defined by BuilLib.bat
 #include "hb_orm_sqlconnect_class_definition.prg"
@@ -920,7 +920,7 @@ if !hb_IsNil(par_hEnumerationDefinition) .and. !empty(par_hEnumerationDefinition
                         endif
                     endif
                     
-                    if !vfp_seek(upper(l_cNamespaceName+'*'+l_cEnumerationName+'*'),"hb_orm_ListOfEnumerationsAndValues","tag1")
+                    if !el_seek(upper(l_cNamespaceName+'*'+l_cEnumerationName+'*'),"hb_orm_ListOfEnumerationsAndValues","tag1")
                         //New Enumeration
                         l_cSQLScript += [CREATE TYPE ]+::FormatIdentifier(l_cNamespaceName)+[.]+::FormatIdentifier(l_cEnumerationName)+[ AS ENUM (]
                         l_lProcessedValue := .f.
@@ -936,7 +936,7 @@ if !hb_IsNil(par_hEnumerationDefinition) .and. !empty(par_hEnumerationDefinition
                         l_cSQLScript += [);]+CRLF
                     else
                         for each l_cEnumValueName in l_hEnumValues
-                            if !vfp_seek(upper(l_cNamespaceName+'*'+l_cEnumerationName+'*'+l_cEnumValueName:__enumKey+'*'),"hb_orm_ListOfEnumerationsAndValues","tag1")
+                            if !el_seek(upper(l_cNamespaceName+'*'+l_cEnumerationName+'*'+l_cEnumValueName:__enumKey+'*'),"hb_orm_ListOfEnumerationsAndValues","tag1")
                                 l_cSQLScript += [ALTER TYPE ]+::FormatIdentifier(l_cNamespaceName)+[.]+::FormatIdentifier(l_cEnumerationName)+[ ADD VALUE ']+l_cEnumValueName:__enumKey+[';]+CRLF
                             endif
                         endfor
@@ -956,7 +956,7 @@ if !empty(l_cEnumValueName)
 endif
 
 // if used("hb_orm_ListOfPrimaryKeyConstraints")
-//     if vfp_seek(padr(upper(NamespaceName+'*'+TableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
+//     if el_seek(padr(upper(NamespaceName+'*'+TableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
 //     endif
 // endif
 
@@ -1016,7 +1016,7 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
 
     if hb_IsNIL(l_hCurrentTableDefinition)
 
-// VFP_StrToFile(hb_jsonEncode(::p_TableSchema,.t.) ,"d:\p_TableSchema.txt")
+// el_StrToFile(hb_jsonEncode(::p_TableSchema,.t.) ,"d:\p_TableSchema.txt")
 
         // Table does not exist in the current catalog
         hb_orm_SendToDebugView("Add Table: "+l_cNamespaceAndTableName)
@@ -1103,7 +1103,7 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
             if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
                 l_lFieldAutoIncrement := .t.
             endif
-            if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
+            if l_lFieldAutoIncrement .and. empty(el_InlistPos(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
                 l_lFieldAutoIncrement := .f.
             endif
             if l_lFieldAutoIncrement .and. l_lFieldNullable  //Auto-Increment fields may not be null (and not have a default)
@@ -1151,7 +1151,7 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
                 l_lCurrentFieldArray         := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
 
 
-                if l_lCurrentFieldAutoIncrement .and. empty(el_inlist(l_cCurrentFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
+                if l_lCurrentFieldAutoIncrement .and. empty(el_InlistPos(l_cCurrentFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
                     l_lCurrentFieldAutoIncrement := .f.
                 endif
                 if l_lCurrentFieldAutoIncrement .and. l_lCurrentFieldNullable  //Auto-Increment fields may not be null (and not have a default)
@@ -1181,11 +1181,11 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
                 case l_cFieldType == "E" .and. !(l_cFieldTypeEnumName == l_cCurrentFieldTypeEnumName)
                     l_lMatchingFieldDefinition := .f.  // The problem is that in Postgres, it is not allowed to change enumeration type.
                     l_cMismatchType := "Field Enumeration Type"
-                case !empty(el_inlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS","JSB","OID","E"))  //Field type with no length
-                case empty(el_inlist(l_cFieldType,"TOZ","TO","DTZ","DT")) .and. l_nFieldLen <> l_nCurrentFieldLen   //Ignore Length matching for datetime and time fields
+                case el_IsInlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS","JSB","OID","E")  //Field type with no length
+                case empty(el_InlistPos(l_cFieldType,"TOZ","TO","DTZ","DT")) .and. l_nFieldLen <> l_nCurrentFieldLen   //Ignore Length matching for datetime and time fields
                     l_lMatchingFieldDefinition := .f.
                     l_cMismatchType := "Field Length"
-                case !empty(el_inlist(l_cFieldType,"C","CV","B","BV"))  //Field type with a length but no decimal
+                case el_IsInlist(l_cFieldType,"C","CV","B","BV")  //Field type with a length but no decimal
                 case l_nFieldDec  <> l_nCurrentFieldDec
                     l_lMatchingFieldDefinition := .f.
                     l_cMismatchType := "Field Decimal"
@@ -1416,7 +1416,7 @@ for each l_aField in par_hStructure
     if lower(l_cFieldName) == lower(::p_PrimaryKeyFieldName)
         l_lFieldAutoIncrement := .t.
     endif
-    if l_lFieldAutoIncrement .and. empty(el_inlist(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
+    if l_lFieldAutoIncrement .and. empty(el_InlistPos(l_cFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
         l_lFieldAutoIncrement := .f.
     endif
     if l_lFieldAutoIncrement .and. l_lFieldNullable  //Auto-Increment fields may not be null (and not have a default)
@@ -1440,7 +1440,7 @@ for each l_aField in par_hStructure
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         do case
-        case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
+        case el_IsInlist(l_cFieldType,"I","IB","IS","N")
             do case
             case l_cFieldType == "I"
                 l_cSQLFields += [INT]
@@ -1464,7 +1464,7 @@ for each l_aField in par_hStructure
                 l_cDefaultString := "0"
             endif
 
-        case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
+        case el_IsInlist(l_cFieldType,"C","CV","B","BV","M","R")
             do case
             case l_cFieldType == "C"
                 l_cSQLFields += [CHAR(]+trans(l_nFieldLen)+[)]
@@ -1486,34 +1486,34 @@ for each l_aField in par_hStructure
             l_cSQLFields += [TINYINT(1)]
             l_cDefaultString := "0"
             
-        case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
+        case el_IsInlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT")
             do case
             case l_cFieldType == "D"
                 l_cSQLFields += [DATE]
                 l_cDefaultString   := ['0000-00-00']
             case l_cFieldType == "TOZ"
-                if vfp_between(l_nFieldDec,0,6)
+                if el_between(l_nFieldDec,0,6)
                     l_cSQLFields += [TIME(]+trans(l_nFieldDec)+[) COMMENT 'Type=TOZ']
                 else
                     l_cSQLFields += [TIME COMMENT 'Type=TOZ']
                 endif
                 l_cDefaultString   := ['00:00:00']
             case l_cFieldType == "TO"
-                if vfp_between(l_nFieldDec,0,6)
+                if el_between(l_nFieldDec,0,6)
                     l_cSQLFields += [TIME(]+trans(l_nFieldDec)+[)]
                 else
                     l_cSQLFields += [TIME]
                 endif
                 l_cDefaultString   := ['00:00:00']
             case l_cFieldType == "DTZ"
-                if vfp_between(l_nFieldDec,0,6)
+                if el_between(l_nFieldDec,0,6)
                     l_cSQLFields += [TIMESTAMP(]+trans(l_nFieldDec)+[)]
                 else
                     l_cSQLFields += [TIMESTAMP]
                 endif
                 l_cDefaultString   := ['0000-00-00 00:00:00']
             case l_cFieldType == "DT" .or. l_cFieldType == "T"
-                if vfp_between(l_nFieldDec,0,6)
+                if el_between(l_nFieldDec,0,6)
                     l_cSQLFields += [DATETIME(]+trans(l_nFieldDec)+[)]
                 else
                     l_cSQLFields += [DATETIME]
@@ -1568,7 +1568,7 @@ for each l_aField in par_hStructure
         l_cFieldTypeSuffix := iif(l_lFieldArray,"[]","")
 
         do case
-        case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
+        case el_IsInlist(l_cFieldType,"I","IB","IS","N")
             do case
             case l_cFieldType == "I"
                 l_cSQLFields += [integer]+l_cFieldTypeSuffix
@@ -1592,7 +1592,7 @@ for each l_aField in par_hStructure
             endif
 
 
-        case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
+        case el_IsInlist(l_cFieldType,"C","CV","B","BV","M","R")
             do case
             case l_cFieldType == "C"
                 l_cSQLFields += [character(]+trans(l_nFieldLen)+[)]+l_cFieldTypeSuffix
@@ -1618,30 +1618,30 @@ for each l_aField in par_hStructure
 
             l_cDefaultString := "FALSE"
             
-        case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
+        case el_IsInlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT")
             do case
             case l_cFieldType == "D"
                 l_cSQLFields += [date]+l_cFieldTypeSuffix
             case l_cFieldType == "TOZ"
-                if vfp_between(l_nFieldDec,0,6)
+                if el_between(l_nFieldDec,0,6)
                     l_cSQLFields += [time(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
                 else
                     l_cSQLFields += [time with time zone]+l_cFieldTypeSuffix
                 endif
             case l_cFieldType == "TO"
-                if vfp_between(l_nFieldDec,0,6)
+                if el_between(l_nFieldDec,0,6)
                     l_cSQLFields += [time(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
                 else
                     l_cSQLFields += [time without time zone]+l_cFieldTypeSuffix
                 endif
             case l_cFieldType == "DTZ"
-                if vfp_between(l_nFieldDec,0,6)
+                if el_between(l_nFieldDec,0,6)
                     l_cSQLFields += [timestamp(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
                 else
                     l_cSQLFields += [timestamp with time zone]+l_cFieldTypeSuffix
                 endif
             case l_cFieldType == "DT" .or. l_cFieldType == "T"
-                if vfp_between(l_nFieldDec,0,6)
+                if el_between(l_nFieldDec,0,6)
                     l_cSQLFields += [timestamp(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
                 else
                     l_cSQLFields += [timestamp without time zone]+l_cFieldTypeSuffix
@@ -1828,7 +1828,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommandCycle2 += [,CHANGE COLUMN ]+l_cFormattedFieldName+[ ]+l_cFormattedFieldName+[ ]
 
     do case
-    case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
+    case el_IsInlist(l_cFieldType,"I","IB","IS","N")
         do case
         case l_cFieldType == "I"
             l_cSQLCommandCycle2 += [INT]
@@ -1860,7 +1860,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
         endif
 
-    case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
+    case el_IsInlist(l_cFieldType,"C","CV","B","BV","M","R")
         do case
         case l_cFieldType == "C"
             l_cSQLCommandCycle2 += [CHAR(]+trans(l_nFieldLen)+[)]
@@ -1882,34 +1882,34 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSQLCommandCycle2 += [TINYINT(1)]
         l_cDefaultString := "0"
         
-    case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
+    case el_IsInlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT")
         do case
         case l_cFieldType == "D"
             l_cSQLCommandCycle2 += [DATE]
             l_cDefaultString := ['0000-00-00']
         case l_cFieldType == "TOZ"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommandCycle2 += [TIME(]+trans(l_nFieldDec)+[) COMMENT 'Type=TOZ']
             else
                 l_cSQLCommandCycle2 += [TIME COMMENT 'Type=TOZ']
             endif
             l_cDefaultString := ['00:00:00']
         case l_cFieldType == "TO"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommandCycle2 += [TIME(]+trans(l_nFieldDec)+[)]
             else
                 l_cSQLCommandCycle2 += [TIME]
             endif
             l_cDefaultString := ['00:00:00']
         case l_cFieldType == "DTZ"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommandCycle2 += [TIMESTAMP(]+trans(l_nFieldDec)+[)]
             else
                 l_cSQLCommandCycle2 += [TIMESTAMP]
             endif
             l_cDefaultString := ['0000-00-00 00:00:00']
         case l_cFieldType == "DT" .or. l_cFieldType == "T"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommandCycle2 += [DATETIME(]+trans(l_nFieldDec)+[)]
             else
                 l_cSQLCommandCycle2 += [DATETIME]
@@ -1967,7 +1967,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_cFieldTypeSuffix := iif(l_lFieldArray,"[]","")
 
     do case
-    case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
+    case el_IsInlist(l_cFieldType,"I","IB","IS","N")
         do case
         case l_cFieldType == "I"
             l_cSQLCommandCycle1 += [TYPE integer]+l_cFieldTypeSuffix
@@ -1999,7 +1999,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             // Will always name the constraints in lower case
 
             if used("hb_orm_ListOfPrimaryKeyConstraints")
-                if !vfp_seek(padr(upper(par_cNamespaceName+'*'+par_cTableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
+                if !el_seek(padr(upper(par_cNamespaceName+'*'+par_cTableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
                     // It does not matter what the constraint name is.
                     l_cSQLCommandCycle1 += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_pkey PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
                     l_cDefaultString := ""
@@ -2019,7 +2019,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
         endif
 
-    case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
+    case el_IsInlist(l_cFieldType,"C","CV","B","BV","M","R")
         do case
         case l_cFieldType == "C"
             l_cSQLCommandCycle1 += [TYPE character(]+trans(l_nFieldLen)+[)]+l_cFieldTypeSuffix
@@ -2042,30 +2042,30 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSQLCommandCycle1 += [TYPE boolean]+l_cFieldTypeSuffix
         l_cDefaultString := "FALSE"
 
-    case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
+    case el_IsInlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT")
         do case
         case l_cFieldType == "D"
             l_cSQLCommandCycle1 += [TYPE date]+l_cFieldTypeSuffix
         case l_cFieldType == "TOZ"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommandCycle1 += [TYPE time(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
             else
                 l_cSQLCommandCycle1 += [TYPE time with time zone]+l_cFieldTypeSuffix
             endif
         case l_cFieldType == "TO"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommandCycle1 += [TYPE time(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
             else
                 l_cSQLCommandCycle1 += [TYPE time without time zone]+l_cFieldTypeSuffix
             endif
         case l_cFieldType == "DTZ"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommandCycle1 += [TYPE timestamp(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
             else
                 l_cSQLCommandCycle1 += [TYPE timestamp with time zone]+l_cFieldTypeSuffix
             endif
         case l_cFieldType == "DT" .or. l_cFieldType == "T"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommandCycle1 += [TYPE timestamp(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
             else
                 l_cSQLCommandCycle1 += [TYPE timestamp without time zone]+l_cFieldTypeSuffix
@@ -2184,7 +2184,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommand += [,ADD COLUMN ]+l_cFormattedFieldName+[ ]
 
     do case
-    case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
+    case el_IsInlist(l_cFieldType,"I","IB","IS","N")
         do case
         case l_cFieldType == "I"
             l_cSQLCommand += [INT]
@@ -2208,7 +2208,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             l_cDefaultString := "0"
         endif
         
-    case !empty(el_inlist(l_cFieldType,"C","CV","B","BV","M","R"))
+    case el_IsInlist(l_cFieldType,"C","CV","B","BV","M","R")
         do case
         case l_cFieldType == "C"
             l_cSQLCommand += [CHAR(]+trans(l_nFieldLen)+[)]
@@ -2229,34 +2229,34 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSQLCommand += [TINYINT(1)]
         l_cDefaultString := "0"
         
-    case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
+    case el_IsInlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT")
         do case
         case l_cFieldType == "D"
             l_cSQLCommand += [DATE]
             l_cDefaultString    := ['0000-00-00']
         case l_cFieldType == "TOZ"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommand += [TIME(]+trans(l_nFieldDec)+[) COMMENT 'Type=TOZ']
             else
                 l_cSQLCommand += [TIME COMMENT 'Type=TOZ']
             endif
             l_cDefaultString    := ['00:00:00']
         case l_cFieldType == "TO"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommand += [TIME(]+trans(l_nFieldDec)+[)]
             else
                 l_cSQLCommand += [TIME]
             endif
             l_cDefaultString    := ['00:00:00']
         case l_cFieldType == "DTZ"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommand += [TIMESTAMP(]+trans(l_nFieldDec)+[)]
             else
                 l_cSQLCommand += [TIMESTAMP]
             endif
             l_cDefaultString    := ['0000-00-00 00:00:00']
         case l_cFieldType == "DT" .or. l_cFieldType == "T"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommand += [DATETIME(]+trans(l_nFieldDec)+[)]
             else
                 l_cSQLCommand += [DATETIME]
@@ -2318,7 +2318,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 // endif
 
     do case
-    case !empty(el_inlist(l_cFieldType,"I","IB","IS","N"))
+    case el_IsInlist(l_cFieldType,"I","IB","IS","N")
         do case
         case l_cFieldType == "I"
             l_cSQLCommand += [integer]+l_cFieldTypeSuffix
@@ -2338,7 +2338,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cSQLCommand += [ NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 )]
 
             if used("hb_orm_ListOfPrimaryKeyConstraints")
-                if !vfp_seek(padr(upper(par_cNamespaceName+'*'+par_cTableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
+                if !el_seek(padr(upper(par_cNamespaceName+'*'+par_cTableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
                     l_cSQLCommand += [,ADD CONSTRAINT ]+lower(par_cTableName)+[_pkey PRIMARY KEY (]+::FormatIdentifier(par_cFieldName)+[)]
                     l_cDefaultString := ""
                 endif
@@ -2348,7 +2348,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cDefaultString := "0"
         endif
         
-    case !empty(el_inlist(l_cFieldType,"C","CV","M","B","BV","R"))
+    case el_IsInlist(l_cFieldType,"C","CV","M","B","BV","R")
         do case
         case l_cFieldType == "C"
             l_cSQLCommand += [character(]+trans(l_nFieldLen)+[)]+l_cFieldTypeSuffix
@@ -2371,30 +2371,30 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSQLCommand += [boolean]+l_cFieldTypeSuffix
         l_cDefaultString := "FALSE"
 
-    case !empty(el_inlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT"))
+    case el_IsInlist(l_cFieldType,"D","TOZ","TO","DTZ","T","DT")
         do case
         case l_cFieldType == "D"
             l_cSQLCommand += [date]+l_cFieldTypeSuffix
         case l_cFieldType == "TOZ"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommand += [time(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
             else
                 l_cSQLCommand += [time with time zone]+l_cFieldTypeSuffix
             endif
         case l_cFieldType == "TO"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommand += [time(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
             else
                 l_cSQLCommand += [time without time zone]+l_cFieldTypeSuffix
             endif
         case l_cFieldType == "DTZ"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommand += [timestamp(]+trans(l_nFieldDec)+[) with time zone]+l_cFieldTypeSuffix
             else
                 l_cSQLCommand += [timestamp with time zone]+l_cFieldTypeSuffix
             endif
         case l_cFieldType == "DT" .or. l_cFieldType == "T"
-            if vfp_between(l_nFieldDec,0,6)
+            if el_between(l_nFieldDec,0,6)
                 l_cSQLCommand += [timestamp(]+trans(l_nFieldDec)+[) without time zone]+l_cFieldTypeSuffix
             else
                 l_cSQLCommand += [timestamp without time zone]+l_cFieldTypeSuffix
@@ -3680,16 +3680,16 @@ case par_cFieldType == "L"
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"FALSE",".F.","F","WHARF-FALSE"))
+        case el_IsInlist(upper(l_cFieldDefault),"FALSE",".F.","F","WHARF-FALSE")
             l_cFieldDefault = "0"
-        case !empty(el_inlist(upper(l_cFieldDefault),"TRUE",".T.","T","WHARF-TRUE"))
+        case el_IsInlist(upper(l_cFieldDefault),"TRUE",".T.","T","WHARF-TRUE")
             l_cFieldDefault = "1"
         endcase
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"0","FALSE",".F.","F","WHARF-FALSE"))
+        case el_IsInlist(upper(l_cFieldDefault),"0","FALSE",".F.","F","WHARF-FALSE")
             l_cFieldDefault = "false"
-        case !empty(el_inlist(upper(l_cFieldDefault),"1","TRUE",".T.","T","WHARF-TRUE"))
+        case el_IsInlist(upper(l_cFieldDefault),"1","TRUE",".T.","T","WHARF-TRUE")
             l_cFieldDefault = "true"
         endcase
     endcase
@@ -3698,21 +3698,21 @@ case par_cFieldType == "UUI"
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"UUI","UUID","UUI()","UUID()","WHARF-UUID()"))
+        case el_IsInlist(upper(l_cFieldDefault),"UUI","UUID","UUI()","UUID()","WHARF-UUID()")
             l_cFieldDefault = "uuid()"
         endcase
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"UUI","UUID","UUI()","UUID()","WHARF-UUID()"))
+        case el_IsInlist(upper(l_cFieldDefault),"UUI","UUID","UUI()","UUID()","WHARF-UUID()")
             l_cFieldDefault = "gen_random_uuid()"
         endcase
     endcase
 
-case !empty(el_inlist(par_cFieldType,"TOZ","TO","DTZ","DT"))
+case el_IsInlist(par_cFieldType,"TOZ","TO","DTZ","DT")
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"NOW","NOW()","WHARF-NOW()"))
+        case el_IsInlist(upper(l_cFieldDefault),"NOW","NOW()","WHARF-NOW()")
             if par_nFieldDec == 0
                 l_cFieldDefault = "current_timestamp()"
             else
@@ -3721,21 +3721,21 @@ case !empty(el_inlist(par_cFieldType,"TOZ","TO","DTZ","DT"))
         endcase
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"NOW","NOW()","WHARF-NOW()"))
+        case el_IsInlist(upper(l_cFieldDefault),"NOW","NOW()","WHARF-NOW()")
             l_cFieldDefault := "now()"
         endcase
     endcase
 
-case !empty(el_inlist(par_cFieldType,"D"))
+case el_IsInlist(par_cFieldType,"D")
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"TODAY","TODAY()","WHARF-TODAY()"))
+        case el_IsInlist(upper(l_cFieldDefault),"TODAY","TODAY()","WHARF-TODAY()")
             l_cFieldDefault = "current_date()"
         endcase
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         do case
-        case !empty(el_inlist(upper(l_cFieldDefault),"TODAY","TODAY()","WHARF-TODAY()"))
+        case el_IsInlist(upper(l_cFieldDefault),"TODAY","TODAY()","WHARF-TODAY()")
             l_cFieldDefault := "current_date()"
         endcase
     endcase
@@ -3743,16 +3743,16 @@ case !empty(el_inlist(par_cFieldType,"D"))
 // //_M_  Add on 
 // //https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-serial/
 
-// case !empty(el_inlist(par_cFieldType,"I","IB","IS","N"))
+// case el_IsInlist(par_cFieldType,"I","IB","IS","N")
 //     do case
 //     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 //         do case
-//         case !empty(el_inlist(upper(l_cFieldDefault),"AUTOINCREMENT", "AUTOINCREMENT()","WHARF-AUTOINCREMENT()"))
+//         case el_IsInlist(upper(l_cFieldDefault),"AUTOINCREMENT", "AUTOINCREMENT()","WHARF-AUTOINCREMENT()")
 //             // l_cFieldDefault = "current_date()"
 //         endcase
 //     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 //         do case
-//         case !empty(el_inlist(upper(l_cFieldDefault),"AUTOINCREMENT", "AUTOINCREMENT()","WHARF-AUTOINCREMENT()"))
+//         case el_IsInlist(upper(l_cFieldDefault),"AUTOINCREMENT", "AUTOINCREMENT()","WHARF-AUTOINCREMENT()")
 //             // l_cFieldDefault := "current_date()"
 //         endcase
 //     endcase
@@ -3770,7 +3770,7 @@ case hb_IsNIL(l_cFieldDefault)
 
 case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     do case
-    case !empty(el_inlist(par_cFieldType,"I","IB","IS","N","Y","L","OID"))
+    case el_IsInlist(par_cFieldType,"I","IB","IS","N","Y","L","OID")
         if (right(par_cFieldDefault,1) == "0" .and. val(par_cFieldDefault) == 0)
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
@@ -3782,7 +3782,7 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     //         l_cFieldDefault := NIL
     //     endif
 
-    case !empty(el_inlist(par_cFieldType,"C","CV"))
+    case el_IsInlist(par_cFieldType,"C","CV")
         if par_cFieldDefault == "''"
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
@@ -3790,28 +3790,28 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         endif
 
     case par_cFieldType == "DTZ"
-        if !empty(el_inlist(par_cFieldDefault,"'0000-00-00 00:00:00'","''"))
+        if el_IsInlist(par_cFieldDefault,"'0000-00-00 00:00:00'","''")
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
         
     case par_cFieldType == "D"
-        if !empty(el_inlist(par_cFieldDefault,"'0000-00-00'","''"))
+        if el_IsInlist(par_cFieldDefault,"'0000-00-00'","''")
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
         
     case par_cFieldType == "UUI"
-        if !empty(el_inlist(par_cFieldDefault,"'00000000-0000-0000-0000-000000000000'","''"))
+        if el_IsInlist(par_cFieldDefault,"'00000000-0000-0000-0000-000000000000'","''")
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
         endif
         
-    case !empty(el_inlist(par_cFieldType,"JS","JSB"))
-        if !empty(el_inlist(par_cFieldDefault,"'{}'","''"))
+    case el_IsInlist(par_cFieldType,"JS","JSB")
+        if el_IsInlist(par_cFieldDefault,"'{}'","''")
             l_cFieldDefault := NIL
         elseif par_cFieldDefault == "NULL"
             l_cFieldDefault := NIL
@@ -3829,7 +3829,7 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     case par_cFieldType == "N"
         if par_cFieldDefault == "0"
             l_cFieldDefault := NIL
-        elseif !empty(el_inlist(par_cFieldDefault,"''::numeric","'0'::numeric","''","0"))
+        elseif el_IsInlist(par_cFieldDefault,"''::numeric","'0'::numeric","''","0")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::numeric")) == "::numeric"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::numeric"))
@@ -3838,7 +3838,7 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     case par_cFieldType == "I"
         if par_cFieldDefault == "0"
             l_cFieldDefault := NIL
-        elseif !empty(el_inlist(par_cFieldDefault,"''::integer","'0'::integer","''","0"))
+        elseif el_IsInlist(par_cFieldDefault,"''::integer","'0'::integer","''","0")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::integer")) == "::integer"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::integer"))
@@ -3847,7 +3847,7 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     case par_cFieldType == "IB"
         if par_cFieldDefault == "0"
             l_cFieldDefault := NIL
-        elseif !empty(el_inlist(par_cFieldDefault,"''::bigint","'0'::bigint","''","0"))
+        elseif el_IsInlist(par_cFieldDefault,"''::bigint","'0'::bigint","''","0")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::bigint")) == "::bigint"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::bigint"))
@@ -3856,7 +3856,7 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     case par_cFieldType == "IS"
         if par_cFieldDefault == "0"
             l_cFieldDefault := NIL
-        elseif !empty(el_inlist(par_cFieldDefault,"''::smallint","'0'::smallint","''","0"))
+        elseif el_IsInlist(par_cFieldDefault,"''::smallint","'0'::smallint","''","0")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::smallint")) == "::smallint"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::smallint"))
@@ -3865,7 +3865,7 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     case par_cFieldType == "Y"
         if par_cFieldDefault == "0"
             l_cFieldDefault := NIL
-        elseif !empty(el_inlist(par_cFieldDefault,"''::money","'0'::money","''","0"))
+        elseif el_IsInlist(par_cFieldDefault,"''::money","'0'::money","''","0")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::money")) == "::money"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::money"))
@@ -3877,55 +3877,55 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         endif
 
     case par_cFieldType == "C"
-        if !empty(el_inlist(par_cFieldDefault,"''::bpchar","''"))
+        if el_IsInlist(par_cFieldDefault,"''::bpchar","''")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::bpchar")) == "::bpchar"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::bpchar"))
         endif
         
     case par_cFieldType == "M"
-        if !empty(el_inlist(par_cFieldDefault,"''::text","''"))
+        if el_IsInlist(par_cFieldDefault,"''::text","''")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::text")) == "::text"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::text"))
         endif
         
     case par_cFieldType == "CV"
-        if !empty(el_inlist(par_cFieldDefault,"''::character varying","''"))
+        if el_IsInlist(par_cFieldDefault,"''::character varying","''")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::character varying")) == "::character varying"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::character varying"))
         endif
         
     case par_cFieldType == "DTZ"
-        if !empty(el_inlist(par_cFieldDefault,"'-infinity'::timestamp with time zone","'-infinity'","''"))
+        if el_IsInlist(par_cFieldDefault,"'-infinity'::timestamp with time zone","'-infinity'","''")
             l_cFieldDefault := NIL
         endif
         
     case par_cFieldType == "DT"
-        if !empty(el_inlist(par_cFieldDefault,"'-infinity'::timestamp without time zone","'-infinity'","''"))
+        if el_IsInlist(par_cFieldDefault,"'-infinity'::timestamp without time zone","'-infinity'","''")
             l_cFieldDefault := NIL
         endif
         
     case par_cFieldType == "D"
-        if !empty(el_inlist(par_cFieldDefault,"'-infinity'::date","'-infinity'","''"))
+        if el_IsInlist(par_cFieldDefault,"'-infinity'::date","'-infinity'","''")
             l_cFieldDefault := NIL
         endif
 
     case par_cFieldType == "UUI"
-        if !empty(el_inlist(par_cFieldDefault,"'00000000-0000-0000-0000-000000000000'::uuid","'00000000-0000-0000-0000-000000000000'","''"))
+        if el_IsInlist(par_cFieldDefault,"'00000000-0000-0000-0000-000000000000'::uuid","'00000000-0000-0000-0000-000000000000'","''")
             l_cFieldDefault := NIL
         endif
         
-    case !empty(el_inlist(par_cFieldType,"JS","JSB"))
-        if !empty(el_inlist(par_cFieldDefault,"'{}'::json","'{}'::jsonb","'{}'","''"))
+    case el_IsInlist(par_cFieldType,"JS","JSB")
+        if el_IsInlist(par_cFieldDefault,"'{}'::json","'{}'::jsonb","'{}'","''")
             l_cFieldDefault := NIL
         endif
         
     case par_cFieldType == "OID"
         if par_cFieldDefault == "0"
             l_cFieldDefault := NIL
-        elseif !empty(el_inlist(par_cFieldDefault,"''::oid","'0'::oid","''","0"))
+        elseif el_IsInlist(par_cFieldDefault,"''::oid","'0'::oid","''","0")
             l_cFieldDefault := NIL
         elseif right(par_cFieldDefault,len("::oid")) == "::oid"
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::oid"))
@@ -4174,7 +4174,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
                         if empty(l_cConstraintAction)
                             //Check if we should remove a constraint
-                            if vfp_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
+                            if el_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
                                 l_cSQLCommand += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc";]
                                 l_cSQLCommand += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
                                 if !(l_cFieldName == lower(l_cFieldName))
@@ -4200,7 +4200,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                                 hb_orm_SendToDebugView("GenerateMigrateForeignKeyConstraintsScript - Failed to find Primary key of Table: "+l_cParentNamespaceName+"."+l_cParentTableName)
                             else
 
-                                if vfp_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
+                                if el_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
                                     //Compare if the constraint is the same
                                     l_lAddConstraints := .f.
 

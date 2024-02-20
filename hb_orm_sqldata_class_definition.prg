@@ -141,8 +141,8 @@ class hb_orm_SQLData
 
         method SetExplainMode(par_nMode)                                                               // Used to get explain information. 0 = Explain off, 1 = Explain with no run, 2 = Explain with run
         method BuildSQL(par_cAction) //  par_cAction can be "Count" "Fetch"
-        method SQL(par_1)                                                                              // Assemble and Run SQL command
-        method Count()                                                                                 // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error. The par_SQLID is optional (used if reporting error info).
+        method SQL(par_1)                                                                              // Assemble and Run SQL command. par_1 can be a String (name of a in-memory table/cursor), reference to an array or reference to a hash array.
+        method Count()                                                                                 // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error.
 
         method GetLastEventId() INLINE ::p_cEventId                                                    // Will return the Last :Table() EventID. Useful to report where a problem occurred. 
         method LastSQL()        INLINE ::p_LastSQLCommand                                              // Get the last sent SQL command executed
