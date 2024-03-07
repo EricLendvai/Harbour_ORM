@@ -58,7 +58,7 @@ local l_aErrors := {}
 local l_cNonTableAlias
 local l_cNamespaceAndTableName
 
-if pcount() > 0
+if pcount() > 0 .and. !empty(::p_oSQLConnection:p_hWharfConfig)
     ::SetEventId(par_xEventId)
 
     // hb_HCaseMatch(::p_AliasToNamespaceAndTableNames,.f.)     No Need to make it case insensitive since Aliases are always converted to lower case
@@ -146,7 +146,8 @@ if pcount() > 0
     endif
     
     ::p_Key     := 0
-
+else
+    ::p_NamespaceAndTableName := ""
 endif
 
 return ::p_NamespaceAndTableName
@@ -336,9 +337,12 @@ local l_nPos
 ::Tally          := 0
 ::p_Key          := 0
 
-if !::IsConnected()
+do case
+case !::IsConnected()
     ::p_ErrorMessage := [Missing SQL Connection]
-endif
+case  empty(::p_oSQLConnection:p_hWharfConfig)
+    ::p_ErrorMessage := [WharfConfig structure required]
+endcase
 
 if empty(::p_ErrorMessage)
     do case
@@ -363,7 +367,7 @@ if empty(::p_ErrorMessage)
             endif
             
             //Check if a CreationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
+            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
                 if !empty(l_cFields)
                     l_cFields += ","
                     l_cValues += ","
@@ -373,7 +377,7 @@ if empty(::p_ErrorMessage)
             endif
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
                 if !empty(l_cFields)
                     l_cFields += ","
                     l_cValues += ","
@@ -384,7 +388,7 @@ if empty(::p_ErrorMessage)
             
             for each l_oField in ::p_FieldsAndValues
                 l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_hFieldInfo := ::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_hFieldInfo := ::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
                 l_aValue     := l_oField:__enumValue()
 
                 switch l_aValue[1]
@@ -457,7 +461,7 @@ if empty(::p_ErrorMessage)
             endif
             
             //Check if a CreationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
+            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
                 if !empty(l_cFields)
                     l_cFields += ","
                     l_cValues += ","
@@ -467,7 +471,7 @@ if empty(::p_ErrorMessage)
             endif
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
                 if !empty(l_cFields)
                     l_cFields += ","
                     l_cValues += ","
@@ -478,7 +482,7 @@ if empty(::p_ErrorMessage)
 
             for each l_oField in ::p_FieldsAndValues
                 l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_hFieldInfo := ::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_hFieldInfo := ::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
                 l_aValue     := l_oField:__enumValue()
 
                 switch l_aValue[1]
@@ -594,9 +598,12 @@ if pcount() != 3
 endif
 
 if empty(::p_ErrorMessage)
-    if !::IsConnected()
+    do case
+    case !::IsConnected()
         ::p_ErrorMessage := [Missing SQL Connection]
-    endif
+    case  empty(::p_oSQLConnection:p_hWharfConfig)
+        ::p_ErrorMessage := [WharfConfig structure required]
+    endcase
 endif
 
 if empty(::p_ErrorMessage)
@@ -690,9 +697,12 @@ endif
 ::p_LastUpdateChangedData := .f.
 *::p_LastDateTimeOfChangeFieldName := ""
 
-if !::IsConnected()
+do case
+case !::IsConnected()
     ::p_ErrorMessage := [Missing SQL Connection]
-endif
+case  empty(::p_oSQLConnection:p_hWharfConfig)
+    ::p_ErrorMessage := [WharfConfig structure required]
+endcase
 
 if empty(::p_ErrorMessage)
     do case
@@ -713,7 +723,7 @@ if empty(::p_ErrorMessage)
             l_cSQLCommand := ""
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
                 if !empty(l_cSQLCommand)
                     l_cSQLCommand += ","
                 endif
@@ -722,7 +732,7 @@ if empty(::p_ErrorMessage)
             
             for each l_oField in ::p_FieldsAndValues
                 l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_hFieldInfo := ::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_hFieldInfo := ::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
                 l_aValue     := l_oField:__enumValue()
 
                 switch l_aValue[1]
@@ -767,7 +777,7 @@ if empty(::p_ErrorMessage)
             l_cSQLCommand := ""
             
             //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
                 if !empty(l_cSQLCommand)
                     l_cSQLCommand += ","
                 endif
@@ -776,7 +786,7 @@ if empty(::p_ErrorMessage)
             
             for each l_oField in ::p_FieldsAndValues
                 l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_hFieldInfo := ::p_oSQLConnection:p_TableSchema[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                l_hFieldInfo := ::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
                 l_aValue     := l_oField:__enumValue()
 
                 switch l_aValue[1]
@@ -884,9 +894,9 @@ if pcount() > 1 .and. "^" $ par_cExpression
                 switch valtype(l_xValue)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_cResult += INVALUEWITCH+'"'+hb_StrReplace( l_xValue, { "'" => "\'",;
+                    l_cResult += INVALUEWITCH+'"'+hb_StrReplace( l_xValue, {'\' => '\\',;
                                                                             '"' => '\"',;
-                                                                            '\' => '\\'} )+'"'+INVALUEWITCH
+                                                                            "'" => "\'"} )+'"'+INVALUEWITCH
                     exit
 
                 case "N"  // Numeric
@@ -942,9 +952,9 @@ if pcount() > 1 .and. "^" $ par_cExpression
                 switch valtype(l_xValue)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_cResult += INVALUEWITCH+"'"+hb_StrReplace( l_xValue, { "'" => "\'",;
+                    l_cResult += INVALUEWITCH+"'"+hb_StrReplace( l_xValue, {'\' => '\\',;
                                                                             '"' => '\"',;
-                                                                            '\' => '\\'} )+"'"+INVALUEWITCH
+                                                                            "'" => "\'"} )+"'"+INVALUEWITCH
                     exit
 
                 case "N"  // Numeric
@@ -1531,12 +1541,12 @@ for each l_cByte in @par_cExpression
 
                 // Fix The Casing of l_cAliasName and l_cFieldName based on the actual on file tables.
 
-                l_nHashPos := hb_hPos(::p_oSQLConnection:p_TableSchema,hb_HGetDef(::p_AliasToNamespaceAndTableNames,l_cAliasName,l_cAliasName))
+                l_nHashPos := hb_hPos(::p_oSQLConnection:p_hMetadataTable,hb_HGetDef(::p_AliasToNamespaceAndTableNames,l_cAliasName,l_cAliasName))
                 if l_nHashPos > 0
-                    l_cNamespaceAndTableName := hb_hKeyAt(::p_oSQLConnection:p_TableSchema,l_nHashPos)
-                    l_nHashPos := hb_hPos(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+                    l_cNamespaceAndTableName := hb_hKeyAt(::p_oSQLConnection:p_hMetadataTable,l_nHashPos)
+                    l_nHashPos := hb_hPos(::p_oSQLConnection:p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
                     if l_nHashPos > 0
-                        l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                        l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
 
                         l_hColumnDefinition := ::p_oSQLConnection:GetColumnConfiguration(l_cNamespaceAndTableName,l_cFieldName)
                         if par_cSource == "column"
@@ -1573,7 +1583,7 @@ for each l_cByte in @par_cExpression
                         // Detect the field type if only 1 field is used in the expression
                         if l_nColumnTypeDetectCount == 0
                             l_nColumnTypeDetectCount      := 1
-                            l_hFieldInfo                  := hb_HValueAt(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                            l_hFieldInfo                  := hb_HValueAt(::p_oSQLConnection:p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
                             l_cColumnTypeDetectExpression := l_cAliasName+"."+l_cFieldName
                             l_cColumnTypeDetectType       := l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
                             l_lColumnTypeDetectArray      := hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
@@ -1616,16 +1626,16 @@ if l_nTableFieldDetection == 3
     if !empty(l_cNonTableAlias)   // If the alias is probably from a CTE statement
         l_cResult += l_cTokenDelimiterLeft+l_cNonTableAlias+l_cTokenDelimiterRight+"."+l_cTokenDelimiterLeft+l_cFieldName+l_cTokenDelimiterRight
     else
-        l_nHashPos := hb_hPos(::p_oSQLConnection:p_TableSchema,hb_HGetDef(::p_AliasToNamespaceAndTableNames,l_cAliasName,l_cAliasName))
+        l_nHashPos := hb_hPos(::p_oSQLConnection:p_hMetadataTable,hb_HGetDef(::p_AliasToNamespaceAndTableNames,l_cAliasName,l_cAliasName))
         if l_nHashPos > 0
-            l_cNamespaceAndTableName := hb_hKeyAt(::p_oSQLConnection:p_TableSchema,l_nHashPos) 
+            l_cNamespaceAndTableName := hb_hKeyAt(::p_oSQLConnection:p_hMetadataTable,l_nHashPos) 
             // l_nPos := at(".",l_cNamespaceAndTableName)
             // if !empty(l_nPos)
             //     l_cAliasName := substr(l_cNamespaceAndTableName,l_nPos+1)
             // endif
-            l_nHashPos := hb_hPos(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+            l_nHashPos := hb_hPos(::p_oSQLConnection:p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
             if l_nHashPos > 0
-                l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                l_cFieldName := hb_hKeyAt(::p_oSQLConnection:p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
 
                 if par_cSource == "column"
                     l_hColumnDefinition := ::p_oSQLConnection:GetColumnConfiguration(l_cNamespaceAndTableName,l_cFieldName)
@@ -1641,7 +1651,7 @@ if l_nTableFieldDetection == 3
                 // Detect the field type if only 1 field is used in the expression
                 if l_nColumnTypeDetectCount == 0
                     l_nColumnTypeDetectCount      := 1
-                    l_hFieldInfo                  := hb_HValueAt(::p_oSQLConnection:p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+                    l_hFieldInfo                  := hb_HValueAt(::p_oSQLConnection:p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
                     l_cColumnTypeDetectExpression := l_cAliasName+"."+l_cFieldName
                     l_cColumnTypeDetectType       := l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE]
                     l_lColumnTypeDetectArray      := hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)

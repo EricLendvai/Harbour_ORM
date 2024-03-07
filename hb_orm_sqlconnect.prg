@@ -209,34 +209,58 @@ endif
 return Self
 //-----------------------------------------------------------------------------------------------------------------
 method Connect() class hb_orm_SQLConnect   // Return -1 on error, 0 if already connected, >0 if succeeded
-local l_SQLHandle := -1
-local l_cConnectionString := ""
+local l_SQLHandle
+local l_cConnectionString
 local l_cPreviousDefaultRDD
 local l_lNoCache := (::p_HBORMNamespace == "nohborm")
 
-::ConnectionCounter++
-::p_ConnectionNumber := ::ConnectionCounter
-hb_orm_SendToDebugView("hb_orm_sqlconnect Connection Number "+trans(::p_ConnectionNumber))
-
-l_cPreviousDefaultRDD = RDDSETDEFAULT( "SQLMIX" )
-
 do case
+case ::Connected
+    ::p_ErrorMessage := "Already Connected"
+    l_SQLHandle := ::p_SQLConnection
+
+case !::p_LoadedWharfConfiguration
+    ::p_ErrorMessage := "LoadWharfConfiguration method must be called first"
+    l_SQLHandle := -1
+
 case ::p_SQLConnection > 0
     ::p_ErrorMessage := "Already connected, disconnect first"
-    l_SQLHandle := 0
+    l_SQLHandle := -1
+
 case ::p_BackendType == 0
     ::p_ErrorMessage := "Missing 'Backend Type'"
+    l_SQLHandle := -1
+
 case empty(::p_Driver)
     ::p_ErrorMessage := "Missing 'Driver'"
+    l_SQLHandle := -1
+
 case empty(::p_Server)
     ::p_ErrorMessage := "Missing 'Server'"
+    l_SQLHandle := -1
+
 case empty(::p_Port)
     ::p_ErrorMessage := "Missing 'Port'"
+    l_SQLHandle := -1
+
 case empty(::p_User)
     ::p_ErrorMessage := "Missing 'User'"
+    l_SQLHandle := -1
+
 case empty(::p_Database)
     ::p_ErrorMessage := "Missing 'Database'"
+    l_SQLHandle := -1
+
 otherwise
+    ::p_ErrorMessage := ""
+    l_SQLHandle      := -1
+    
+    ::ConnectionCounter++
+    ::p_ConnectionNumber := ::ConnectionCounter
+    hb_orm_SendToDebugView("hb_orm_sqlconnect Connection Number "+trans(::p_ConnectionNumber))
+
+    l_cPreviousDefaultRDD = RDDSETDEFAULT( "SQLMIX" )
+
     do case
     case ::p_BackendType == HB_ORM_BACKENDTYPE_MARIADB .or. ::p_BackendType == HB_ORM_BACKENDTYPE_MYSQL   // MySQL or MariaDB
         // To enable multi statements to be executed, meaning multiple SQL commands separated by ";", had to use the OPTION= setting.
@@ -252,8 +276,10 @@ otherwise
         l_cConnectionString += ";Database="+::p_Database
         l_cConnectionString += ";BoolsAsChar=0;"
     otherwise
+        l_cConnectionString := ""
         ::p_ErrorMessage := "Invalid 'Backend Type'"
     endcase
+
     if !empty(l_cConnectionString)
         //The following can take up to 10 seconds when accessing a VMWare Ubuntu machine to test out MySQL.
         l_SQLHandle := hb_RDDInfo( RDDI_CONNECT, { "ODBC", l_cConnectionString })
@@ -263,53 +289,54 @@ otherwise
             ::p_ErrorMessage := "Unable connect to the server!"+Chr(13)+Chr(10)+Str(hb_RDDInfo( RDDI_ERRORNO ))+Chr(13)+Chr(10)+hb_RDDInfo( RDDI_ERROR )
             hb_orm_SendToDebugView("Unable connect to the server! "+::p_Server)
         else
-            ::p_SQLConnection    := l_SQLHandle
-            ::p_ErrorMessage := ""
+            ::p_SQLConnection := l_SQLHandle
         endif
     endif
-endcase
 
-RDDSETDEFAULT(l_cPreviousDefaultRDD)
+    RDDSETDEFAULT(l_cPreviousDefaultRDD)
 
-if l_SQLHandle > 0
-    ::Connected := .t.
+    if l_SQLHandle > 0
+        ::Connected := .t.
 
-    do case
-    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        // l_cBackendType := "PostgreSQL"
-        if !empty(::p_ApplicationName)
-            ::SQLExec("cbcb115d-7bda-4118-aa61-9340faab98fa","set application_name = '"+strtran(::p_ApplicationName,['],[])+"';")
-        endif
-        if !l_lNoCache
-            if !::TableExists(::p_HBORMNamespace+".SchemaCacheLog")
-                ::EnableSchemaChangeTracking()
-                ::UpdateSchemaCache(.t.)
-            else
-                if ::TableExists(::p_HBORMNamespace+".SchemaVersion")
-                    if ::GetSchemaDefinitionVersion("orm trigger version") != HB_ORM_TRIGGERVERSION
+        do case
+        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+            // l_cBackendType := "PostgreSQL"
+            if !empty(::p_ApplicationName)
+                ::SQLExec("cbcb115d-7bda-4118-aa61-9340faab98fa","set application_name = '"+strtran(::p_ApplicationName,['],[])+"';")
+            endif
+            if !l_lNoCache
+                if !::TableExists(::p_HBORMNamespace+".SchemaCacheLog")
                     ::EnableSchemaChangeTracking()
-                    ::SetSchemaDefinitionVersion("orm trigger version" ,HB_ORM_TRIGGERVERSION)
+                    ::UpdateSchemaCache(.t.)
+                else
+                    if ::TableExists(::p_HBORMNamespace+".SchemaVersion")
+                        if ::GetSchemaDefinitionVersion("orm trigger version") != HB_ORM_TRIGGERVERSION
+                        ::EnableSchemaChangeTracking()
+                        ::SetSchemaDefinitionVersion("orm trigger version" ,HB_ORM_TRIGGERVERSION)
+                        endif
                     endif
+                    ::UpdateSchemaCache()
                 endif
-                ::UpdateSchemaCache()
+            endif
+
+        endcase
+
+        //Load the entire schema
+        ::LoadMetadata("Connect")
+        // altd()
+
+        if !l_lNoCache
+            //AutoFix ORM supporting tables
+            if ::UpdateORMSupportSchema()  //l_cBackendType
+                ::LoadMetadata("Connect, after UpdateORMSupportSchema")  // Only called again the the ORM schema changed
             endif
         endif
 
-    endcase
-
-    //Load the entire schema
-    ::LoadSchema("Connect")
-
-    if !l_lNoCache
-        //AutoFix ORM supporting tables
-        if ::UpdateORMSupportSchema()  //l_cBackendType
-            ::LoadSchema("Connect, after UpdateORMSupportSchema")  // Only called again the the ORM schema changed
-        endif
+    else
+        ::Connected := .f.
     endif
 
-else
-    ::Connected := .f.
-endif
+endcase
 
 return l_SQLHandle
 //-----------------------------------------------------------------------------------------------------------------
@@ -911,7 +938,7 @@ if ::Connected
 
             if ::SQLExec("CheckIfSchemaCacheShouldBeUpdated",l_cSQLCommand,"SchemaCacheLogLast")
                 if SchemaCacheLogLast->(reccount()) == 1
-                    if SchemaCacheLogLast->pk == ::p_TableSchemaCacheLogLastPk
+                    if SchemaCacheLogLast->pk == ::p_iMetadataTableCacheLogLastPk
                         l_lResult := .f.
                     endif
                 endif
@@ -976,7 +1003,10 @@ method SetForeignKeyNullAndZeroParity(par_lMode) class hb_orm_SQLConnect
 return nil
 //-----------------------------------------------------------------------------------------------------------------
 method LoadWharfConfiguration(par_hConfig) class hb_orm_SQLConnect
-hb_HMerge(::p_WharfConfig,par_hConfig)
+if !hb_IsNil(par_hConfig) .and. !empty(par_hConfig)
+    hb_HMerge(::p_hWharfConfig,par_hConfig)
+endif
+::p_LoadedWharfConfiguration := .t.
 return nil
 //-----------------------------------------------------------------------------------------------------------------
 method GetColumnConfiguration(par_cNamespaceAndTableName,par_cFieldName) class hb_orm_SQLConnect
@@ -1000,7 +1030,7 @@ local l_cHashKey := iif(::p_ForeignKeyNullAndZeroParity,"T","F")+par_cNamespaceA
 //     altd()
 // endif
 
-l_cDefinitionSignature := hb_HGetDef(::p_WharfConfig,"GenerationSignature","")
+l_cDefinitionSignature := hb_HGetDef(::p_hWharfConfig,"GenerationSignature","")
 if empty(l_cDefinitionSignature)
     // No Loaded Wharf Configuration
     l_hDefinition := {=>}
@@ -1017,11 +1047,11 @@ else
     //No Cache Entry
     if empty(l_hDefinition)
         // Find out if we are getting or setting a Foreign Key at is Nullable and if 0 is equivalent to NULL
-        l_hReference = hb_HGetDef(::p_WharfConfig,"Tables",NIL)    //Find the equivalent of the p_TableSchema definitions
+        l_hReference = hb_HGetDef(::p_hWharfConfig,"Tables",NIL)    //Find the equivalent of the p_hMetadataTable definitions
         if !hb_IsNil(l_hReference)
             l_hReference := hb_HGetDef(l_hReference,par_cNamespaceAndTableName,NIL)       //Find the Table definition
             if !hb_IsNil(l_hReference)
-                l_hReference := hb_HGetDef(l_hReference,"Fields",NIL)                    //Find "Fields" definition
+                l_hReference := hb_HGetDef(l_hReference,HB_ORM_SCHEMA_FIELD,NIL)                    //Find "Fields" definition
                 if !hb_IsNil(l_hReference)
                     l_hReference := hb_HGetDef(l_hReference,par_cFieldName,NIL)            //Find the column definition
                     if !hb_IsNil(l_hReference)
@@ -1068,7 +1098,7 @@ local l_hFieldDefinition
 local l_hReference
 local l_cHashKey := par_cNamespaceAndTableName
 
-l_cDefinitionSignature := hb_HGetDef(::p_WharfConfig,"GenerationSignature","")
+l_cDefinitionSignature := hb_HGetDef(::p_hWharfConfig,"GenerationSignature","")
 if empty(l_cDefinitionSignature)
     // No Loaded Wharf Configuration
     l_aColumns := {=>}
@@ -1085,11 +1115,11 @@ else
     //No Cache Entry
     if empty(l_aColumns)
         // Find out if we are getting or setting a Foreign Key at is Nullable and if 0 is equivalent to NULL
-        l_hReference = hb_HGetDef(::p_WharfConfig,"Tables",NIL)    //Find the equivalent of the p_TableSchema definitions
+        l_hReference = hb_HGetDef(::p_hWharfConfig,"Tables",NIL)    //Find the equivalent of the p_hMetadataTable definitions
         if !hb_IsNil(l_hReference)
             l_hReference := hb_HGetDef(l_hReference,par_cNamespaceAndTableName,NIL)       //Find the Table definition
             if !hb_IsNil(l_hReference)
-                l_hReference := hb_HGetDef(l_hReference,"Fields",NIL)                    //Find "Fields" definition
+                l_hReference := hb_HGetDef(l_hReference,HB_ORM_SCHEMA_FIELD,NIL)                    //Find "Fields" definition
                 if !hb_IsNil(l_hReference)
 
                     for each l_hFieldDefinition in l_hReference
@@ -1135,7 +1165,7 @@ local l_nMaxLoopOfTables := 10  //To deal with cascading deletions
 local l_lForeignKeyOptional
 
 if ::UpdateSchemaCache()
-    ::LoadSchema("DeleteAllOrphanRecords")
+    ::LoadMetadata("DeleteAllOrphanRecords")
 endif
 
 l_hPrimaryKeys := ::GetListOfPrimaryKeysForAllTables(par_hTableSchemaDefinition)
@@ -1164,7 +1194,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             endif
             l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
 
-            // l_hCurrentTableDefinition := hb_HGetDef(::p_TableSchema,l_cNamespaceAndTableName,NIL)
+            // l_hCurrentTableDefinition := hb_HGetDef(::p_hMetadataTable,l_cNamespaceAndTableName,NIL)
 
             l_hFields := l_hTableDefinition[HB_ORM_SCHEMA_FIELD]
 
@@ -1285,7 +1315,7 @@ local l_oCursor
 local l_cFieldType
 
 if ::UpdateSchemaCache()
-    ::LoadSchema("ForeignKeyConvertAllZeroToNull")
+    ::LoadMetadata("ForeignKeyConvertAllZeroToNull")
 endif
 
 for each l_hTableDefinition in par_hTableSchemaDefinition

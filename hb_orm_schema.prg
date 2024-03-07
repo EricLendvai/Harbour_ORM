@@ -11,7 +11,7 @@
 // autoincrement fields are not null with no default.
 
 //-----------------------------------------------------------------------------------------------------------------
-method LoadSchema(par_cSource) class hb_orm_SQLConnect
+method LoadMetadata(par_cSource) class hb_orm_SQLConnect
 //par_cSource is optional, will help to debug ORM
 
 local l_nSelect := iif(used(),select(),0)
@@ -21,10 +21,12 @@ local l_cSQLCommandIndexes := ""
 local l_cFieldType,l_cFieldTypeEnumName,l_nFieldLen,l_nFieldDec,l_lFieldNullable,l_lFieldAutoIncrement,l_lFieldArray,l_cFieldComment,l_cFieldDefault
 local l_cTableName
 local l_cNamespaceAndTableName,l_cNamespaceAndTableNameLast
+local l_cNamespaceAndEnumerationName
 local l_cIndexName,l_cIndexDefinition,l_cIndexExpression,l_lIndexUnique,l_cIndexType
 local l_hTableSchemaField   := {=>}
 local l_hTableSchemaFields  := {=>}
 local l_hTableSchemaIndexes := {=>}
+local l_hEnumerationValues
 local l_nPos1,l_nPos2,l_nPos3,l_nPos4
 local l_lLoadedCache
 local l_cFieldCommentType
@@ -39,13 +41,17 @@ hb_orm_SendToDebugView("LoadSchema Start - Source: "+l_cSource)
 hb_HCaseMatch(l_hTableSchemaField ,.f.)
 hb_HCaseMatch(l_hTableSchemaFields ,.f.)
 hb_HCaseMatch(l_hTableSchemaIndexes,.f.)
-hb_HClear(::p_TableSchema)
-hb_HCaseMatch(::p_TableSchema,.f.)
+hb_HClear(::p_hMetadataTable)
+hb_HCaseMatch(::p_hMetadataTable,.f.)
+hb_HClear(::p_hMetadataNamespace)
+hb_HCaseMatch(::p_hMetadataNamespace,.f.)
+hb_HClear(::p_hMetadataEnumeration)
+hb_HCaseMatch(::p_hMetadataEnumeration,.f.)
 
 CloseAlias("hb_orm_sqlconnect_schema_fields")
 CloseAlias("hb_orm_sqlconnect_schema_indexes")
 
-::p_TableSchemaCacheLogLastPk := 0
+::p_iMetadataTableCacheLogLastPk := 0
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -110,7 +116,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     //  AND   lower(left(columns.table_name,11)) != 'schemacache'
     //  ORDER BY tag1,field_position
 
-
     l_cSQLCommandIndexes += [SELECT table_name,]
     l_cSQLCommandIndexes +=        [index_name,]
     l_cSQLCommandIndexes +=        [group_concat(column_name order by seq_in_index) AS index_columns,]
@@ -126,10 +131,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommandIndexes += [ GROUP BY table_name,index_name]
     l_cSQLCommandIndexes += [ ORDER BY index_schema,table_name,index_name;]
 
-    if !::SQLExec("LoadSchema",l_cSQLCommandFields,"hb_orm_sqlconnect_schema_fields")
+    if !::SQLExec("LoadMetadata",l_cSQLCommandFields,"hb_orm_sqlconnect_schema_fields")
         ::p_ErrorMessage := [Failed SQL for hb_orm_sqlconnect_schema_fields.]
         // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommandFields+[ -> ]+::p_ErrorMessage)
-    elseif !::SQLExec("LoadSchema",l_cSQLCommandIndexes,"hb_orm_sqlconnect_schema_indexes")
+    elseif !::SQLExec("LoadMetadata",l_cSQLCommandIndexes,"hb_orm_sqlconnect_schema_indexes")
         ::p_ErrorMessage := [Failed SQL for hb_orm_sqlconnect_schema_indexes.]
     else
         if used("hb_orm_sqlconnect_schema_fields") .and. used("hb_orm_sqlconnect_schema_indexes")
@@ -149,31 +154,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                         l_cNamespaceAndTableName := "public."+l_cNamespaceAndTableName
                     endif
 
-
                     if !(l_cNamespaceAndTableName == l_cNamespaceAndTableNameLast)  // Method to for an exact not equal
-                        ::p_TableSchema[l_cNamespaceAndTableNameLast] := {"Fields"=>hb_hClone(l_hTableSchemaFields),"Indexes"=>NIL}
+                        ::p_hMetadataTable[l_cNamespaceAndTableNameLast] := {HB_ORM_SCHEMA_FIELD=>hb_hClone(l_hTableSchemaFields),HB_ORM_SCHEMA_INDEX=>NIL}
                         hb_HClear(l_hTableSchemaFields)
                         l_cNamespaceAndTableNameLast := l_cNamespaceAndTableName
                     endif
-
-                    //Parse the comment field to see if recorded the field type and its length. Since in MySQL there is no need of LENGTH=, the code was simplified.
-                    // l_cFieldCommentType   := ""
-                    // l_nFieldCommentLength := 0
-                    // l_cFieldComment := nvl(field->field_comment,"")
-                    // l_cFieldComment := upper(MemoLine(l_cFieldComment,1000,1))  // Extract first line of comment, max 1000 char length
-                    // if !empty(l_cFieldComment) 
-                    //     l_nPos1 := at("|",l_cFieldComment)
-                    //     l_nPos2 := at("TYPE=",l_cFieldComment)
-                    //     l_nPos3 := at("LENGTH=",l_cFieldComment)
-                    //     if l_nPos1 > 0 .and. l_nPos2 > 0 .and. l_nPos3 > 0
-                    //         l_cFieldCommentType   := Alltrim(substr(l_cFieldComment,l_nPos2+len("TYPE="),l_nPos1-(l_nPos2+len("TYPE="))))
-                    //         l_nFieldCommentLength := Val(substr(l_cFieldComment,l_nPos3+len("LENGTH=")))
-                    //     elseif l_nPos2 > 0
-                    //         l_cFieldCommentType   := Alltrim(substr(l_cFieldComment,l_nPos2+len("TYPE=")))
-                    //         l_nFieldCommentLength := 0
-                    //     endif
-                    // endif
-
 
                     //Parse the comment field to see if recorded the field type and its length
                     l_cFieldCommentType   := ""
@@ -344,13 +329,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
                 endscan
 
-
-                ::p_TableSchema[l_cNamespaceAndTableNameLast] := {"Fields"=>hb_hClone(l_hTableSchemaFields),"Indexes"=>NIL}
+                ::p_hMetadataTable[l_cNamespaceAndTableNameLast] := {HB_ORM_SCHEMA_FIELD=>hb_hClone(l_hTableSchemaFields),HB_ORM_SCHEMA_INDEX=>NIL}
                 hb_HClear(l_hTableSchemaFields)
 
-                //Since Indexes could only exists for an existing table we simply assign to a ::p_TableSchema[][HB_ORM_SCHEMA_INDEX] cell
+                //Since Indexes could only exists for an existing table we simply assign to a ::p_hMetadataTable[][HB_ORM_SCHEMA_INDEX] cell
                 select hb_orm_sqlconnect_schema_indexes
-// altd()
                 if Reccount() > 0
                     l_cNamespaceAndTableNameLast := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
                     l_nPos1 := at(".",l_cNamespaceAndTableNameLast)
@@ -367,15 +350,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                             l_cNamespaceAndTableName := "public."+l_cNamespaceAndTableName
                         endif
 
-                        //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_TableSchema
-                        if hb_HHasKey(::p_TableSchema,l_cNamespaceAndTableName)
+                        //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_hMetadataTable
+                        if hb_HHasKey(::p_hMetadataTable,l_cNamespaceAndTableName)
 
                             if !(l_cNamespaceAndTableName == l_cNamespaceAndTableNameLast)
                                 if len(l_hTableSchemaIndexes) > 0
-                                    ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
+                                    ::p_hMetadataTable[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
                                     hb_HClear(l_hTableSchemaIndexes)
                                 else
-                                    ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                                    ::p_hMetadataTable[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                                 endif
                                 l_cNamespaceAndTableNameLast := l_cNamespaceAndTableName
                             endif
@@ -398,10 +381,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                     endscan
 
                     if len(l_hTableSchemaIndexes) > 0
-                        ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
+                        ::p_hMetadataTable[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
                         hb_HClear(l_hTableSchemaIndexes)
                     else
-                        ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                        ::p_hMetadataTable[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                     endif
 
                 endif
@@ -413,6 +396,58 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     endif
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+
+    // -- Load the Metadata Namespace in p_hMetadataNamespace
+    TEXT TO VAR l_cSQLCommand
+    select ns.nspname as "NamespaceName"
+    from pg_namespace ns
+    where ns.nspname not in ('cyanaudit','pg_catalog','information_schema','pg_toast')
+    ENDTEXT
+
+    if ::SQLExec("LoadMetadata",l_cSQLCommand,"SchemaListOfNamespace")
+        select SchemaListOfNamespace
+        scan all
+            ::p_hMetadataNamespace[SchemaListOfNamespace->NamespaceName] := SchemaListOfNamespace->NamespaceName
+        endscan
+        CloseAlias("SchemaListOfNamespace")
+    endif
+
+    // -- Load the Metadata Enumeration in p_hMetadataEnumeration
+    TEXT TO VAR l_cSQLCommand
+    SELECT
+      ns.nspname          as "namespace_name",
+      pt.typname          as "enumeration_name",
+      pe.enumlabel        as "EnumValueName",
+      pe.enumsortorder    as "EnumValueOrder"
+     FROM pg_type      as pt
+     join pg_namespace as ns on pt.typnamespace = ns.oid
+     join pg_enum      as pe on pe.enumtypid = pt.oid
+     WHERE pt.typcategory = 'E'
+     and   ns.nspname not in ('cyanaudit','pg_catalog','information_schema','pg_toast')
+     order by "namespace_name","enumeration_name"
+    ENDTEXT
+    if ::SQLExec("LoadMetadata",l_cSQLCommand,"SchemaListOfEnumerations")
+        l_hEnumerationValues := {=>}
+        select SchemaListOfEnumerations
+        scan all
+            if empty(l_cNamespaceAndEnumerationName)
+                l_cNamespaceAndEnumerationName := Trim(SchemaListOfEnumerations->namespace_name)+"."+Trim(SchemaListOfEnumerations->enumeration_name)
+            endif
+            if !(l_cNamespaceAndEnumerationName == Trim(SchemaListOfEnumerations->namespace_name)+"."+Trim(SchemaListOfEnumerations->enumeration_name))
+                ::p_hMetadataEnumeration[l_cNamespaceAndEnumerationName] := {"ImplementAs"=>"NativeSQLEnum","Values"=>l_hEnumerationValues}
+                l_hEnumerationValues := {=>}  // Should not use hb_HClear since we Hashes are used by reference.
+                l_cNamespaceAndEnumerationName := Trim(SchemaListOfEnumerations->namespace_name)+"."+Trim(SchemaListOfEnumerations->enumeration_name)
+            endif
+            l_hEnumerationValues[SchemaListOfEnumerations->EnumValueName] := SchemaListOfEnumerations->EnumValueOrder
+        endscan
+        if !empty(l_hEnumerationValues)  // In case no SQLEnum enumeration exists
+            ::p_hMetadataEnumeration[l_cNamespaceAndEnumerationName] := {"ImplementAs"=>"NativeSQLEnum","Values"=>l_hEnumerationValues}
+            l_hEnumerationValues := {=>}
+        endif
+        CloseAlias("SchemaListOfEnumerations")
+    endif
+
+    // -- Load the Metadata Table
     if l_lNoCache
         ::SQLExec("90b44078-1424-4c22-99a1-da3defbddc60","SET enable_nestloop = false")
         ::SQLExec("90b44078-1424-4c22-99a1-da3defbddc61",::GetPostgresTableSchemaQuery(),"hb_orm_sqlconnect_schema_fields")
@@ -438,7 +473,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
         endif
 
-        if ::SQLExec("LoadSchema",l_cSQLCommand,"SchemaCacheLogLast")
+        if ::SQLExec("LoadMetadata",l_cSQLCommand,"SchemaCacheLogLast")
             if SchemaCacheLogLast->(reccount()) > 0
 
                 l_cSQLCommandFields  := [SELECT namespace_name,]
@@ -461,7 +496,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_cSQLCommandFields  +=        [tag1,]
                 l_cSQLCommandFields  +=        [tag2]
                 // l_cSQLCommandFields  += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
-                l_cSQLCommandFields  += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+[p_TableSchemaCacheLogLastPk]+["]
+                l_cSQLCommandFields  += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+[p_iMetadataTableCacheLogLastPk]+["]
                 l_cSQLCommandFields  += [ ORDER BY tag1,tag2,field_position]
 
 
@@ -472,24 +507,24 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_cSQLCommandIndexes +=        [tag1,]
                 l_cSQLCommandIndexes +=        [tag2]
                 // l_cSQLCommandIndexes += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
-                l_cSQLCommandIndexes += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+[p_TableSchemaCacheLogLastPk]+["]
+                l_cSQLCommandIndexes += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+[p_iMetadataTableCacheLogLastPk]+["]
                 l_cSQLCommandIndexes += [ ORDER BY tag1,tag2,index_name]
 
-                if       ::SQLExec("LoadSchema",strtran(l_cSQLCommandFields ,"p_TableSchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
-                .and. ::SQLExec("LoadSchema",strtran(l_cSQLCommandIndexes,"p_TableSchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
+                if       ::SQLExec("LoadMetadata",strtran(l_cSQLCommandFields ,"p_iMetadataTableCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
+                .and. ::SQLExec("LoadMetadata",strtran(l_cSQLCommandIndexes,"p_iMetadataTableCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
                     l_lLoadedCache := .t.
-                    ::p_TableSchemaCacheLogLastPk := SchemaCacheLogLast->pk
+                    ::p_iMetadataTableCacheLogLastPk := SchemaCacheLogLast->pk
                 else
                     CloseAlias("hb_orm_sqlconnect_schema_fields")
                     CloseAlias("hb_orm_sqlconnect_schema_indexes")
                     ::EnableSchemaChangeTracking()
                     ::UpdateSchemaCache(.t.)
 
-                    if ::SQLExec("LoadSchema",l_cSQLCommand,"SchemaCacheLogLast")
-                        if       ::SQLExec("LoadSchema",strtran(l_cSQLCommandFields ,"p_TableSchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
-                        .and. ::SQLExec("LoadSchema",strtran(l_cSQLCommandIndexes,"p_TableSchemaCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
+                    if ::SQLExec("LoadMetadata",l_cSQLCommand,"SchemaCacheLogLast")
+                        if       ::SQLExec("LoadMetadata",strtran(l_cSQLCommandFields ,"p_iMetadataTableCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
+                        .and. ::SQLExec("LoadMetadata",strtran(l_cSQLCommandIndexes,"p_iMetadataTableCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
                             l_lLoadedCache := .t.
-                            ::p_TableSchemaCacheLogLastPk := SchemaCacheLogLast->pk
+                            ::p_iMetadataTableCacheLogLastPk := SchemaCacheLogLast->pk
                         endif
                     endif
                 endif
@@ -517,7 +552,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_cNamespaceAndTableName := Trim(hb_orm_sqlconnect_schema_fields->namespace_name)+"."+Trim(hb_orm_sqlconnect_schema_fields->table_name)
                 l_lUnlogged              := hb_orm_sqlconnect_schema_fields->table_is_unlogged
                 if !(l_cNamespaceAndTableName == l_cNamespaceAndTableNameLast)
-                    ::p_TableSchema[l_cNamespaceAndTableNameLast] := {"Fields"=>hb_hClone(l_hTableSchemaFields),"Indexes"=>NIL,"Unlogged"=>l_lUnloggedLast}    //{Table Fields (HB_ORM_SCHEMA_FIELD), Table Indexes (HB_ORM_SCHEMA_INDEX)}
+                    ::p_hMetadataTable[l_cNamespaceAndTableNameLast] := {HB_ORM_SCHEMA_FIELD=>hb_hClone(l_hTableSchemaFields),HB_ORM_SCHEMA_INDEX=>NIL,"Unlogged"=>l_lUnloggedLast}    //{Table Fields (HB_ORM_SCHEMA_FIELD), Table Indexes (HB_ORM_SCHEMA_INDEX)}
                     hb_HClear(l_hTableSchemaFields)
                     l_cNamespaceAndTableNameLast := l_cNamespaceAndTableName
                     l_lUnloggedLast           := l_lUnlogged
@@ -697,10 +732,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
             endscan
 
-            ::p_TableSchema[l_cNamespaceAndTableNameLast] := {"Fields"=>hb_hClone(l_hTableSchemaFields),"Indexes"=>NIL,"Unlogged"=>l_lUnloggedLast}    //{Table Fields (HB_ORM_SCHEMA_FIELD), Table Indexes (HB_ORM_SCHEMA_INDEX)}
+            ::p_hMetadataTable[l_cNamespaceAndTableNameLast] := {HB_ORM_SCHEMA_FIELD=>hb_hClone(l_hTableSchemaFields),;
+                                                                 HB_ORM_SCHEMA_INDEX=>NIL,"Unlogged"=>l_lUnloggedLast}    //{Table Fields (HB_ORM_SCHEMA_FIELD), Table Indexes (HB_ORM_SCHEMA_INDEX)}
             hb_HClear(l_hTableSchemaFields)
 
-            //Since Indexes could only exists for an existing table we simply assign to a ::p_TableSchema[][HB_ORM_SCHEMA_INDEX] cell
+            //Since Indexes could only exists for an existing table we simply assign to a ::p_hMetadataTable[][HB_ORM_SCHEMA_INDEX] cell
             //Stopped added the namespace name to the index names, to help fit objects length to 63 characters and in any case "Two indexes in the same schema cannot have the same name.", meaning can be the same in two different namespace_name.
             select hb_orm_sqlconnect_schema_indexes
             if Reccount() > 0
@@ -711,15 +747,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                     l_cNamespaceAndTableName := Trim(hb_orm_sqlconnect_schema_indexes->namespace_name)+"."+Trim(hb_orm_sqlconnect_schema_indexes->table_name)
                     l_cTableName             := Trim(hb_orm_sqlconnect_schema_indexes->table_name)
 
-                    //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_TableSchema
-                    if hb_HHasKey(::p_TableSchema,l_cNamespaceAndTableName)
+                    //Test that the index is for a real table, not a view or other type of objects. Since we used "tables.table_type = 'BASE TABLE'" earlier we need to check if we loaded that table in the p_hMetadataTable
+                    if hb_HHasKey(::p_hMetadataTable,l_cNamespaceAndTableName)
 
                         if !(l_cNamespaceAndTableName == l_cNamespaceAndTableNameLast)
                             if len(l_hTableSchemaIndexes) > 0
-                                ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
+                                ::p_hMetadataTable[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
                                 hb_HClear(l_hTableSchemaIndexes)
                             else
-                                ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                                ::p_hMetadataTable[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                             endif
                             l_cNamespaceAndTableNameLast := l_cNamespaceAndTableName
                         endif
@@ -750,10 +786,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                     endif
                 endscan
                 if len(l_hTableSchemaIndexes) > 0
-                    ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
+                    ::p_hMetadataTable[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := hb_hClone(l_hTableSchemaIndexes)
                     hb_HClear(l_hTableSchemaIndexes)
                 else
-                    ::p_TableSchema[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
+                    ::p_hMetadataTable[l_cNamespaceAndTableNameLast][HB_ORM_SCHEMA_INDEX] := NIL
                 endif
 
             endif
@@ -771,11 +807,10 @@ select (l_nSelect)
 
 hb_orm_SendToDebugView("LoadSchema End")
 
-// altd()
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-method GenerateMigrateSchemaScript(par_hTableSchemaDefinition,par_hEnumerationDefinition) class hb_orm_SQLConnect
+method GenerateMigrateSchemaScript(par_hWharfConfig) class hb_orm_SQLConnect
 
 local l_cTableName,l_hTableDefinition
 local l_cFieldName,l_hFieldDefinition
@@ -789,7 +824,6 @@ local l_cFieldType,       l_cFieldTypeEnumName       ,l_lFieldArray,       l_nFi
 local l_cCurrentFieldType,l_cCurrentFieldTypeEnumName,l_lCurrentFieldArray,l_nCurrentFieldLen,l_nCurrentFieldDec,l_lCurrentFieldNullable,l_lCurrentFieldAutoIncrement,l_cCurrentFieldDefault
 local l_lMatchingFieldDefinition
 local l_cMismatchType
-// local l_cInFocusNamespaceName
 local l_cNamespaceName
 local l_cSQLScriptPreUpdate := ""
 local l_cSQLScript := ""
@@ -798,8 +832,6 @@ local l_cSQLScriptFieldChanges,l_cSQLScriptFieldChangesCycle1,l_cSQLScriptFieldC
 local l_cNamespaceAndTableName
 local l_cFormattedTableName
 local l_nPos
-local l_hListOfNamespaceName := {=>}
-local l_cSQLScriptCreateOrUpdateNamespaceName := ""
 
 local l_cCurrentNamespaceAndTableName
 local l_cCurrentNamespaceName
@@ -809,41 +841,304 @@ local l_cCurrentFieldName
 local l_lCurrentUnlogged
 local l_lUnlogged
 
-local l_cSQLForeignKeyConstraints
-
 local l_cFieldUsedAs
 local l_cFieldParentTable
 local l_cSQLPrimaryKeyConstraints
 local l_oCursorPrimaryKeyConstraints
 local l_hExistingIndexesOfExistingTable
-
 local l_cEnumerationName
 local l_hEnumerationDefinition
-local l_cEnumerationNamespaceAndName
 local l_hEnumValues
-local l_lFetchedExistingEnumerations
 local l_cSQLEnumerations
 local l_cEnumValueName
 local l_lProcessedValue
 local l_oCursorExistingEnumerations
+local l_hRename
+local l_hRenameNamespace
+local l_hRenameTable
+local l_hRenameIndex
+local l_hRenameColumn
+local l_hRenameEnumeration
+local l_hRenameEnumValue
+local l_cNamespaceAndEnumerationName
+local l_hCurrentEnumerationDefinition
+local l_cNamespaceNameExistingCasing
+local l_cNameFrom
+local l_cNameTo
+local l_cHashValue
+local l_cHashKey
+local l_cHashNewKey
+local l_cPrefix
+local l_nPrefixLength
+local l_cNamespaceOnFile
+local l_cSQLScriptForeignKeyConstraints
+local l_cNamespaceAndTableFrom
 
+//Following needed to ignore constraint changes, since Postgres will already handle these when namespace, table and columns are renamed.
+local l_hAppliedRenameNamespace := {=>}
+local l_hAppliedRenameTable     := {=>}
+local l_hAppliedRenameColumn    := {=>}
+local l_hMetadataCurrentTable
+local l_hMetadataCurrentFields
+local l_hMetadataCurrentEnumeration
+local l_hMetadataCurrentValues
 
-hb_HCaseMatch(l_hListOfNamespaceName,.f.)
-hb_HClear(l_hListOfNamespaceName)
-
-// do case
-// case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-//     l_cInFocusNamespaceName := ::GetCurrentNamespaceName()
-// case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-//     l_cInFocusNamespaceName := ::GetCurrentNamespaceName()
-// endcase
-
-// l_cInFocusNamespaceName := ::GetCurrentNamespaceName()
+local l_cNamespaceAndTable
+local l_hColumnDefinition
 
 if ::UpdateSchemaCache()
-    ::LoadSchema("GenerateMigrateSchemaScript")
+    ::LoadMetadata("GenerateMigrateSchemaScript")
 endif
 
+//Check if should do some renaming first
+l_hRename := hb_hGetDef(par_hWharfConfig,"Rename",{=>})
+if !empty( l_hRename )
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        //_M_ Not supported Yet
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+
+        // Rename Namespaces if needed -----------------------------------------------------------------------------------------------------------
+        for each l_hRenameNamespace in hb_hGetDef(l_hRename,"Namespace",{=>})
+            l_cNameFrom := l_hRenameNamespace:__enumkey
+            l_cNameTo   := l_hRenameNamespace
+
+            l_cNameFrom := hb_hGetDef(::p_hMetadataNamespace,l_cNameFrom,"")  // To check if currently present and get the casing on file
+            if !empty(l_cNameFrom)
+                l_cSQLScript += [ALTER SCHEMA ]+::FormatIdentifier(l_cNameFrom)+[ RENAME TO ]+::FormatIdentifier(l_cNameTo)+[;]+CRLF
+
+                l_hAppliedRenameNamespace[l_cNameFrom] := l_cNameTo
+
+                //Update the ::p_hMetadataTable to ensure we will not create tables simply because their namespace was changed
+                //There is no Hash Key rename, so has to copy the entire entry. For now will leave the old version, in any case a new LoadMetadata() will be done after migration.
+                l_cPrefix := lower(l_cNameFrom)+[.]
+                l_nPrefixLength := len(l_cPrefix)
+
+                for each l_cHashKey in hb_HKeys(::p_hMetadataTable)  // Since changing the ::p_hMetadataTable itself, it is safer to make an array list of the keys
+                    l_cHashValue := ::p_hMetadataTable[l_cHashKey]
+                    if lower(left(l_cHashKey,l_nPrefixLength)) == l_cPrefix
+                        l_cHashNewKey := l_cNameTo+"."+substr(l_cHashKey,l_nPrefixLength+1)
+                       ::p_hMetadataTable[l_cHashNewKey] := ::p_hMetadataTable[l_cHashKey]
+
+                        l_hAppliedRenameTable[l_cHashKey] := l_cHashNewKey
+
+                       hb_HDel(::p_hMetadataTable,l_cHashKey)   // Not certain if can delete while looping
+                    endif
+                endfor
+
+                for each l_cHashKey in hb_HKeys(::p_hMetadataEnumeration)  // Since changing the ::p_hMetadataEnumeration itself, it is safer to make an array list of the keys
+                   l_cHashValue := ::p_hMetadataEnumeration[l_cHashKey]
+                   if lower(left(l_cHashKey,l_nPrefixLength)) == l_cPrefix
+                        l_cHashNewKey := l_cNameTo+"."+substr(l_cHashKey,l_nPrefixLength+1)
+                        ::p_hMetadataEnumeration[l_cHashNewKey] := ::p_hMetadataEnumeration[l_cHashKey]
+                        hb_HDel(::p_hMetadataEnumeration,l_cHashKey)   // Not certain if can delete while looping
+                    endif
+                endfor
+
+                //Update the ::p_hMetadataNamespace itself
+                ::p_hMetadataNamespace[l_cNameTo] := l_cNameTo
+                hb_HDel(::p_hMetadataNamespace,l_cNameFrom)
+
+            endif
+        endfor
+
+        // Rename Tables if needed -----------------------------------------------------------------------------------------------------------
+        for each l_hRenameNamespace in hb_hGetDef(l_hRename,"Table",{=>})
+            l_cNamespaceName := l_hRenameNamespace:__enumkey
+
+            for each l_hRenameTable in l_hRenameNamespace
+                l_cNameFrom := l_hRenameTable:__enumkey
+                l_cNameTo   := l_hRenameTable
+
+                l_nPos := hb_HPos(::p_hMetadataTable,l_cNamespaceName+"."+l_cNameFrom)  // To check if currently present. Its position will help to get the casing on file
+                if l_nPos > 0
+                    l_cNamespaceAndTableFrom := hb_HKeyAt(::p_hMetadataTable,l_nPos) 
+                    l_nPos := at(".",l_cNamespaceAndTableFrom)
+                    if l_nPos > 0
+                        l_cNameFrom := substr(l_cNamespaceAndTableFrom,l_nPos+1)
+
+                        l_cSQLScript += [ALTER TABLE IF EXISTS ]+::FormatIdentifier(l_cNamespaceName)+"."+::FormatIdentifier(l_cNameFrom)+[ RENAME TO ]+::FormatIdentifier(l_cNameTo)+[;]+CRLF
+
+                        l_hAppliedRenameTable[l_cNamespaceName+"."+l_cNameFrom] := l_cNamespaceName+"."+l_cNameTo
+
+                        //Update the ::p_hMetadataTable itself
+                        ::p_hMetadataTable[l_cNamespaceName+"."+l_cNameTo] := hb_HClone(::p_hMetadataTable[l_cNamespaceName+"."+l_cNameFrom])  // Have to copy over all the field and index definitions.
+                        hb_HDel(::p_hMetadataTable,l_cNamespaceName+"."+l_cNameFrom)
+
+                        //Rename table related indexes
+                        for each l_hRenameIndex in nvl(hb_hGetDef(::p_hMetadataTable[l_cNamespaceName+"."+l_cNameTo],HB_ORM_SCHEMA_INDEX,{=>}),{=>})
+                            l_cIndexName := l_hRenameIndex:__enumkey
+                            l_cSQLScript += [ALTER INDEX IF EXISTS ]+::FormatIdentifier(l_cNamespaceName)+"."+::FormatIdentifier(lower(l_cNameFrom)+"_"+lower(l_cIndexName)+"_idx")+;
+                                                        [ RENAME TO ]+::FormatIdentifier(lower(l_cNameTo)+"_"+lower(l_cIndexName)+"_idx")+[;]+CRLF
+                        endfor
+                    endif
+                endif
+            endfor
+        endfor
+
+        // Rename Columns if needed -----------------------------------------------------------------------------------------------------------
+        for each l_hRenameNamespace in hb_hGetDef(l_hRename,"Column",{=>})
+            l_cNamespaceName := l_hRenameNamespace:__enumkey
+            for each l_hRenameTable in l_hRenameNamespace
+                l_cTableName := l_hRenameTable:__enumkey
+
+                l_hMetadataCurrentTable := hb_hGetDef(::p_hMetadataTable,l_cNamespaceName+"."+l_cTableName,{=>})
+                if !empty(l_hMetadataCurrentTable)   // We should always find the table since any namespace and table renames happened before.
+                    l_hMetadataCurrentFields := l_hMetadataCurrentTable[HB_ORM_SCHEMA_FIELD]
+                    for each l_hRenameColumn in l_hRenameTable
+                        l_cNameFrom := l_hRenameColumn:__enumkey
+                        l_cNameTo   := l_hRenameColumn
+
+                        l_nPos := hb_HPos(l_hMetadataCurrentFields,l_cNameFrom)  // To check if currently present. Its position will help to get the casing on file
+                        if l_nPos > 0
+                            l_cNameFrom := hb_HKeyAt(l_hMetadataCurrentFields,l_nPos)
+                            l_hMetadataCurrentFields[l_cNameTo] := hb_HClone(l_hMetadataCurrentFields[l_cNameFrom])
+                            hb_HDel(l_hMetadataCurrentFields,l_cNameFrom)
+
+                            l_cSQLScript += [ALTER TABLE IF EXISTS ]+::FormatIdentifier(l_cNamespaceName)+"."+::FormatIdentifier(l_cTableName)+[ RENAME ]+::FormatIdentifier(l_cNameFrom)+[ TO ]+::FormatIdentifier(l_cNameTo)+[;]+CRLF
+
+                            //Will need the following by GenerateMigrateForeignKeyConstraintsScript
+                            l_hAppliedRenameColumn[l_cNamespaceName+"."+l_cTableName+"."+l_cNameFrom] := l_cNameTo
+
+                            // Rename related index, in case this is a foreign key field which means DataWharf may have auto-generated and index for.
+                            for each l_hRenameIndex in nvl(hb_hGetDef(l_hMetadataCurrentTable,HB_ORM_SCHEMA_INDEX,{=>}),{=>})
+                                l_cIndexName := l_hRenameIndex:__enumkey
+                                if lower(l_cIndexName) == lower(l_cNameFrom)
+                                    l_cSQLScript += [ALTER INDEX IF EXISTS ]+::FormatIdentifier(l_cNamespaceName)+"."+::FormatIdentifier(lower(l_cTableName)+"_"+lower(l_cNameFrom)+"_idx")+;
+                                                                [ RENAME TO ]+::FormatIdentifier(lower(l_cTableName)+"_"+lower(l_cNameTo)+"_idx")+[;]+CRLF
+
+                                    //To prevent creating later on the index, not needed since the current one is renamed.
+                                    l_hRenameIndex["Expression"] := lower(l_cNameTo)
+                                    l_hMetadataCurrentTable[HB_ORM_SCHEMA_INDEX][l_cNameTo] := hb_hClone( l_hMetadataCurrentTable[HB_ORM_SCHEMA_INDEX][l_cNameFrom] )
+                                    hb_HDel(l_hMetadataCurrentTable[HB_ORM_SCHEMA_INDEX],l_cNameFrom)
+
+                                    // The Rename of any potential Constraints will be done in GenerateMigrateForeignKeyConstraintsScript
+
+                                    exit  // only one  index could be named by the column name
+                                endif
+                            endfor
+                            //We don't need to update the ::p_hMetadataTable column info since will reload it
+                            // ::p_hMetadataTable[l_cNamespaceName+"."+l_cNameTo] := hb_HClone(::p_hMetadataTable[l_cNamespaceName+"."+l_cNameFrom])  // Have to copy over all the field and index definitions.
+                            // hb_HDel(::p_hMetadataTable,l_cNamespaceName+"."+l_cNameFrom)
+
+                        endif
+                    endfor
+                    // ::p_hMetadataTable[l_cNamespaceName+"."+l_cTableName][HB_ORM_SCHEMA_FIELD] := l_hMetadataCurrentFields  No need for this, since was modifying l_hMetadataCurrentFields use by reference.
+                    l_hMetadataCurrentTable := {=>}   // To ensure will not alter the previous step mapping
+
+
+                endif
+            endfor
+        endfor
+
+        // Rename Enumerations if needed -----------------------------------------------------------------------------------------------------------
+        for each l_hRenameNamespace in hb_hGetDef(l_hRename,"Enumeration",{=>})
+            l_cNamespaceName := l_hRenameNamespace:__enumkey
+
+            for each l_hRenameEnumeration in l_hRenameNamespace
+                l_cNameFrom := l_hRenameEnumeration:__enumkey
+                l_cNameTo   := l_hRenameEnumeration
+
+                l_nPos := hb_HPos(::p_hMetadataEnumeration,l_cNamespaceName+"."+l_cNameFrom)  // To check if currently present. Its position will help to get the casing on file
+                if l_nPos > 0
+                    l_cNamespaceAndTableFrom := hb_HKeyAt(::p_hMetadataEnumeration,l_nPos) 
+                    l_nPos := at(".",l_cNamespaceAndTableFrom)
+                    if l_nPos > 0
+                        l_cNameFrom := substr(l_cNamespaceAndTableFrom,l_nPos+1)
+
+                        l_cSQLScript += [ALTER TYPE ]+::FormatIdentifier(l_cNamespaceName)+"."+::FormatIdentifier(l_cNameFrom)+[ RENAME TO ]+::FormatIdentifier(l_cNameTo)+[;]+CRLF
+
+                        // l_hAppliedRenameTable[l_cNamespaceName+"."+l_cNameFrom] := l_cNamespaceName+"."+l_cNameTo
+
+                        //Update the ::p_hMetadataEnumeration itself
+                        ::p_hMetadataEnumeration[l_cNamespaceName+"."+l_cNameTo] := hb_HClone(::p_hMetadataEnumeration[l_cNamespaceName+"."+l_cNameFrom])  // Have to copy over all the field and index definitions.
+                        hb_HDel(::p_hMetadataEnumeration,l_cNamespaceName+"."+l_cNameFrom)
+
+                        // Patch ::p_hMetadataTable since changing the enumeration name will also automatically remapped, so we don't have to alter the field definition of the current enumeration being renamed.
+                        for each l_hMetadataCurrentTable in ::p_hMetadataTable
+                            //Check if the Namespace is same as the enumeration. For now we don't support tables using enumeration from other namespaces.
+                            l_cNamespaceAndTable := l_hMetadataCurrentTable:__enumkey
+                            l_nPos := at(".",l_cNamespaceAndTable)
+                            if l_nPos > 0
+                                if lower(left(l_cNamespaceAndTable,l_nPos-1)) == lower(l_cNamespaceName)
+                                    for each l_hColumnDefinition in hb_hGetDef(l_hMetadataCurrentTable,HB_ORM_SCHEMA_FIELD,{=>})  //"Fields"
+                                        if l_hColumnDefinition["Type"] == "E" .and. lower(l_hColumnDefinition["Enumeration"]) == lower(l_cNameFrom)
+                                            l_hColumnDefinition["Enumeration"] := l_cNameTo  // Since Hashes are stored by reference, changing a node value will affect the original ::p_hMetadataTable structure.
+                                        endif
+                                    endfor
+                                endif
+                            endif
+                        endfor
+
+                    endif
+                endif
+            endfor
+        endfor
+
+        // Rename EnumValues if needed -----------------------------------------------------------------------------------------------------------
+        for each l_hRenameNamespace in hb_hGetDef(l_hRename,"EnumValue",{=>})
+            l_cNamespaceName := l_hRenameNamespace:__enumkey
+
+            for each l_hRenameEnumeration in l_hRenameNamespace
+                l_cEnumerationName := l_hRenameEnumeration:__enumkey
+
+                l_hMetadataCurrentEnumeration := hb_hGetDef(::p_hMetadataEnumeration,l_cNamespaceName+"."+l_cEnumerationName,{=>})
+                if !empty(l_hMetadataCurrentEnumeration)   // We should always find the table since any namespace and table renames happened before.
+                    l_hMetadataCurrentValues := l_hMetadataCurrentEnumeration["Values"]
+                    for each l_hRenameColumn in l_hRenameEnumeration
+                        l_cNameFrom := l_hRenameColumn:__enumkey
+                        l_cNameTo   := l_hRenameColumn
+
+                        l_nPos := hb_HPos(l_hMetadataCurrentValues,l_cNameFrom)  // To check if currently present. Its position will help to get the casing on file
+                        if l_nPos > 0
+                            l_cNameFrom := hb_HKeyAt(l_hMetadataCurrentValues,l_nPos)
+                            l_hMetadataCurrentValues[l_cNameTo] := l_hMetadataCurrentValues[l_cNameFrom]    // Only storing the order of the value, no sub-hash structure
+                            hb_HDel(l_hMetadataCurrentValues,l_cNameFrom)
+
+                            l_cSQLScript += [ALTER TYPE ]+::FormatIdentifier(l_cNamespaceName)+"."+::FormatIdentifier(l_cEnumerationName)+[ RENAME VALUE ]+::FormatValue(l_cNameFrom)+[ TO ]+::FormatValue(l_cNameTo)+[;]+CRLF
+
+                            //We don't need to update the ::p_hMetadataEnumeration column info since will reload it
+                            // ::p_hMetadataEnumeration[l_cNamespaceName+"."+l_cNameTo] := hb_HClone(::p_hMetadataEnumeration[l_cNamespaceName+"."+l_cNameFrom])  // Have to copy over all the field and index definitions.
+                            // hb_HDel(::p_hMetadataEnumeration,l_cNamespaceName+"."+l_cNameFrom)
+
+                        endif
+                    endfor
+                    // ::p_hMetadataEnumeration[l_cNamespaceName+"."+l_cEnumerationName][HB_ORM_SCHEMA_FIELD] := l_hMetadataCurrentValues  No need for this, since was modifying l_hMetadataCurrentValues use by reference.
+                    l_hMetadataCurrentEnumeration := {=>}   // To ensure will not alter the previous step mapping
+
+                endif
+            endfor
+        endfor
+
+
+    endcase
+endif
+
+//Create any missing namespaces or case fix already existing ones
+do case
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    //When you get a connection to PostgreSQL it is always to a particular database. To access a different database, you must get a new connection.
+
+    for each l_cNamespaceName in hb_hGetDef(par_hWharfConfig,"Namespaces",{})
+        l_cNamespaceOnFile := hb_hGetDef(::p_hMetadataNamespace,l_cNamespaceName,nil)
+        if hb_IsNil(l_cNamespaceOnFile)
+            //Missing Name space
+            l_cSQLScript += [CREATE SCHEMA IF NOT EXISTS ]+::FormatIdentifier(l_cNamespaceName)+[;]+CRLF
+            ::p_hMetadataNamespace[l_cNamespaceName] := l_cNamespaceName
+        else
+            //Present but maybe the casing changed
+            if !(l_cNamespaceOnFile == l_cNamespaceName)
+                l_cSQLScript += [ALTER SCHEMA ]+::FormatIdentifier(l_cNamespaceOnFile)+[ RENAME TO ]+::FormatIdentifier(l_cNamespaceName)+[;]+CRLF
+                ::p_hMetadataNamespace[l_cNamespaceName] := l_cNamespaceName
+            endif
+        endif
+    endfor
+
+endcase
+
+//Get the list of Primary Keys in case we need to add them.  
+// Renaming the primakey will affect the constraints name. But that one is managed by Postgresql itself since we made the fields incremental
 CloseAlias("hb_orm_ListOfPrimaryKeyConstraints")
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -870,58 +1165,32 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
 endcase
 
-if !hb_IsNil(par_hEnumerationDefinition) .and. !empty(par_hEnumerationDefinition)
+//Add / Update any Enumerations
+if !empty( hb_hGetDef(par_hWharfConfig,"Enumerations",{=>}) )
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        //We can only create actual enumeration definitions for Postgresql when the enumeration "ImplementAs" is "NativeSQLEnum"
-        l_lFetchedExistingEnumerations := .f.
-        for each l_hEnumerationDefinition in par_hEnumerationDefinition
-            if nvl(hb_hGetDef(l_hEnumerationDefinition,"ImplementAs",""),"") == "NativeSQLEnum"
-                l_cEnumerationNamespaceAndName := l_hEnumerationDefinition:__enumKey()
 
-                l_nPos := at(".",l_cEnumerationNamespaceAndName)
+        //We can only create actual enumeration definitions for Postgresql when the enumeration "ImplementAs" is "NativeSQLEnum"
+        for each l_hEnumerationDefinition in hb_hGetDef(par_hWharfConfig,"Enumerations",{=>})
+            if nvl(hb_hGetDef(l_hEnumerationDefinition,"ImplementAs",""),"") == "NativeSQLEnum"
+                l_cNamespaceAndEnumerationName := l_hEnumerationDefinition:__enumKey()
+
+                l_nPos := at(".",l_cNamespaceAndEnumerationName)
                 if empty(l_nPos)
                     l_cNamespaceName   := "public"
-                    l_cEnumerationName := l_cEnumerationNamespaceAndName
+                    l_cEnumerationName := l_cNamespaceAndEnumerationName
                 else
-                    l_cNamespaceName   := left(l_cEnumerationNamespaceAndName,l_nPos-1)
-                    l_cEnumerationName := substr(l_cEnumerationNamespaceAndName,l_nPos+1)
+                    l_cNamespaceName   := left(l_cNamespaceAndEnumerationName,l_nPos-1)
+                    l_cEnumerationName := substr(l_cNamespaceAndEnumerationName,l_nPos+1)
                 endif
+                l_cNamespaceAndEnumerationName := l_cNamespaceName+"."+l_cEnumerationName
 
                 l_hEnumValues := hb_hGetDef(l_hEnumerationDefinition,"Values",{=>})
                 if len(l_hEnumValues) > 0
-                    if !l_lFetchedExistingEnumerations
-                        
-                        l_cSQLEnumerations := [SELECT]
-                        l_cSQLEnumerations += [  ns.nspname          as "NamespaceName",]
-                        l_cSQLEnumerations += [  pt.typname          as "EnumerationName",]
-                        l_cSQLEnumerations += [  pe.enumlabel        as "EnumValueName",]
-                        l_cSQLEnumerations += [  pe.enumsortorder    as "EnumValueOrder"]
-                        // l_cSQLEnumerations += [  upper(ns.nspname)   as "tag1",]
-                        // l_cSQLEnumerations += [  upper(pt.typname)   as "tag2",]
-                        // l_cSQLEnumerations += [  upper(pe.enumlabel) as "tag3"]
-                        l_cSQLEnumerations += [ FROM pg_type      as pt]
-                        l_cSQLEnumerations += [ join pg_namespace as ns on pt.typnamespace = ns.oid]
-                        l_cSQLEnumerations += [ join pg_enum      as pe on pe.enumtypid = pt.oid]
-                        l_cSQLEnumerations += [ WHERE pt.typcategory = 'E']
-                        l_cSQLEnumerations += [ and   ns.nspname not in ('cyanaudit','pg_catalog')]
-                        // l_cSQLEnumerations += [ order by "tag1","tag2","EnumValueOrder"]
-                        if ! ::SQLExec("7d5a0a33-fb9d-4267-89a7-350a7fd22065",l_cSQLEnumerations,"hb_orm_ListOfEnumerationsAndValues")
-                            exit
-                        else
-                            l_lFetchedExistingEnumerations := .t.
-                            l_oCursorExistingEnumerations := hb_orm_Cursor():Init():Associate("hb_orm_ListOfEnumerationsAndValues")   // Associating it with the variable will ensure the alias is also closed once the variable is gone.
-
-                            with object l_oCursorExistingEnumerations
-                                :Index("tag1","padr(upper(NamespaceName+'*'+EnumerationName+'*'+EnumValueName+'*'),240)")
-                                :CreateIndexes()
-                            endwith
-                        endif
-                    endif
-                    
-                    if !el_seek(upper(l_cNamespaceName+'*'+l_cEnumerationName+'*'),"hb_orm_ListOfEnumerationsAndValues","tag1")
-                        //New Enumeration
+                    l_hCurrentEnumerationDefinition := hb_HGetDef(::p_hMetadataEnumeration,l_cNamespaceAndEnumerationName,NIL)
+                    if hb_IsNIL(l_hCurrentEnumerationDefinition)
+                        // Enumeration does not exists
                         l_cSQLScript += [CREATE TYPE ]+::FormatIdentifier(l_cNamespaceName)+[.]+::FormatIdentifier(l_cEnumerationName)+[ AS ENUM (]
                         l_lProcessedValue := .f.
                         
@@ -935,8 +1204,9 @@ if !hb_IsNil(par_hEnumerationDefinition) .and. !empty(par_hEnumerationDefinition
                         endfor
                         l_cSQLScript += [);]+CRLF
                     else
+                        // Enumeration exists, lets see if we have all the possible values.
                         for each l_cEnumValueName in l_hEnumValues
-                            if !el_seek(upper(l_cNamespaceName+'*'+l_cEnumerationName+'*'+l_cEnumValueName:__enumKey+'*'),"hb_orm_ListOfEnumerationsAndValues","tag1")
+                            if hb_IsNil(l_hCurrentEnumerationDefinition,l_cEnumValueName:__enumKey,NIL)
                                 l_cSQLScript += [ALTER TYPE ]+::FormatIdentifier(l_cNamespaceName)+[.]+::FormatIdentifier(l_cEnumerationName)+[ ADD VALUE ']+l_cEnumValueName:__enumKey+[';]+CRLF
                             endif
                         endfor
@@ -945,9 +1215,6 @@ if !hb_IsNil(par_hEnumerationDefinition) .and. !empty(par_hEnumerationDefinition
                 endif
             endif
         endfor
-        if l_lFetchedExistingEnumerations
-            CloseAlias("hb_orm_ListOfEnumerationsAndValues")
-        endif
     endcase
 endif
 
@@ -955,12 +1222,8 @@ if !empty(l_cEnumValueName)
     hb_orm_SendToDebugView(l_cEnumValueName)
 endif
 
-// if used("hb_orm_ListOfPrimaryKeyConstraints")
-//     if el_seek(padr(upper(NamespaceName+'*'+TableName+'*'),240),"hb_orm_ListOfPrimaryKeyConstraints","tag1")
-//     endif
-// endif
-
-for each l_hTableDefinition in par_hTableSchemaDefinition
+//Add / Update any Tables
+for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
     l_cNamespaceAndTableName := l_hTableDefinition:__enumKey()
 
     do case
@@ -1003,20 +1266,17 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
         if l_cNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
             l_cNamespaceName := ::p_HBORMNamespace
         endif
-        l_hListOfNamespaceName[l_cNamespaceName] := NIL  //Will use the Hash as a Set of values
         l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
 
     endcase
 
-    l_hCurrentTableDefinition := hb_HGetDef(::p_TableSchema,l_cNamespaceAndTableName,NIL)
+    l_hCurrentTableDefinition := hb_HGetDef(::p_hMetadataTable,l_cNamespaceAndTableName,NIL)
 
     l_hFields   := l_hTableDefinition[HB_ORM_SCHEMA_FIELD]
     l_hIndexes  := hb_HGetDef(l_hTableDefinition,HB_ORM_SCHEMA_INDEX,NIL)
     l_lUnlogged := hb_HGetDef(l_hTableDefinition,"Unlogged",.f.)
 
     if hb_IsNIL(l_hCurrentTableDefinition)
-
-// el_StrToFile(hb_jsonEncode(::p_TableSchema,.t.) ,"d:\p_TableSchema.txt")
 
         // Table does not exist in the current catalog
         hb_orm_SendToDebugView("Add Table: "+l_cNamespaceAndTableName)
@@ -1028,7 +1288,7 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
                 l_cIndexName       := lower(l_hIndex:__enumKey())
                 l_hIndexDefinition := l_hIndex:__enumValue()
                 
-                if !(lower(l_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so. This should not happen since no loaded in p_TableSchema to start with. But this method accepts any p_TableSchema hash arrays.
+                if !(lower(l_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so. This should not happen since no loaded in p_hMetadataTable to start with. But this method accepts any p_hMetadataTable hash arrays.
                     l_cSQLScript += ::GMSSAddIndex(l_cNamespaceName,l_cTableName,l_hFields,l_cIndexName,l_hIndexDefinition)  //Passing l_hFields to help with index expressions
                 endif
                 
@@ -1036,10 +1296,11 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
         endif
 
     else
-        // Found the table in the current ::p_TableSchema, now lets test all the fields are also there and matching
+        // Found the table in the current ::p_hMetadataTable, now lets test all the fields are also there and matching
         // Test Every Fields to see if structure must be updated.
-        l_cCurrentNamespaceAndTableName := hb_HKeyAt(::p_TableSchema,hb_HPos(::p_TableSchema,l_cNamespaceAndTableName))
-        l_lCurrentUnlogged              := hb_HGetDef(::p_TableSchema[l_cNamespaceAndTableName],"Unlogged",.f.)
+        l_cCurrentNamespaceAndTableName := hb_HKeyAt(::p_hMetadataTable,hb_HPos(::p_hMetadataTable,l_cNamespaceAndTableName))
+
+        l_lCurrentUnlogged              := hb_HGetDef(::p_hMetadataTable[l_cNamespaceAndTableName],"Unlogged",.f.)
 
         if !(l_cCurrentNamespaceAndTableName == l_cNamespaceAndTableName)
 
@@ -1060,11 +1321,6 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
                 l_nPos := at(".",l_cCurrentNamespaceAndTableName)
                 l_cCurrentNamespaceName := left(l_cCurrentNamespaceAndTableName,l_nPos-1)
                 l_cCurrentTableName     := substr(l_cCurrentNamespaceAndTableName,l_nPos+1)
-
-                //Namespace Name to be already fixed before Table compare occurs
-                if !(l_cCurrentNamespaceName == l_cNamespaceName)
-                    l_hListOfNamespaceName[l_cNamespaceName] := l_cCurrentNamespaceName  // To help detect if a namespace name changed.
-                endif
 
                 if !(l_cCurrentTableName == l_cTableName)
                     l_cSQLScriptPreUpdate += ::GMSSUpdateTableName(l_cNamespaceName,l_cTableName,l_cCurrentNamespaceName,l_cCurrentTableName)
@@ -1110,7 +1366,7 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
                 l_lFieldNullable := .f.
             endif
 
-            l_hCurrentFieldDefinition := hb_HGetDef(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName,NIL)
+            l_hCurrentFieldDefinition := hb_HGetDef(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName,NIL)
             if hb_IsNIL(l_hCurrentFieldDefinition)
                 //Missing Field
                 hb_orm_SendToDebugView("Table: "+l_cNamespaceAndTableName+" Add Field: "+l_cFieldName)
@@ -1131,12 +1387,11 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
                 l_cSQLScriptFieldChangesCycle2 += l_cSQLScriptFieldChanges[3]  // Allways blank for now MYSQL+POSTGRESQL
                 l_cSQLScriptPostUpdate         += l_cSQLScriptFieldChanges[4]
 
-
             else
                 //Compare the field definition using arrays l_hCurrentFieldDefinition and l_hFieldDefinition
 
                 //Test if the field Name Casing Changed
-                l_cCurrentFieldName := hb_HKeyAt(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],hb_HPos(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName))
+                l_cCurrentFieldName := hb_HKeyAt(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],hb_HPos(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName))
                 if !(l_cCurrentFieldName == l_cFieldName)
                     l_cSQLScriptPreUpdate += ::GMSSUpdateFieldName(l_cNamespaceName,l_cTableName,l_cFieldName,l_cCurrentFieldName)
                 endif
@@ -1150,21 +1405,12 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
                 l_lCurrentFieldAutoIncrement := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_AUTOINCREMENT,.f.)
                 l_lCurrentFieldArray         := hb_HGetDef(l_hCurrentFieldDefinition,HB_ORM_SCHEMA_FIELD_ARRAY,.f.)
 
-
                 if l_lCurrentFieldAutoIncrement .and. empty(el_InlistPos(l_cCurrentFieldType,"I","IB","IS"))  //Only those fields types may be flagged as Auto-Increment
                     l_lCurrentFieldAutoIncrement := .f.
                 endif
                 if l_lCurrentFieldAutoIncrement .and. l_lCurrentFieldNullable  //Auto-Increment fields may not be null (and not have a default)
                     l_lCurrentFieldNullable := .f.
                 endif
-
-//l_cCurrentFieldAttributes := iif(l_lCurrentFieldNullable,"N","")+iif(l_lCurrentFieldAutoIncrement,"+","")+iif(l_lCurrentFieldArray,"A","")
-
-                //Also using the nvl() below since doing the same when getting l_cCurrentFieldDefault above
-
-// if lower(l_cCurrentFieldName) == lower("PrimaryKeyDefaultInteger")
-//     altd()
-// endif
 
                 l_cFieldDefault := ::NormalizeFieldDefaultForCurrentEngineType(l_cFieldDefault,l_cFieldType,l_nFieldDec)
                 l_cFieldDefault := nvl(::SanitizeFieldDefaultFromDefaultBehavior(::p_SQLEngineType,l_cFieldType,l_lFieldNullable,l_cFieldDefault),"")
@@ -1261,7 +1507,7 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
         endif
 
         //Clone the list of existing indexes, so to search them and remove the ones we don't have defined afterwards
-        l_hExistingIndexesOfExistingTable := hb_HClone(nvl(hb_HGetDef(::p_TableSchema[l_cNamespaceAndTableName],HB_ORM_SCHEMA_INDEX,{=>}),{=>}))
+        l_hExistingIndexesOfExistingTable := hb_HClone(nvl(hb_HGetDef(::p_hMetadataTable[l_cNamespaceAndTableName],HB_ORM_SCHEMA_INDEX,{=>}),{=>}))
 
         if !hb_IsNIL(l_hIndexes)
             for each l_hIndex in l_hIndexes
@@ -1290,20 +1536,25 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
             endfor
         endif
 
-        //Delete non define hb_orm indexes existing in table. LoadSchema() method only loaded indexes maintained by hb_orm (ending with "_idx")
+        //Delete non define hb_orm indexes existing in table. LoadMetadata() method only loaded indexes maintained by hb_orm (ending with "_idx")
         for each l_hIndex in l_hExistingIndexesOfExistingTable
             l_cIndexName := l_hIndex:__enumKey()     // the hash key is already the hb_orm_RootIndexName of the physical index name.
-            l_cSQLScript += ::GMSSDeleteIndex(l_cNamespaceName,l_cTableName,l_cIndexName)
+            l_cNamespaceNameExistingCasing := hb_hGetDef(::p_hMetadataNamespace,l_cNamespaceName,"")
+            if !empty(l_cNamespaceNameExistingCasing)
+                // l_cIndexName := hb_orm_RootIndexName(l_cTableName,l_cIndexName)
+                l_cSQLScript += ::GMSSDeleteIndex(l_cNamespaceNameExistingCasing,l_cTableName,l_cIndexName)+CRLF
+                // l_cSQLScript := [DROP INDEX IF EXISTS ]+::FormatIdentifier(l_cNamespaceNameExistingCasing+"."+lower(l_cIndexName)+"_idx")+[ CASCADE;]
+            endif
         endfor
 
     endif
 endfor
 
-
+//Prepare result script and also add any Foreign Key Constraints.
 if !empty(l_cSQLScript) .or. ;
    !empty(l_cSQLScriptPreUpdate) .or. ;
-   !empty(l_cSQLScriptPostUpdate) .or. ;
-   !empty(l_hListOfNamespaceName) 
+   !empty(l_cSQLScriptPostUpdate)
+
     if !empty(l_cSQLScriptPreUpdate)
         l_cSQLScript := l_cSQLScriptPreUpdate+CRLF+l_cSQLScript
     endif
@@ -1314,31 +1565,29 @@ if !empty(l_cSQLScript) .or. ;
     do case
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSQLScript := [USE ]+::FormatIdentifier(::GetDatabase())+[;]+CRLF+l_cSQLScript
-
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        //When you get a connection to PostgreSQL it is always to a particular database. To access a different database, you must get a new connection.
-
-        if !empty(l_cSQLScript)  // No need to create schemas unless anything else should also be done
-            for each l_cCurrentNamespaceName in l_hListOfNamespaceName
-                l_cNamespaceName := l_cCurrentNamespaceName:__enumKey()
-                if !hb_IsNil(l_cCurrentNamespaceName)
-                    if !(l_cNamespaceName == l_cCurrentNamespaceName)
-                        l_cSQLScriptCreateOrUpdateNamespaceName += ::GMSSUpdateNamespaceName(l_cNamespaceName,l_cCurrentNamespaceName)+CRLF
-                    endif
-                endif
-                l_cSQLScriptCreateOrUpdateNamespaceName += [CREATE SCHEMA IF NOT EXISTS ]+::FormatIdentifier(l_cNamespaceName)+[;]+CRLF
-            endfor
-        endif
-
-        if !empty(l_cSQLScriptCreateOrUpdateNamespaceName)
-            l_cSQLScript := l_cSQLScriptCreateOrUpdateNamespaceName+l_cSQLScript
-        endif
     endcase
+endif
+
+if !empty(l_cSQLScript)
+    l_cSQLScript := "--Structure Changes generated at "+strtran(hb_TSToStr(hb_TSToUTC(hb_DateTime()))," ","T")+"Z"+["]+CRLF+l_cSQLScript
+endif
+
+l_cSQLScriptForeignKeyConstraints := ::GenerateMigrateForeignKeyConstraintsScript( nvl(hb_hGetDef(par_hWharfConfig,"Tables",{=>}),{=>}) ,;
+                                                                                   .t.,;
+                                                                                   l_hAppliedRenameNamespace,;
+                                                                                   l_hAppliedRenameTable,;
+                                                                                   l_hAppliedRenameColumn)
+if !empty(l_cSQLScriptForeignKeyConstraints)
+    if !empty(l_cSQLScript)
+        l_cSQLScript += CRLF
+    endif
+    l_cSQLScript += l_cSQLScriptForeignKeyConstraints
 endif
 
 return l_cSQLScript
 //-----------------------------------------------------------------------------------------------------------------
-method MigrateSchema(par_hTableSchemaDefinition,par_hEnumerationDefinition) class hb_orm_SQLConnect
+method MigrateSchema(par_hWharfConfig) class hb_orm_SQLConnect
 local l_cSQLScript
 local l_nResult := 0   // 0 = Nothing Migrated, 1 = Migrated, -1 = Error Migrating
 local l_cLastError := ""
@@ -1346,7 +1595,7 @@ local l_aInstructions
 local l_cStatement
 local l_nCounter := 0
 
-l_cSQLScript := ::GenerateMigrateSchemaScript(par_hTableSchemaDefinition,par_hEnumerationDefinition)
+l_cSQLScript := ::GenerateMigrateSchemaScript(par_hWharfConfig)
 if !empty(l_cSQLScript)
     l_nResult := 1
     l_aInstructions := hb_ATokens(l_cSQLScript,.t.)
@@ -1364,7 +1613,7 @@ if !empty(l_cSQLScript)
         endif
     endfor
     ::UpdateSchemaCache()
-    ::LoadSchema("MigrateSchema")
+    ::LoadMetadata("MigrateSchema")
 endif
 
 ::UpdateORMNamespaceTableNumber()  // Will call this routine even if no tables where modified.
@@ -1372,7 +1621,7 @@ endif
 return {l_nResult,l_cSQLScript,l_cLastError}
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSAddTable(par_cNamespaceName,par_cTableName,par_hStructure,par_lUnlogged) class hb_orm_SQLConnect                 // Fix if needed a single file structure
+method GMSSAddTable(par_cNamespaceName,par_cTableName,par_hStructure,par_lUnlogged) class hb_orm_SQLConnect                 // Fix if needed a single file structure. GMSS (Generate Migrate Schema Script).
 local l_aField
 local l_cFieldName
 local l_hFieldDefinition
@@ -1428,7 +1677,6 @@ for each l_aField in par_hStructure
     if l_lFieldAutoIncrement .and. l_cFieldDefault == "Wharf-AutoIncrement()"
         l_cFieldDefault := ""
     endif
-
 
     if !empty(l_cSQLFields)
         l_cSQLFields += ","
@@ -1679,7 +1927,7 @@ for each l_aField in par_hStructure
             if empty(l_cFieldTypeEnumName)
                 //_M_
             else
-                l_cSQLFields += ["]+l_cFieldTypeEnumName+["]+l_cFieldTypeSuffix
+                l_cSQLFields += ["]+par_cNamespaceName+["."]+l_cFieldTypeEnumName+["]+l_cFieldTypeSuffix
                 l_cDefaultString := "''"
             endif
 
@@ -1720,7 +1968,7 @@ endcase
 
 return l_cSQLCommand+l_cAdditionalSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSUpdateNamespaceName(par_cNamespaceName,par_cCurrentNamespaceName) class hb_orm_SQLConnect
+method GMSSUpdateNamespaceName(par_cNamespaceName,par_cCurrentNamespaceName) class hb_orm_SQLConnect  // GMSS (Generate Migrate Schema Script).
 local l_cSQLCommand := ""
 
 do case
@@ -1734,7 +1982,7 @@ endcase
 
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSUpdateTableName(par_cNamespaceName,par_cTableName,par_cCurrentNamespaceName,par_cCurrentTableName) class hb_orm_SQLConnect
+method GMSSUpdateTableName(par_cNamespaceName,par_cTableName,par_cCurrentNamespaceName,par_cCurrentTableName) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
 local l_cSQLCommand := ""
 local l_cTableNameFrom
@@ -1765,7 +2013,7 @@ endcase
 
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSUpdateFieldName(par_cNamespaceName,par_cTableName,par_cFieldName,par_cCurrentFieldName) class hb_orm_SQLConnect
+method GMSSUpdateFieldName(par_cNamespaceName,par_cTableName,par_cFieldName,par_cCurrentFieldName) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
 local l_cSQLCommand := ""
 
@@ -1787,7 +2035,7 @@ endcase
 
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSUpdateField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition,par_hCurrentFieldDefinition) class hb_orm_SQLConnect
+method GMSSUpdateField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition,par_hCurrentFieldDefinition) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
 // Due to a bug in MySQL engine of the "ALTER TABLE" command cannot mix "CHANGE COLUMN" and "ALTER COLUMN" options. Therefore separating those in 2 Cycles
 local l_cSQLCommandPreUpdate := ""
 local l_cSQLCommandCycle1    := ""
@@ -2094,7 +2342,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cDefaultString := "0"
 
     case l_cFieldType == "E"
-        l_cSQLCommandCycle1 += [TYPE ]+::FormatIdentifier(l_cFieldTypeEnumName)+l_cFieldTypeSuffix
+        l_cSQLCommandCycle1 += [TYPE ]+::FormatIdentifier(par_cNamespaceName)+[.]+::FormatIdentifier(l_cFieldTypeEnumName)+l_cFieldTypeSuffix
         l_cDefaultString := "''"
 
     otherwise
@@ -2157,7 +2405,7 @@ endcase
 
 return {l_cSQLCommandPreUpdate,l_cSQLCommandCycle1,l_cSQLCommandCycle2,l_cAdditionalSQLCommands}
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSAddField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition) class hb_orm_SQLConnect
+method GMSSAddField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
 local l_cSQLCommand := ""
 local l_cAdditionalSQLCommands := ""
 local l_cFieldType,l_cFieldTypeEnumName,l_lFieldArray,l_nFieldLen,l_nFieldDec,l_lFieldNullable,l_lFieldAutoIncrement,l_cFieldDefault
@@ -2313,10 +2561,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     l_cFieldTypeSuffix := iif(l_lFieldArray,"[]","")
 
-// if lower(par_cTableName == "film") .and. lower(par_cFieldName) == "rating"
-//     altd()
-// endif
-
     do case
     case el_IsInlist(l_cFieldType,"I","IB","IS","N")
         do case
@@ -2426,7 +2670,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         if empty(l_cFieldTypeEnumName)
             //_M_ Report as an error
         else
-            l_cSQLCommand += ::FormatIdentifier(l_cFieldTypeEnumName)+l_cFieldTypeSuffix
+            l_cSQLCommand +=  ::FormatIdentifier(par_cNamespaceName)+[.]+::FormatIdentifier(l_cFieldTypeEnumName)+l_cFieldTypeSuffix
             l_cDefaultString := "''"
         endif
 
@@ -2453,7 +2697,7 @@ endcase
 
 return {"",l_cSQLCommand,"",l_cAdditionalSQLCommands}
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSAddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_hIndexDefinition) class hb_orm_SQLConnect
+method GMSSAddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_hIndexDefinition) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
 local l_cSQLCommand := ""
 local l_cIndexNameOnFile
 local l_cIndexExpression
@@ -2463,8 +2707,6 @@ local l_cFormattedTableName
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-// altd()
-
     l_cIndexNameOnFile := lower(par_cIndexName)+"_idx"
     do case
     case empty(par_cNamespaceName)
@@ -2515,7 +2757,7 @@ endcase
 
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSDeleteIndex(par_cNamespaceName,par_cTableName,par_cIndexName) class hb_orm_SQLConnect
+method GMSSDeleteIndex(par_cNamespaceName,par_cTableName,par_cIndexName) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
 local l_cSQLCommand
 local l_cNamespaceAndTableNameFixedCase
 local l_cPrefix
@@ -2537,9 +2779,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommand := [DROP INDEX IF EXISTS `]+lower(l_cIndexName)+"_idx"+[` ON ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableNameFixedCase))+[;]
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cSQLCommand := [DROP INDEX IF EXISTS ]+::FormatIdentifier(lower(par_cNamespaceName)+"."+lower(par_cTableName)+"_"+lower(l_cIndexName)+"_idx")+[ CASCADE;]
+    //In Postgresql the index are named spaced in the Schema, not the table it belongs to
+    l_cSQLCommand := [DROP INDEX IF EXISTS ]+::FormatIdentifier(par_cNamespaceName+"."+lower(par_cTableName)+"_"+lower(l_cIndexName)+"_idx")+[ CASCADE;]
     //Previously added the Namespace as prefix to the index
-    l_cSQLCommand += [DROP INDEX IF EXISTS ]+::FormatIdentifier(lower(par_cNamespaceName)+"."+lower(par_cNamespaceName)+"_"+lower(par_cTableName)+"_"+lower(l_cIndexName)+"_idx")+[ CASCADE;]
+    l_cSQLCommand += [DROP INDEX IF EXISTS ]+::FormatIdentifier(par_cNamespaceName+"."+lower(par_cNamespaceName)+"_"+lower(par_cTableName)+"_"+lower(l_cIndexName)+"_idx")+[ CASCADE;]
 
 endcase
 
@@ -2702,10 +2945,7 @@ return l_Success
 //-----------------------------------------------------------------------------------------------------------------
 method UpdateSchemaCache(par_lForce) class hb_orm_SQLConnect   //returns .t. if cache was updated
 local l_cSQLCommand
-// local l_cSQLCommandFields
-// local l_cSQLCommandIndexes
 local l_nSelect := iif(used(),select(),0)
-// local l_CacheFullName
 local l_CacheFullNameField
 local l_CacheFullNameIndex
 local l_lResult := .f.
@@ -2735,7 +2975,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         if SchemaCacheLogLast->(reccount()) == 1
             if SchemaCacheLogLast->cachedschema == 0   //Meaning the last schema change log was not cached  (0 = false)
 //hb_orm_SendToDebugView("Will create a new Schema Cache")
-
 
 l_CacheFullNameField := l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
 l_CacheFullNameIndex := l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
@@ -2816,7 +3055,7 @@ l_cSQLCommand += [DROP FUNCTION IF EXISTS ]+l_HBORMNamespaceName+[.hb_orm_update
                         endif
                     endif
                 endif
-                // ::LoadSchema()
+                // ::LoadMetadata()
                 l_lResult := .t.
             endif
         endif
@@ -2983,6 +3222,23 @@ endcase
 
 return l_cFormattedIdentifier
 //-----------------------------------------------------------------------------------------------------------------
+method FormatValue(par_cValue) class hb_orm_SQLConnect
+local l_cFormattedValue
+
+do case
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
+    l_cFormattedValue := hb_StrReplace( par_cValue, {'\' => '\\',;
+                                                     '"' => '\"',;
+                                                     "'" => "\'"} )
+
+case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    l_cFormattedValue := "'"+strtran(par_cValue,"'","''")+"'"
+
+endcase
+
+return l_cFormattedValue
+//-----------------------------------------------------------------------------------------------------------------
 method NormalizeTableNameInternal(par_cNamespaceAndTableName) class hb_orm_SQLConnect
 local l_cNamespaceAndTableName := hb_StrReplace(par_cNamespaceAndTableName,{' '=>'','"'=>'',"'"=>""})
 local l_nPos
@@ -3015,22 +3271,23 @@ local l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAnd
 local l_nHashPos
 
 //Fix The Casing of Table and Field based on he actual on file tables.
-l_nHashPos := hb_hPos(::p_TableSchema,l_cNamespaceAndTableName)
+l_nHashPos := hb_hPos(::p_hMetadataTable,l_cNamespaceAndTableName)
 if l_nHashPos > 0
-    l_cNamespaceAndTableName := hb_hKeyAt(::p_TableSchema,l_nHashPos) 
+    l_cNamespaceAndTableName := hb_hKeyAt(::p_hMetadataTable,l_nHashPos) 
 else
     // Report Failed to find Table by returning empty.
     l_cNamespaceAndTableName := ""
 endif
+
 return l_cNamespaceAndTableName
 //-----------------------------------------------------------------------------------------------------------------
 method CaseFieldName(par_cNamespaceAndTableName,par_cFieldName) class hb_orm_SQLConnect
 local l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
 local l_cFieldName             := allt(par_cFieldName)
 local l_nHashPos
-l_nHashPos := hb_hPos(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+l_nHashPos := hb_hPos(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
 if l_nHashPos > 0
-    l_cFieldName := hb_hKeyAt(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+    l_cFieldName := hb_hKeyAt(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
 else
     // Report Failed to find Field by returning empty.
     l_cFieldName := ""
@@ -3058,13 +3315,13 @@ local l_hFieldInfo
 local l_nHashPos
 local l_nPos
 
-l_nHashPos := hb_hPos(::p_TableSchema,l_cNamespaceAndTableName)
+l_nHashPos := hb_hPos(::p_hMetadataTable,l_cNamespaceAndTableName)
 if l_nHashPos > 0
-    l_cNamespaceAndTableName := hb_hKeyAt(::p_TableSchema,l_nHashPos)   // To get the proper casing
-    l_nHashPos := hb_hPos(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
+    l_cNamespaceAndTableName := hb_hKeyAt(::p_hMetadataTable,l_nHashPos)   // To get the proper casing
+    l_nHashPos := hb_hPos(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName)
     if l_nHashPos > 0
-        l_cFieldName  := hb_hKeyAt(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
-        l_hFieldInfo := hb_HValueAt(::p_TableSchema[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+        l_cFieldName  := hb_hKeyAt(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
+        l_hFieldInfo := hb_HValueAt(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_nHashPos)
 
         l_nPos := at(".",l_cNamespaceAndTableName)
         if empty(l_nPos)
@@ -3183,7 +3440,7 @@ if empty(l_cNamespaceAndTableNameFixedCase)
 else
     l_cSQLCommand := [DROP TABLE IF EXISTS ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableNameFixedCase))+[;]
     if ::SQLExec("DeleteTable",l_cSQLCommand)
-        hb_HDel(::p_TableSchema,l_cNamespaceAndTableNameFixedCase)
+        hb_HDel(::p_hMetadataTable,l_cNamespaceAndTableNameFixedCase)
     else
         l_lResult := .f.
         l_cLastError := ::GetSQLExecErrorMessage()
@@ -3208,7 +3465,7 @@ if empty(l_cNamespaceAndTableNameFixedCase)
 
 else
     //Test if the index is present. Only hb_orm indexes can be removed.
-    l_nHashPos := hb_hPos(::p_TableSchema[par_cNamespaceAndTableName][HB_ORM_SCHEMA_INDEX],lower(par_cIndexName))
+    l_nHashPos := hb_hPos(::p_hMetadataTable[par_cNamespaceAndTableName][HB_ORM_SCHEMA_INDEX],lower(par_cIndexName))
     if l_nHashPos > 0
         
         do case
@@ -3228,7 +3485,7 @@ else
 
         if !empty(l_cSQLCommand)
             if ::SQLExec("DeleteIndex",l_cSQLCommand)
-                hb_HDel(::p_TableSchema[par_cNamespaceAndTableName][HB_ORM_SCHEMA_INDEX],lower(par_cIndexName))
+                hb_HDel(::p_hMetadataTable[par_cNamespaceAndTableName][HB_ORM_SCHEMA_INDEX],lower(par_cIndexName))
             else
                 l_lResult := .f.
                 l_cLastError := ::GetSQLExecErrorMessage()
@@ -3296,7 +3553,7 @@ else
                 for each l_cFieldName in l_aFieldNames
                     l_cFieldNameFixedCase := ::CaseFieldName(l_cNamespaceAndTableNameFixedCase,l_cFieldName)
                     if !empty(l_cFieldNameFixedCase)
-                        hb_HDel(::p_TableSchema[l_cNamespaceAndTableNameFixedCase][HB_ORM_SCHEMA_FIELD],l_cFieldNameFixedCase)
+                        hb_HDel(::p_hMetadataTable[l_cNamespaceAndTableNameFixedCase][HB_ORM_SCHEMA_FIELD],l_cFieldNameFixedCase)
                     endif
                 endfor
             else
@@ -3373,51 +3630,54 @@ method UpdateORMSupportSchema() class hb_orm_SQLConnect
 local l_lResult := .f.   // return .t. if overall schema changed
 local l_cSQLScript,l_ErrorInfo   // can be removed later, only used during code testing
 local l_PreviousNamespaceName
-local l_Schema
+local l_hWharfConfig
 
-l_Schema := ;
-    {"hborm.SchemaAndDataErrorLog"=>{"Fields"=>;
-        {"pk"            =>{"Type"=>"IB","AutoIncrement"=>.t.};
-        ,"eventid"       =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
-        ,"datetime"      =>{"Type"=>"DTZ"};
-        ,"ip"            =>{"Type"=>"CV","Length"=>43};
-        ,"namespacename" =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
-        ,"tablename"     =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
-        ,"recordpk"      =>{"Type"=>"IB","Nullable"=>.t.};
-        ,"errormessage"  =>{"Type"=>"M","Nullable"=>.t.};
-        ,"appstack"      =>{"Type"=>"M","Nullable"=>.t.}};
+l_hWharfConfig := ;
+    {"DataWharfVersion"=>4.3,;
+     "Enumerations"=>{=>},;
+     "Tables"=>;
+        {"hborm.SchemaAndDataErrorLog"=>{HB_ORM_SCHEMA_FIELD=>;
+            {"pk"            =>{"Type"=>"IB","AutoIncrement"=>.t.};
+            ,"eventid"       =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
+            ,"datetime"      =>{"Type"=>"DTZ"};
+            ,"ip"            =>{"Type"=>"CV","Length"=>43};
+            ,"namespacename" =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
+            ,"tablename"     =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
+            ,"recordpk"      =>{"Type"=>"IB","Nullable"=>.t.};
+            ,"errormessage"  =>{"Type"=>"M","Nullable"=>.t.};
+            ,"appstack"      =>{"Type"=>"M","Nullable"=>.t.}};
+                                    };
+        ,"hborm.SchemaAutoTrimLog"=>{HB_ORM_SCHEMA_FIELD=>;
+            {"pk"            =>{"Type"=>"IB","AutoIncrement"=>.t.};
+            ,"eventid"       =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
+            ,"datetime"      =>{"Type"=>"DTZ"};
+            ,"ip"            =>{"Type"=>"CV","Length"=>43};
+            ,"namespacename" =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
+            ,"tablename"     =>{"Type"=>"CV","Length"=>254};
+            ,"recordpk"      =>{"Type"=>"IB"};
+            ,"fieldname"     =>{"Type"=>"CV","Length"=>254};
+            ,"fieldtype"     =>{"Type"=>"C","Length"=>3};
+            ,"fieldlen"      =>{"Type"=>"I"};
+            ,"fieldvaluer"   =>{"Type"=>"R","Nullable"=>.t.};
+            ,"fieldvaluem"   =>{"Type"=>"M","Nullable"=>.t.}};
                                 };
-    ,"hborm.SchemaAutoTrimLog"=>{"Fields"=>;
-        {"pk"            =>{"Type"=>"IB","AutoIncrement"=>.t.};
-        ,"eventid"       =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
-        ,"datetime"      =>{"Type"=>"DTZ"};
-        ,"ip"            =>{"Type"=>"CV","Length"=>43};
-        ,"namespacename" =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
-        ,"tablename"     =>{"Type"=>"CV","Length"=>254};
-        ,"recordpk"      =>{"Type"=>"IB"};
-        ,"fieldname"     =>{"Type"=>"CV","Length"=>254};
-        ,"fieldtype"     =>{"Type"=>"C","Length"=>3};
-        ,"fieldlen"      =>{"Type"=>"I"};
-        ,"fieldvaluer"   =>{"Type"=>"R","Nullable"=>.t.};
-        ,"fieldvaluem"   =>{"Type"=>"M","Nullable"=>.t.}};
+        ,"hborm.NamespaceTableNumber"=>{HB_ORM_SCHEMA_FIELD=>;
+            {"pk"           =>{"Type"=>"I","AutoIncrement"=>.t.};   //Will never have more than 2**32 tables.
+            ,"namespacename"=>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
+            ,"tablename"    =>{"Type"=>"CV","Length"=>254}};
+                                ,HB_ORM_SCHEMA_INDEX=>;
+            {"namespacename"=>{"Expression"=>"namespacename"};
+            ,"tablename"    =>{"Expression"=>"tablename"}}};
+        ,"hborm.SchemaVersion"=>{HB_ORM_SCHEMA_FIELD=>;
+            {"pk"     =>{"Type"=>"I","AutoIncrement"=>.t.};
+            ,"name"   =>{"Type"=>"CV","Length"=>254};
+            ,"version"=>{"Type"=>"I"}};
                             };
-    ,"hborm.NamespaceTableNumber"=>{"Fields"=>;
-        {"pk"           =>{"Type"=>"I","AutoIncrement"=>.t.};   //Will never have more than 2**32 tables.
-        ,"namespacename"=>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
-        ,"tablename"    =>{"Type"=>"CV","Length"=>254}};
-                            ,"Indexes"=>;
-        {"namespacename"=>{"Expression"=>"namespacename"};
-        ,"tablename"    =>{"Expression"=>"tablename"}}};
-    ,"hborm.SchemaVersion"=>{"Fields"=>;
-        {"pk"     =>{"Type"=>"I","AutoIncrement"=>.t.};
-        ,"name"   =>{"Type"=>"CV","Length"=>254};
-        ,"version"=>{"Type"=>"I"}};
-                        };
+        };
     }
-
 l_PreviousNamespaceName := ::SetCurrentNamespaceName(::p_HBORMNamespace)
 
-if el_AUnpack(::MigrateSchema(l_Schema),,@l_cSQLScript,@l_ErrorInfo) <> 0
+if el_AUnpack(::MigrateSchema(l_hWharfConfig),,@l_cSQLScript,@l_ErrorInfo) <> 0
     // altd()
     l_lResult = .t.  // Will assume the schema change worked.
 endif
@@ -3567,10 +3827,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
             l_cSQLCommand += [);]
         else
             if SchemaVersion->pk == 0  // To fix an initial bug in the hb_orm
-                ::LoadSchema("SetSchemaDefinitionVersion - 1")
+                ::LoadMetadata("SetSchemaDefinitionVersion - 1")
                 ::DeleteField(l_cFormattedTableName,"pk")  // the pk field will be readded correctly.
                 ::UpdateORMSupportSchema()  //"MySQL"
-                ::LoadSchema("SetSchemaDefinitionVersion - 2")  // Only called again since the ORM schema changed
+                ::LoadMetadata("SetSchemaDefinitionVersion - 2")  // Only called again since the ORM schema changed
                 ::SQLExec("SetSchemaDefinitionVersion",l_cSQLCommand,"SchemaVersion")
             endif
 
@@ -3607,10 +3867,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cSQLCommand += [);]
         else
             if SchemaVersion->pk == 0  // To fix an initial bug in the hb_orm
-                ::LoadSchema("SetSchemaDefinitionVersion - 3")
+                ::LoadMetadata("SetSchemaDefinitionVersion - 3")
                 ::DeleteField(l_cFormattedTableName,"pk")  // the pk field will be readded correctly.
                 ::UpdateORMSupportSchema()  //"PostgreSQL"
-                ::LoadSchema("SetSchemaDefinitionVersion - 4")  // Only called again since the ORM schema changed
+                ::LoadMetadata("SetSchemaDefinitionVersion - 4")  // Only called again since the ORM schema changed
                 ::SQLExec("SetSchemaDefinitionVersion",l_cSQLCommand,"SchemaVersion")
             endif
 
@@ -3967,7 +4227,7 @@ local l_cSQLCommand
 local l_lForeignKeyOptional
 
 if ::UpdateSchemaCache()
-    ::LoadSchema("RemoveWharfForeignKeyConstraints")
+    ::LoadMetadata("RemoveWharfForeignKeyConstraints")
 endif
 
 do case
@@ -4043,7 +4303,10 @@ endcase
 return nil
 //-----------------------------------------------------------------------------------------------------------------
 // Generate the Script to Add/Update if missing any Foreign Key Constraint that and with "_fkc"
-method GenerateMigrateForeignKeyConstraintsScript(par_hTableSchemaDefinition) class hb_orm_SQLConnect
+method GenerateMigrateForeignKeyConstraintsScript(par_hTableSchemaDefinition,par_lSimulationMode,;
+                                                                             par_hAppliedRenameNamespace,;
+                                                                             par_hAppliedRenameTable,;
+                                                                             par_hAppliedRenameColumn) class hb_orm_SQLConnect
 
 local l_hTableDefinition
 local l_cNamespaceAndTableName
@@ -4059,7 +4322,7 @@ local l_cParentNamespaceAndTable
 local l_cParentNamespaceName
 local l_cParentTableName
 local l_cParentTablePrimaryKey
-local l_cSQLCommand := ""
+local l_cSQLScript := ""
 local l_lForeignKeyOptional
 local l_cOnDelete
 local l_cSQLForeignKeyConstraints
@@ -4069,9 +4332,20 @@ local l_cCurrentOnUpdateConstraintAction
 local l_cCurrentOnDeleteConstraintAction
 local l_lAddConstraints
 local l_hPrimaryKeys
+local l_lSimulationMode := nvl(par_lSimulationMode,.f.)
+local l_cNamespaceFrom
+local l_cNamespaceTo
+local l_cTableFrom
+local l_cTableTo
+local l_cNamespaceAndTableFrom
+local l_cNamespaceAndTableTo
+local l_cColumnNameTo
+local l_cColumnNameFrom
 
-if ::UpdateSchemaCache()
-    ::LoadSchema("GenerateMigrateForeignKeyConstraintsScript")
+if !l_lSimulationMode
+    if ::UpdateSchemaCache()
+        ::LoadMetadata("GenerateMigrateForeignKeyConstraintsScript")
+    endif
 endif
 
 l_hPrimaryKeys := ::GetListOfPrimaryKeysForAllTables(par_hTableSchemaDefinition)
@@ -4127,6 +4401,75 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     else
         l_oCursor := hb_orm_Cursor():Init():Associate("hb_orm_ListOfForeignKeyConstraints")
 
+        select hb_orm_ListOfForeignKeyConstraints
+        if l_lSimulationMode
+        // ExportTableToHtmlFile("hb_orm_ListOfForeignKeyConstraints","D:\336\BeforeReplace","From PostgreSQL",,,.t.)
+
+        //-- Apply Namespace renames, which also affect table names
+            for each l_cNamespaceTo in par_hAppliedRenameNamespace
+                l_cNamespaceFrom := l_cNamespaceTo:__enumKey()
+                replace all ChildNamespace  with l_cNamespaceTo FOR alltrim(field->ChildNamespace)  == l_cNamespaceFrom
+                replace all ParentNamespace with l_cNamespaceTo FOR alltrim(field->ParentNamespace) == l_cNamespaceFrom
+            endfor
+
+            for each l_cNamespaceAndTableTo in par_hAppliedRenameTable
+                l_cNamespaceAndTableFrom := l_cNamespaceAndTableTo:__enumKey()
+
+                l_nPos := at(".",l_cNamespaceAndTableTo)
+                if l_nPos > 0
+                    l_cNamespaceTo := left(l_cNamespaceAndTableTo,l_nPos-1)
+                    l_cTableTo     := substr(l_cNamespaceAndTableTo,l_nPos+1)
+
+                    l_nPos := at(".",l_cNamespaceAndTableFrom)
+                    if l_nPos > 0
+                        l_cNamespaceFrom := left(l_cNamespaceAndTableFrom,l_nPos-1)
+                        l_cTableFrom     := substr(l_cNamespaceAndTableFrom,l_nPos+1)
+
+                        replace all ChildNamespace  with l_cNamespaceTo,;
+                                    ChildTable      with l_cTableTo;
+                                    FOR alltrim(field->ChildNamespace) == l_cNamespaceFrom .and. alltrim(field->ChildTable) == l_cTableFrom
+
+                        replace all ParentNamespace  with l_cNamespaceTo,;
+                                    ParentTable      with l_cTableTo;
+                                    FOR alltrim(field->ParentNamespace) == l_cNamespaceFrom .and. alltrim(field->ParentTable) == l_cTableFrom
+
+                    endif
+                endif
+            endfor
+
+        //-- Apply Table renames
+            //Constraints names are not affected by table name changes
+
+        //-- Apply Column renames
+            //Rename constraints names that depended on a column being renamed.
+
+            for each l_cColumnNameTo in par_hAppliedRenameColumn
+                l_cColumnNameFrom := l_cColumnNameTo:__enumkey
+                l_nPos := at(".",l_cColumnNameFrom)
+                if l_nPos > 0
+                    l_cNamespaceName  := left(l_cColumnNameFrom,l_nPos-1)
+                    l_cColumnNameFrom := substr(l_cColumnNameFrom,l_nPos+1)
+                    l_nPos := at(".",l_cColumnNameFrom)
+                    if l_nPos > 0
+                        l_cTableName      := left(l_cColumnNameFrom,l_nPos-1)
+                        l_cColumnNameFrom := substr(l_cColumnNameFrom,l_nPos+1)
+
+                        select hb_orm_ListOfForeignKeyConstraints
+                        locate for lower(alltrim(field->ChildNamespace)) == lower(l_cNamespaceName) .and.;
+                                lower(alltrim(field->ChildTable))     == lower(l_cTableName)     .and.;
+                                lower(alltrim(field->ChildColumn))    == lower(l_cColumnNameFrom)
+                        if found()
+                            l_cSQLScript += [ALTER TABLE IF EXISTS "]+l_cNamespaceName+["."]+l_cTableName+[" RENAME CONSTRAINT "]+lower(l_cColumnNameFrom)+[_fkc" TO "]+lower(l_cColumnNameTo)+[_fkc";]+CRLF
+                            replace ChildColumn    with l_cColumnNameTo
+                            replace ConstraintName with lower(l_cColumnNameTo)+[_fkc]   // To ensure a future compare will not trigger a DROP+ADD
+                        endif
+
+                    endif
+                endif
+            endfor
+
+        endif
+
         with object l_oCursor
             :Index("tag1","padr(upper(ChildNamespace+'*'+ChildTable+'*'+ChildColumn+'*'),240)")
             :CreateIndexes()
@@ -4175,11 +4518,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                         if empty(l_cConstraintAction)
                             //Check if we should remove a constraint
                             if el_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
-                                l_cSQLCommand += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc";]
-                                l_cSQLCommand += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
+                                l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc";]
+                                l_cSQLScript += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
                                 if !(l_cFieldName == lower(l_cFieldName))
-                                    l_cSQLCommand += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+lower(l_cFieldName)+[_fkc";]
-                                    l_cSQLCommand += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+lower(l_cFieldName)+[*/]+CRLF
+                                    l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+lower(l_cFieldName)+[_fkc";]
+                                    l_cSQLScript += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+lower(l_cFieldName)+[*/]+CRLF
                                 endif
                             endif
                         else
@@ -4228,11 +4571,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                                     endcase
 
                                     if l_lAddConstraints   //Remove the Constraints since it is different, will re-add it.
-                                        l_cSQLCommand += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc";]
-                                        l_cSQLCommand += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
+                                        l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc";]
+                                        l_cSQLScript += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
                                         if !(l_cFieldName == lower(l_cFieldName))
-                                            l_cSQLCommand += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+lower(l_cFieldName)+[_fkc";]
-                                            l_cSQLCommand += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+lower(l_cFieldName)+[*/]+CRLF
+                                            l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+lower(l_cFieldName)+[_fkc";]
+                                            l_cSQLScript += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+lower(l_cFieldName)+[*/]+CRLF
                                         endif
                                     endif
                                 else
@@ -4240,8 +4583,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                                 endif
 
                                 if l_lAddConstraints
-                                    l_cSQLCommand += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" ADD CONSTRAINT "]+lower(l_cFieldName)+[_fkc" FOREIGN KEY ("]+l_cFieldName+[") REFERENCES "]+l_cParentNamespaceName+["."]+l_cParentTableName+[" ("]+l_cParentTablePrimaryKey+[") ON DELETE ]+l_cConstraintAction+[ ON UPDATE CASCADE;]
-                                    l_cSQLCommand += [  /*OnFailMessage: Add Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
+                                    l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" ADD CONSTRAINT "]+lower(l_cFieldName)+[_fkc" FOREIGN KEY ("]+l_cFieldName+[") REFERENCES "]+l_cParentNamespaceName+["."]+l_cParentTableName+[" ("]+l_cParentTablePrimaryKey+[") ON DELETE ]+l_cConstraintAction+[ ON UPDATE CASCADE;]
+                                    l_cSQLScript += [  /*OnFailMessage: Add Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
                                 endif
                             endif
                         endif
@@ -4258,7 +4601,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
 endcase
 
-return l_cSQLCommand
+if !empty(l_cSQLScript)
+    l_cSQLScript := "--Foreign Key Constraint Changes generated at "+strtran(hb_TSToStr(hb_TSToUTC(hb_DateTime()))," ","T")+"Z"+["]+CRLF+l_cSQLScript
+endif
+
+return l_cSQLScript
 //-----------------------------------------------------------------------------------------------------------------
 // Add any Foreign Key Constraint that and with "_fkc".
 method MigrateForeignKeyConstraints(par_hTableSchemaDefinition) class hb_orm_SQLConnect
@@ -4288,7 +4635,7 @@ if !empty(l_cSQLScript)
         endif
     endfor
     ::UpdateSchemaCache()
-    ::LoadSchema("MigrateSchema")
+    ::LoadMetadata("MigrateSchema")
 endif
 
 ::UpdateORMNamespaceTableNumber()  // Will call this routine even if no tables where modified.

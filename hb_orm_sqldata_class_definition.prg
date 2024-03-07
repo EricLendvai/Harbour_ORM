@@ -82,7 +82,7 @@ class hb_orm_SQLData
         method PrepExpression(par_cExpression,...)                                 //Used to "Freeze" parameters as values in "^" places
         method ExpressionToMYSQL(par_cSource,par_cExpression)                      //_M_  to generalize UDF translation to backend
         method ExpressionToPostgreSQL(par_cSource,par_cExpression)                 //_M_  to generalize UDF translation to backend
-        method FixAliasAndFieldNameCasingInExpression(par_cSourcepar_cExpression)  // to handle the casing of tables and fields, by using the connection's :p_TableSchema Since it is more of alias.field for now will assume alias same as table name and will use ::p_NamespaceName
+        method FixAliasAndFieldNameCasingInExpression(par_cSourcepar_cExpression)  // to handle the casing of tables and fields, by using the connection's :p_hMetadataTable Since it is more of alias.field for now will assume alias same as table name and will use ::p_NamespaceName
         method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_hFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_hFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method SetEventId(par_xId)                                              // Called by Table() and Delete(). Used to identify SQL(), Add(), Update(), Delete() query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
