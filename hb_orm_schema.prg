@@ -3668,6 +3668,13 @@ l_hWharfConfig := ;
                                 ,HB_ORM_SCHEMA_INDEX=>;
             {"namespacename"=>{"Expression"=>"namespacename"};
             ,"tablename"    =>{"Expression"=>"tablename"}}};
+        ,"hborm.WharfConfig"=>{HB_ORM_SCHEMA_FIELD=>;
+            {"pk"                  =>{"Type"=>"I","AutoIncrement"=>.t.};
+            ,"taskname"            =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};      // Since the pk is not constant it is better to Search/Add by a Task Name
+            ,"datetime"            =>{"Type"=>"DTZ","Nullable"=>.t.};                  // Time the task ran last
+            ,"ip"                  =>{"Type"=>"CV","Length"=>43,"Nullable"=>.t.};      // Where the task ran
+            ,"generationtime"      =>{"Type"=>"CV","Length"=>24,"Nullable"=>.t.};      // The GenerationTime of a WharfConfig structure.
+            ,"generationsignature" =>{"Type"=>"CV","Length"=>36,"Nullable"=>.t.}}};    // The GenerationSignature of a WharfConfig structure.
         ,"hborm.SchemaVersion"=>{HB_ORM_SCHEMA_FIELD=>;
             {"pk"     =>{"Type"=>"I","AutoIncrement"=>.t.};
             ,"name"   =>{"Type"=>"CV","Length"=>254};
@@ -3675,6 +3682,7 @@ l_hWharfConfig := ;
                             };
         };
     }
+
 l_PreviousNamespaceName := ::SetCurrentNamespaceName(::p_HBORMNamespace)
 
 if el_AUnpack(::MigrateSchema(l_hWharfConfig),,@l_cSQLScript,@l_ErrorInfo) <> 0
@@ -4641,4 +4649,138 @@ endif
 ::UpdateORMNamespaceTableNumber()  // Will call this routine even if no tables where modified.
 
 return {l_nResult,l_cSQLScript,l_cLastError}
+//-----------------------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------
+method RecordCurrentAppliedWharfConfig() class hb_orm_SQLConnect
+//123456
+local l_cGenerationTime
+local l_cGenerationSignature
+local l_lResult := .f.
+local l_cSQLCommand := ""
+local l_cFormattedTableName
+
+if !empty(::p_hWharfConfig)
+    l_cGenerationTime      := hb_hGetDef(::p_hWharfConfig,"GenerationTime","")
+    l_cGenerationSignature := hb_hGetDef(::p_hWharfConfig,"GenerationSignature","")
+    if !empty(l_cGenerationTime) .and. !empty(l_cGenerationSignature)
+
+        do case
+        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+//_M_
+
+        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+            l_cFormattedTableName := ::FormatIdentifier(::p_HBORMNamespace+[.]+"WharfConfig")
+
+            // ,"hborm.WharfConfig"=>{HB_ORM_SCHEMA_FIELD=>;
+            //     {"pk"                  =>{"Type"=>"I","AutoIncrement"=>.t.};
+            //     ,"taskname"            =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};      // Since the pk is not constant it is better to Search/Add by a Task Name
+            //     ,"datetime"            =>{"Type"=>"DTZ","Nullable"=>.t.};                  // Time the task ran last
+            //     ,"ip"                  =>{"Type"=>"CV","Length"=>43,"Nullable"=>.t.};      // Where the task ran
+            //     ,"generationtime"      =>{"Type"=>"CV","Length"=>24,"Nullable"=>.t.};      // The GenerationTime of a WharfConfig structure.
+            //     ,"generationsignature" =>{"Type"=>"CV","Length"=>36,"Nullable"=>.t.}}};    // The GenerationSignature of a WharfConfig structure.
+
+            l_cSQLCommand := [SELECT pk,generationtime,generationsignature]
+            l_cSQLCommand += [ FROM ]+l_cFormattedTableName
+            l_cSQLCommand += [ WHERE taskname = 'AppliedWharfConfig';]
+            if ::SQLExec("RecordCurrentAppliedWharfConfig",l_cSQLCommand,"AppliedWharfConfig")
+                if empty(AppliedWharfConfig->(reccount()))
+                    //Add an entry
+                    l_cSQLCommand := [INSERT INTO ]+l_cFormattedTableName+[ (]
+                    l_cSQLCommand += [taskname,generationtime,generationsignature,datetime,ip]
+                    l_cSQLCommand += [) VALUES (]
+                    l_cSQLCommand += ['AppliedWharfConfig',']+l_cGenerationTime+[',']+l_cGenerationSignature+[',now(),cast(inet_server_addr() as varchar(43))]
+                    l_cSQLCommand += [);]
+                    ::SQLExec("InsertAppliedWharfConfig",l_cSQLCommand)
+                else
+                    if (AppliedWharfConfig->generationtime <> l_cGenerationTime) .or. (AppliedWharfConfig->generationsignature <> l_cGenerationSignature)
+                        //Update Version
+                        l_cSQLCommand := [UPDATE ]+l_cFormattedTableName+[ SET ]
+                        l_cSQLCommand += [generationtime=']+l_cGenerationTime+[',generationsignature=']+l_cGenerationSignature+[',datetime=now(),ip=cast(inet_server_addr() as varchar(43))]
+                        l_cSQLCommand += [ WHERE pk=]+trans(AppliedWharfConfig->pk)+[;]
+                        ::SQLExec("UpdateAppliedWharfConfig",l_cSQLCommand)
+                    endif
+                endif
+
+            endif
+            CloseAlias("AppliedWharfConfig")
+        endcase
+
+    endif
+endif
+
+return nil
+//-----------------------------------------------------------------------------------------------------------------
+method GetWharfConfigAppliedStatus()                  // Will use the WharfConfig of the connection.
+local l_nResult := -1
+        //0  Current Database matches 
+        //1  No information on File, meaning we should run the UpdateSchema and stamp it
+        //2  Not up-to-date
+        //3  Future Schema, meaning running an old app.
+        //-1 Error
+
+
+local l_cGenerationTime
+local l_tGenerationTime
+
+local l_cRecordedTime
+local l_tRecordedTime
+
+local l_cGenerationSignature
+local l_cSQLCommand := ""
+local l_cFormattedTableName
+
+if !empty(::p_hWharfConfig)
+    l_cGenerationTime      := hb_hGetDef(::p_hWharfConfig,"GenerationTime","")
+    l_cGenerationSignature := hb_hGetDef(::p_hWharfConfig,"GenerationSignature","")
+    if !empty(l_cGenerationTime) .and. !empty(l_cGenerationSignature)
+
+        do case
+        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+//_M_
+
+        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+            l_cFormattedTableName := ::FormatIdentifier(::p_HBORMNamespace+[.]+"WharfConfig")
+
+            // ,"hborm.WharfConfig"=>{HB_ORM_SCHEMA_FIELD=>;
+            //     {"pk"                  =>{"Type"=>"I","AutoIncrement"=>.t.};
+            //     ,"taskname"            =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};      // Since the pk is not constant it is better to Search/Add by a Task Name
+            //     ,"datetime"            =>{"Type"=>"DTZ","Nullable"=>.t.};                  // Time the task ran last
+            //     ,"ip"                  =>{"Type"=>"CV","Length"=>43,"Nullable"=>.t.};      // Where the task ran
+            //     ,"generationtime"      =>{"Type"=>"CV","Length"=>24,"Nullable"=>.t.};      // The GenerationTime of a WharfConfig structure.
+            //     ,"generationsignature" =>{"Type"=>"CV","Length"=>36,"Nullable"=>.t.}}};    // The GenerationSignature of a WharfConfig structure.
+
+            l_cSQLCommand := [SELECT generationtime,generationsignature]
+            l_cSQLCommand += [ FROM ]+l_cFormattedTableName
+            l_cSQLCommand += [ WHERE taskname = 'AppliedWharfConfig';]
+            if ::SQLExec("RecordCurrentAppliedWharfConfig",l_cSQLCommand,"AppliedWharfConfig")
+                if empty(AppliedWharfConfig->(reccount()))
+                    l_nResult := 1   // No information on File, meaning we should run the UpdateSchema and stamp it
+                else
+                    if (AppliedWharfConfig->generationtime == l_cGenerationTime) .and. (AppliedWharfConfig->generationsignature == l_cGenerationSignature)
+                        l_nResult := 0   // Current Database matches 
+                    else
+                        l_cGenerationTime := strtran(l_cGenerationTime,"T"," ")
+                        l_cGenerationTime := strtran(l_cGenerationTime,"Z","")
+                        l_tGenerationTime := hb_StrToTS(l_cGenerationTime)
+
+                        l_cRecordedTime := AppliedWharfConfig->generationtime
+                        l_cRecordedTime := strtran(l_cRecordedTime,"T"," ")
+                        l_cRecordedTime := strtran(l_cRecordedTime,"Z","")
+                        l_tRecordedTime := hb_StrToTS(l_cRecordedTime)
+
+                        if l_tGenerationTime > l_tRecordedTime
+                            l_nResult := 2   // Not up-to-date
+                        else
+                            l_nResult := 3   // Future Schema, meaning running an old app.
+                        endif
+
+                    endif
+                endif
+            endif
+            CloseAlias("AppliedWharfConfig")
+        endcase
+    endif
+endif
+
+return l_nResult
 //-----------------------------------------------------------------------------------------------------------------

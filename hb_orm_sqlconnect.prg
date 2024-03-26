@@ -448,7 +448,7 @@ otherwise
                     //No Locks entry to reuse
 
                     //Do the actual locking
-                    l_cSQLCommand    = [SELECT pg_advisory_lock(']+l_LockName+[') as result]
+                    l_cSQLCommand := [SELECT pg_advisory_lock(']+l_LockName+[') as result]
                     if ::SQLExec("Lock",l_cSQLCommand,l_cCursorTempName)
                         //No know method to find out if lock failed.
                         // if (l_cCursorTempName)->(result) == 1
@@ -560,8 +560,8 @@ otherwise
                     //No Locks entry to reuse
 
                     //Do the actual locking
-                    l_cCursorTempName = "c_DB_Temp"
-                    l_cSQLCommand    = [SELECT pg_advisory_unlock(']+l_LockName+[') as result]
+                    l_cCursorTempName := "c_DB_Temp"
+                    l_cSQLCommand := [SELECT pg_advisory_unlock(']+l_LockName+[') as result]
                     if ::SQLExec("Unlock",l_cSQLCommand,l_cCursorTempName)
                         hb_ADel(::p_Locks,l_nArrayRow,.t.)
                         l_lResult := .t.

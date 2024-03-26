@@ -140,6 +140,13 @@ class hb_orm_SQLConnect
         method GetSchemaDefinitionVersion(par_cSchemaDefinitionName)                                    // Since calling ::MigrateSchema() is cumulative with different hTableSchemaDefinition, each can be named and have a different version.
         method SetSchemaDefinitionVersion(par_cSchemaDefinitionName,par_iVersion)                       // Since calling ::MigrateSchema() is cumulative with different hTableSchemaDefinition, each can be named and have a different version.
 
+        method RecordCurrentAppliedWharfConfig()              // Under Development.
+        method GetWharfConfigAppliedStatus()                  // Will use the WharfConfig of the connection.
+                //0  Current Database matches 
+                //1  No information on File, meaning we should run the UpdateSchema and stamp it
+                //2  Not up-to-date
+                //3  Future Schema, meaning running an old app.
+
         method LogAutoTrimEvent(par_xEventId,par_cNamespaceAndTableName,par_nKey,par_aAutoTrimmedFields)
         method LogErrorEvent(par_xEventId,par_aErrors)                                                  // The par_aErrors is an array of arrays like {<cNamespaceAndTableName>,<nKey>,<cErrorMessage>,<cAppStack>}
 

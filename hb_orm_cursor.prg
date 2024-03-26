@@ -137,7 +137,7 @@ for each l_hFieldDefinition in ::p_Fields
     
     ::p_Fields[l_cFieldName][HB_ORM_CURSOR_STRUCTURE_POS] := ++l_nFieldPos
 
-    l_cFieldFlags := iif(l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_NULL]    ,"N","") +;
+    l_cFieldFlags := iif(l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_NULL]   ,"N","") +;
                     iif(l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_AUTOINC] ,"+","") +;
                     iif(l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_BINARY]  ,"B","") +;
                     iif(l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_UNICODE] ,"U","") +;
@@ -149,6 +149,7 @@ for each l_hFieldDefinition in ::p_Fields
         l_cFieldType  := l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_TYPE]+":"+l_cFieldFlags
         // AAdd(::p_FieldsForAppend,hb_HClone(l_hFieldDefinition:__enumValue()))   //Have to clone, since otherwise passed by reference
     endif
+
     if l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_AUTOINC] .or. ;
        l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_NULL] .or. ;
        l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_BINARY] .or. ;
@@ -166,6 +167,70 @@ for each l_hFieldDefinition in ::p_Fields
                                   l_hFieldDefinition[10];
                                   })
     endif
+
+    //Following "do case" will not work yet since timestamp field types not supported in SQLMIX
+    // do case
+    // case el_IsInlist(l_cFieldType,"DT","DTZ","T")
+    //     l_cFieldType := "@"
+    //     l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_LEN] := 0
+    //     l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_DEC] := 0
+    // case el_IsInlist(l_cFieldType,"TOZ","TO")
+    //     l_cFieldType := "T"
+    //     l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_LEN] := 0
+    //     l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_DEC] := 0
+    // endcase
+
+
+    //As of 2024-03-19  DateTime field types don't work
+
+    //SQL MIX does not support all the following field types.
+    //    ; Current field type mappings are:
+    //        C; Character,n     HB_FT_STRING,n                      ADS_STRING
+    //        N; Numeric,n,d     HB_FT_LONG,n,d                      ADS_NUMERIC
+    //        D; Date,n          HB_FT_DATE,3 or 4 or 8              ADS_COMPACTDATE; ADS_DATE
+    //        ShortDate          HB_FT_DATE,3                        ADS_COMPACTDATE
+    //        L; Logical         HB_FT_LOGICAL,1                     ADS_LOGICAL
+    //        M; Memo,n          HB_FT_MEMO,4 or 9 or 8              ADS_MEMO
+    //        B; Double,,d       HB_FT_DOUBLE,8,d                    ADS_DOUBLE
+    //        I; Integer,n       HB_FT_INTEGER, 2 or 4 or 8          ADS_SHORTINT; ADS_INTEGER; ADS_LONGLONG
+    //        ShortInt           HB_FT_INTEGER,2                     ADS_SHORTINT
+    //        Longlong           HB_FT_INTEGER,8                     ADS_LONGLONG
+    //        P; Image           HB_FT_IMAGE,9 or 10                 ADS_IMAGE
+    //        W; Binary          HB_FT_BLOB,4 or 9 or 10             ADS_BINARY
+    //        Y; Money           HB_FT_CURRENCY,8,4                  ADS_MONEY
+    //        Z; CurDouble,,d    HB_FT_CURDOUBLE,8,d                 ADS_CURDOUBLE
+    //        T,4; Time          HB_FT_TIME,4                        ADS_TIME
+    //        @; T,8; TimeStamp  HB_FT_TIMESTAMP,8                   ADS_TIMESTAMP
+    //        +; AutoInc         HB_FT_AUTOINC,4                     ADS_AUTOINC
+    //        ^; RowVersion      HB_FT_ROWVER,8                      ADS_ROWVERSION
+    //        =; ModTime         HB_FT_MODTIME,8                     ADS_MODTIME
+    //        Raw,n              HB_FT_STRING,n (+HB_FF_BINARY)      ADS_RAW
+    //        Q; VarChar,n       HB_FT_VARLENGTH,n                   ADS_VARCHAR; ADS_VARCHAR_FOX
+    //        VarBinary,n        HB_FT_VARLENGTH,n (+HB_FF_BINARY)   ADS_VARBINARY_FOX; ADS_RAW
+    //        CICharacter,n      HB_FT_STRING,n                      ADS_CISTRING
+
+    // /* Field types */
+    // #define HB_FT_NONE            0
+    // #define HB_FT_STRING          1     /* "C" */
+    // #define HB_FT_LOGICAL         2     /* "L" */
+    // #define HB_FT_DATE            3     /* "D" */
+    // #define HB_FT_LONG            4     /* "N" */
+    // #define HB_FT_FLOAT           5     /* "F" */
+    // #define HB_FT_INTEGER         6     /* "I" */
+    // #define HB_FT_DOUBLE          7     /* "B" */
+    // #define HB_FT_TIME            8     /* "T" */
+    // #define HB_FT_TIMESTAMP       9     /* "@" */
+    // #define HB_FT_MODTIME         10    /* "=" */
+    // #define HB_FT_ROWVER          11    /* "^" */
+    // #define HB_FT_AUTOINC         12    /* "+" */
+    // #define HB_FT_CURRENCY        13    /* "Y" */
+    // #define HB_FT_CURDOUBLE       14    /* "Z" */
+    // #define HB_FT_VARLENGTH       15    /* "Q" */
+    // #define HB_FT_MEMO            16    /* "M" */
+    // #define HB_FT_ANY             17    /* "V" */
+    // #define HB_FT_IMAGE           18    /* "P" */
+    // #define HB_FT_BLOB            19    /* "W" */
+    // #define HB_FT_OLE             20    /* "G" */
 
     AAdd(l_aStructure,{l_cFieldName,l_cFieldType,l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_LEN],l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_DEC]})
     
