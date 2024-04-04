@@ -1,5 +1,9 @@
 # Harbour ORM - Change Log
 
+## 04/04/2024 V 4.7
+* Foreign Key Constraint Generation will handled manually altered changes.
+* Indexes and Foreign Key Names that are beyond PostgreSQL length limit will be replace using StaticUIDs from DataWharf. Must use WharfConfig structures from DataWharf 4.6+.
+
 ## 03/25/2024 V 4.6
 * Add support for extended Datetime field types in cursors.
 * New WharfConfig table in the ORM namespace. This will ensure that latest ORM/schema change is applied.

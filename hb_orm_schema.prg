@@ -364,9 +364,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                             endif
 
                             l_cIndexName := lower(trim(field->index_name))
-                            // if left(l_cIndexName,len(l_cNamespaceAndTableName)+1) == lower(l_cNamespaceAndTableName)+"_" .and. right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
                             if right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
-                                l_cIndexName      := hb_orm_RootIndexName(l_cNamespaceAndTableName,l_cIndexName)
+                                // l_cIndexName      := hb_orm_RootIndexName(l_cNamespaceAndTableName,l_cIndexName)   // The Index names in the MetaData are not the actual real name.  04/04/2024
 
                                 l_cIndexExpression := trim(field->index_columns)
                                 if !(lower(l_cIndexExpression) == lower(::p_PrimaryKeyFieldName))   // No reason to record the index of the PRIMARY key
@@ -761,9 +760,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                         endif
 
                         l_cIndexName := lower(trim(field->index_name))
-                        // if left(l_cIndexName,len(l_cTableName)+1) == lower(l_cTableName)+"_" .and. right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm
                         if right(l_cIndexName,4) == "_idx"  // only record indexes maintained by hb_orm. Remove the restriction about table name in front, since a past spec also had the name space.
-                            l_cIndexName      := hb_orm_RootIndexName(l_cTableName,l_cIndexName)
+                            // l_cIndexName      := hb_orm_RootIndexName(l_cTableName,l_cIndexName)     // The Index names in the MetaData are not the actual real name.  04/04/2024
                             
                             l_cIndexDefinition := field->index_definition
                             l_nPos1 := hb_ati(" USING ",l_cIndexDefinition)
@@ -814,7 +812,7 @@ method GenerateMigrateSchemaScript(par_hWharfConfig) class hb_orm_SQLConnect
 
 local l_cTableName,l_hTableDefinition
 local l_cFieldName,l_hFieldDefinition
-local l_cIndexName,l_hIndexDefinition
+local l_cIndexName,l_hIndexDefinition,l_cIndexStaticUID,l_cIndexNameOnFile
 local l_hFields,l_hIndexes
 local l_hField,l_hIndex
 local l_hCurrentTableDefinition
@@ -1287,9 +1285,10 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
             for each l_hIndex in l_hIndexes
                 l_cIndexName       := lower(l_hIndex:__enumKey())
                 l_hIndexDefinition := l_hIndex:__enumValue()
+                l_cIndexStaticUID  := alltrim(hb_hGetDef(l_hIndexDefinition,"StaticUID",""))
                 
                 if !(lower(l_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so. This should not happen since no loaded in p_hMetadataTable to start with. But this method accepts any p_hMetadataTable hash arrays.
-                    l_cSQLScript += ::GMSSAddIndex(l_cNamespaceName,l_cTableName,l_hFields,l_cIndexName,l_hIndexDefinition)  //Passing l_hFields to help with index expressions
+                    l_cSQLScript += ::GMSSAddIndex(l_cNamespaceName,l_cTableName,l_hFields,l_cIndexName,l_cIndexStaticUID,l_hIndexDefinition)  //Passing l_hFields to help with index expressions
                 endif
                 
             endfor
@@ -1511,24 +1510,32 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
 
         if !hb_IsNIL(l_hIndexes)
             for each l_hIndex in l_hIndexes
-                l_cIndexName       := hb_orm_RootIndexName(l_cTableName,l_hIndex:__enumKey())
+
+                // l_cIndexName       := hb_orm_RootIndexName(l_cTableName,l_hIndex:__enumKey())
+                l_cIndexName       := l_hIndex:__enumKey()
                 l_hIndexDefinition := l_hIndex:__enumValue()
                 if !(lower(l_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION]) == lower(::p_PrimaryKeyFieldName))   // Don't Create and index, since PRIMARY will already do so.
+                    l_cIndexStaticUID := alltrim(hb_hGetDef(l_hIndexDefinition,"StaticUID",""))
+
+    l_cIndexNameOnFile    := lower(l_cTableName+"_"+l_cIndexName)+"_idx"
+    if len(l_cIndexNameOnFile) > POSTGRESQL_MAX_INDEX_NAME_LENGTH
+        l_cIndexNameOnFile := "dw_"+lower(l_cIndexStaticUID)+"_idx"
+    endif
 
                     if empty(l_hExistingIndexesOfExistingTable)
                         l_hCurrentIndexDefinition := NIL
                     else
-                        l_hCurrentIndexDefinition := hb_HGetDef(l_hExistingIndexesOfExistingTable,l_cIndexName,NIL)
+                        l_hCurrentIndexDefinition := hb_HGetDef(l_hExistingIndexesOfExistingTable,l_cIndexNameOnFile,NIL)  //l_cIndexName
                     endif
                     
                     if hb_IsNIL(l_hCurrentIndexDefinition)
                         //Missing Index
-                        hb_orm_SendToDebugView("Table: "+l_cNamespaceAndTableName+" Add Index: "+l_cIndexName)
-                        l_cSQLScript += ::GMSSAddIndex(l_cNamespaceName,l_cTableName,l_hFields,l_cIndexName,l_hIndexDefinition)  //Passing l_hFields to help with index expressions
+                        hb_orm_SendToDebugView("Table: "+l_cNamespaceAndTableName+" Add Index: "+l_cIndexNameOnFile)  //l_cIndexName
+                        l_cSQLScript += ::GMSSAddIndex(l_cNamespaceName,l_cTableName,l_hFields,l_cIndexName,l_cIndexStaticUID,l_hIndexDefinition)  //Passing l_hFields to help with index expressions
                     else
                         // _M_ Compare the index definition
                         //Remove the index entry in the list of Exist indexes, so not be removed later on
-                        hb_HDel(l_hExistingIndexesOfExistingTable,l_cIndexName)
+                        hb_HDel(l_hExistingIndexesOfExistingTable,l_cIndexNameOnFile) //l_cIndexName
                     endif
 
                 endif
@@ -1538,11 +1545,12 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
 
         //Delete non define hb_orm indexes existing in table. LoadMetadata() method only loaded indexes maintained by hb_orm (ending with "_idx")
         for each l_hIndex in l_hExistingIndexesOfExistingTable
-            l_cIndexName := l_hIndex:__enumKey()     // the hash key is already the hb_orm_RootIndexName of the physical index name.
+            // l_cIndexName := l_hIndex:__enumKey()     // the hash key is already the hb_orm_RootIndexName of the physical index name.
+            l_cIndexNameOnFile := l_hIndex:__enumKey()
             l_cNamespaceNameExistingCasing := hb_hGetDef(::p_hMetadataNamespace,l_cNamespaceName,"")
             if !empty(l_cNamespaceNameExistingCasing)
                 // l_cIndexName := hb_orm_RootIndexName(l_cTableName,l_cIndexName)
-                l_cSQLScript += ::GMSSDeleteIndex(l_cNamespaceNameExistingCasing,l_cTableName,l_cIndexName)+CRLF
+                l_cSQLScript += ::GMSSDeleteIndex(l_cNamespaceNameExistingCasing,l_cTableName,l_cIndexNameOnFile)+CRLF
                 // l_cSQLScript := [DROP INDEX IF EXISTS ]+::FormatIdentifier(l_cNamespaceNameExistingCasing+"."+lower(l_cIndexName)+"_idx")+[ CASCADE;]
             endif
         endfor
@@ -2697,7 +2705,7 @@ endcase
 
 return {"",l_cSQLCommand,"",l_cAdditionalSQLCommands}
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSAddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_hIndexDefinition) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
+method GMSSAddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_cIndexStaticUID,par_hIndexDefinition) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
 local l_cSQLCommand := ""
 local l_cIndexNameOnFile
 local l_cIndexExpression
@@ -2720,16 +2728,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cFormattedTableName := ::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)
     endif
     
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    // Since "Two indexes in the same schema cannot have the same name."
-    // l_cIndexNameOnFile   := lower(par_cNamespaceName)+"_"+lower(par_cTableName)+"_"+lower(par_cIndexName)+"_idx"
-    l_cIndexNameOnFile    := lower(par_cTableName+"_"+par_cIndexName)+"_idx"
-    l_cFormattedTableName := ::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)
-    
-endcase
-
-do case
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cIndexExpression := ::FixCasingInFieldExpression(par_hFields,par_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION])
     l_lIndexUnique     := hb_HGetDef(par_hIndexDefinition,HB_ORM_SCHEMA_INDEX_UNIQUE,.f.)
     l_cIndexType       := hb_HGetDef(par_hIndexDefinition,HB_ORM_SCHEMA_INDEX_ALGORITHM,"")
@@ -2738,9 +2736,17 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     endif
 
     l_cSQLCommand := [ALTER TABLE ]+l_cFormattedTableName
-	l_cSQLCommand += [ ADD ]+iif(l_lIndexUnique,"UNIQUE ","")+[INDEX `]+l_cIndexNameOnFile+[` (]+l_cIndexExpression+[) USING ]+l_cIndexType+[;]+CRLF
+    // l_cSQLCommand += [ ADD ]+iif(l_lIndexUnique,"UNIQUE ","")+[INDEX `]+l_cIndexNameOnFile+[` (]+l_cIndexExpression+[) USING ]+l_cIndexType+[;]+CRLF
+    l_cSQLCommand += [ ADD ]+iif(l_lIndexUnique,"UNIQUE ","")+[INDEX ]+::FormatIdentifier(l_cIndexNameOnFile)+[ (]+l_cIndexExpression+[) USING ]+l_cIndexType+[;]+CRLF
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    // Since "Two indexes in the same schema cannot have the same name."
+    l_cIndexNameOnFile    := lower(par_cTableName+"_"+par_cIndexName)+"_idx"
+    if len(l_cIndexNameOnFile) > POSTGRESQL_MAX_INDEX_NAME_LENGTH .and. !empty(par_cIndexStaticUID)   // Exclude the ORM Namespace from the size restriction, since those are a well definied tables/columns/Indexes.
+        l_cIndexNameOnFile := "dw_"+lower(par_cIndexStaticUID)+"_idx"
+    endif
+    l_cFormattedTableName := ::FormatIdentifier(par_cNamespaceName+"."+par_cTableName)
+    
     l_cIndexExpression := ::FixCasingInFieldExpression(par_hFields,par_hIndexDefinition[HB_ORM_SCHEMA_INDEX_EXPRESSION])
     l_lIndexUnique     := hb_HGetDef(par_hIndexDefinition,HB_ORM_SCHEMA_INDEX_UNIQUE,.f.)
     l_cIndexType       := hb_HGetDef(par_hIndexDefinition,HB_ORM_SCHEMA_INDEX_ALGORITHM,"")
@@ -2749,7 +2755,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     endif
 
     // Will create index named in lower cases.
-    l_cSQLCommand := [CREATE ]+iif(l_lIndexUnique,"UNIQUE ","")+[INDEX ]+l_cIndexNameOnFile
+    l_cSQLCommand := [CREATE ]+iif(l_lIndexUnique,"UNIQUE ","")+[INDEX ]+::FormatIdentifier(l_cIndexNameOnFile)
     l_cSQLCommand += [ ON ]+l_cFormattedTableName+[ USING ]+l_cIndexType
     l_cSQLCommand += [ (]+l_cIndexExpression+[);]+CRLF
 
@@ -2757,32 +2763,35 @@ endcase
 
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
-method GMSSDeleteIndex(par_cNamespaceName,par_cTableName,par_cIndexName) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
+method GMSSDeleteIndex(par_cNamespaceName,par_cTableName,par_cIndexNameOnFile) class hb_orm_SQLConnect   // GMSS (Generate Migrate Schema Script).
 local l_cSQLCommand
 local l_cNamespaceAndTableNameFixedCase
 local l_cPrefix
-local l_cIndexName := par_cIndexName
+// local l_cIndexName := par_cIndexName
 
-l_cPrefix := lower(par_cNamespaceName)+"_"+lower(par_cTableName)+"_"
-if left(l_cIndexName,len(l_cPrefix)) == l_cPrefix
-    l_cIndexName := substr(l_cIndexName,len(l_cPrefix)+1)
-else
-    l_cPrefix := lower(par_cTableName)+"_"
-    if left(l_cIndexName,len(l_cPrefix)) == l_cPrefix
-        l_cIndexName := substr(l_cIndexName,len(l_cPrefix)+1)
-    endif
-endif
+// l_cPrefix := lower(par_cNamespaceName)+"_"+lower(par_cTableName)+"_"
+// if left(l_cIndexName,len(l_cPrefix)) == l_cPrefix
+//     l_cIndexName := substr(l_cIndexName,len(l_cPrefix)+1)
+// else
+//     l_cPrefix := lower(par_cTableName)+"_"
+//     if left(l_cIndexName,len(l_cPrefix)) == l_cPrefix
+//         l_cIndexName := substr(l_cIndexName,len(l_cPrefix)+1)
+//     endif
+// endif
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cNamespaceAndTableNameFixedCase := ::CaseTableName(iif(empty(par_cNamespaceName) .or. lower(par_cNamespaceName) == "public","",par_cNamespaceName+".")+par_cTableName)
-    l_cSQLCommand := [DROP INDEX IF EXISTS `]+lower(l_cIndexName)+"_idx"+[` ON ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableNameFixedCase))+[;]
+    l_cSQLCommand := [DROP INDEX IF EXISTS ]+::FormatIdentifier(par_cIndexNameOnFile)+[ ON ]+::FormatIdentifier(::NormalizeTableNamePhysical(l_cNamespaceAndTableNameFixedCase))+[;]
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    // //In Postgresql the index are named spaced in the Schema, not the table it belongs to
+    // l_cSQLCommand := [DROP INDEX IF EXISTS ]+::FormatIdentifier(par_cNamespaceName+"."+lower(par_cTableName)+"_"+lower(l_cIndexName)+"_idx")+[ CASCADE;]
+    // //Previously added the Namespace as prefix to the index
+    // l_cSQLCommand += [DROP INDEX IF EXISTS ]+::FormatIdentifier(par_cNamespaceName+"."+lower(par_cNamespaceName)+"_"+lower(par_cTableName)+"_"+lower(l_cIndexName)+"_idx")+[ CASCADE;]
+
     //In Postgresql the index are named spaced in the Schema, not the table it belongs to
-    l_cSQLCommand := [DROP INDEX IF EXISTS ]+::FormatIdentifier(par_cNamespaceName+"."+lower(par_cTableName)+"_"+lower(l_cIndexName)+"_idx")+[ CASCADE;]
-    //Previously added the Namespace as prefix to the index
-    l_cSQLCommand += [DROP INDEX IF EXISTS ]+::FormatIdentifier(par_cNamespaceName+"."+lower(par_cNamespaceName)+"_"+lower(par_cTableName)+"_"+lower(l_cIndexName)+"_idx")+[ CASCADE;]
+    l_cSQLCommand := [DROP INDEX IF EXISTS ]+::FormatIdentifier(par_cNamespaceName+"."+par_cIndexNameOnFile)+[ CASCADE;]
 
 endcase
 
@@ -2956,113 +2965,115 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_HBORMNamespaceName := ::FormatIdentifier(::p_HBORMNamespace)
-    hb_Default(@par_lForce,.f.)
-    // altd()
+    if "nohborm" $ l_HBORMNamespaceName
+        l_lResult := .t.
+    else
+        hb_Default(@par_lForce,.f.)
+        // altd()
 
-    if par_lForce
-        //Add an Entry in SchemaCacheLog to notify to make a cache
-        l_cSQLCommand := [INSERT INTO ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])+[ (action) VALUES ('No Change');]
-        ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
-    endif
+        if par_lForce
+            //Add an Entry in SchemaCacheLog to notify to make a cache
+            l_cSQLCommand := [INSERT INTO ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])+[ (action) VALUES ('No Change');]
+            ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
+        endif
 
-    l_cSQLCommand := [SELECT pk,]
-    l_cSQLCommand += [       cachedschema::integer]
-    l_cSQLCommand += [ FROM  ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
-    l_cSQLCommand += [ ORDER BY pk DESC]
-    l_cSQLCommand += [ LIMIT 1]
+        l_cSQLCommand := [SELECT pk,]
+        l_cSQLCommand += [       cachedschema::integer]
+        l_cSQLCommand += [ FROM  ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+        l_cSQLCommand += [ ORDER BY pk DESC]
+        l_cSQLCommand += [ LIMIT 1]
 
-    if ::SQLExec("UpdateSchemaCache",l_cSQLCommand,"SchemaCacheLogLast")
-        if SchemaCacheLogLast->(reccount()) == 1
-            if SchemaCacheLogLast->cachedschema == 0   //Meaning the last schema change log was not cached  (0 = false)
-//hb_orm_SendToDebugView("Will create a new Schema Cache")
+        if ::SQLExec("UpdateSchemaCache",l_cSQLCommand,"SchemaCacheLogLast")
+            if SchemaCacheLogLast->(reccount()) == 1
+                if SchemaCacheLogLast->cachedschema == 0   //Meaning the last schema change log was not cached  (0 = false)
+                    //hb_orm_SendToDebugView("Will create a new Schema Cache")
 
-l_CacheFullNameField := l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
-l_CacheFullNameIndex := l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
+                    l_CacheFullNameField := l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
+                    l_CacheFullNameIndex := l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
 
-//====================================
-l_cSQLCommand := [DROP FUNCTION IF EXISTS ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache;]+CRLF
-//====================================
-l_cSQLCommand += [CREATE OR REPLACE FUNCTION ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache(par_cache_full_name_field text,par_cache_full_name_index text) RETURNS boolean]
-l_cSQLCommand += [ LANGUAGE plpgsql VOLATILE SECURITY DEFINER AS $BODY$]+CRLF
-l_cSQLCommand += [DECLARE]+CRLF
-l_cSQLCommand += [   v_SQLCommand text;]+CRLF
-l_cSQLCommand += [   v_lReturn boolean := TRUE;]+CRLF
-l_cSQLCommand += [BEGIN]+CRLF
-l_cSQLCommand += [SET enable_nestloop = false;]+CRLF //    -- See  https://github.com/yugabyte/yugabyte-db/issues/9938
-// -------------------------------------------------------------------------------------
-l_cSQLCommand += [EXECUTE format('DROP TABLE IF EXISTS %s', par_cache_full_name_field);]+CRLF
+                    //====================================
+                    l_cSQLCommand := [DROP FUNCTION IF EXISTS ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache;]+CRLF
+                    //====================================
+                    l_cSQLCommand += [CREATE OR REPLACE FUNCTION ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache(par_cache_full_name_field text,par_cache_full_name_index text) RETURNS boolean]
+                    l_cSQLCommand += [ LANGUAGE plpgsql VOLATILE SECURITY DEFINER AS $BODY$]+CRLF
+                    l_cSQLCommand += [DECLARE]+CRLF
+                    l_cSQLCommand += [   v_SQLCommand text;]+CRLF
+                    l_cSQLCommand += [   v_lReturn boolean := TRUE;]+CRLF
+                    l_cSQLCommand += [BEGIN]+CRLF
+                    l_cSQLCommand += [SET enable_nestloop = false;]+CRLF //    -- See  https://github.com/yugabyte/yugabyte-db/issues/9938
+                    // -------------------------------------------------------------------------------------
+                    l_cSQLCommand += [EXECUTE format('DROP TABLE IF EXISTS %s', par_cache_full_name_field);]+CRLF
 
-l_cSQLCommand += [v_SQLCommand := $$]+CRLF
-l_cSQLCommand += ::GetPostgresTableSchemaQuery()
-l_cSQLCommand += [$$;]+CRLF
-l_cSQLCommand += [v_SQLCommand := CONCAT('CREATE TABLE ',par_cache_full_name_field,' AS ',v_SQLCommand);]+CRLF
-l_cSQLCommand += [EXECUTE v_SQLCommand;]+CRLF
-// -------------------------------------------------------------------------------------
-l_cSQLCommand += [EXECUTE format('DROP TABLE IF EXISTS %s', par_cache_full_name_index);]+CRLF
-// -------------------------------------------------------------------------------------
-l_cSQLCommand += [v_SQLCommand := $$]+CRLF
-l_cSQLCommand += ::GetPostgresIndexSchemaQuery()
-l_cSQLCommand += [$$;]+CRLF
-l_cSQLCommand += [v_SQLCommand := CONCAT('CREATE TABLE ',par_cache_full_name_index,' AS ',v_SQLCommand);]+CRLF
-l_cSQLCommand += [EXECUTE v_SQLCommand;]+CRLF
-// -------------------------------------------------------------------------------------
-l_cSQLCommand += [SET enable_nestloop = true;]+CRLF
-// l_cSQLCommand += [RAISE NOTICE '%',v_SQLCommand;]
-l_cSQLCommand += [RETURN v_lReturn;]+CRLF
-l_cSQLCommand += [END]+CRLF
-l_cSQLCommand += [$BODY$;]+CRLF
-//====================================
-l_cSQLCommand += [SELECT ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache(']+l_CacheFullNameField+[',']+l_CacheFullNameIndex+[');]+CRLF
-//====================================
-l_cSQLCommand += [DROP FUNCTION IF EXISTS ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache;]+CRLF
-//====================================
+                    l_cSQLCommand += [v_SQLCommand := $$]+CRLF
+                    l_cSQLCommand += ::GetPostgresTableSchemaQuery()
+                    l_cSQLCommand += [$$;]+CRLF
+                    l_cSQLCommand += [v_SQLCommand := CONCAT('CREATE TABLE ',par_cache_full_name_field,' AS ',v_SQLCommand);]+CRLF
+                    l_cSQLCommand += [EXECUTE v_SQLCommand;]+CRLF
+                    // -------------------------------------------------------------------------------------
+                    l_cSQLCommand += [EXECUTE format('DROP TABLE IF EXISTS %s', par_cache_full_name_index);]+CRLF
+                    // -------------------------------------------------------------------------------------
+                    l_cSQLCommand += [v_SQLCommand := $$]+CRLF
+                    l_cSQLCommand += ::GetPostgresIndexSchemaQuery()
+                    l_cSQLCommand += [$$;]+CRLF
+                    l_cSQLCommand += [v_SQLCommand := CONCAT('CREATE TABLE ',par_cache_full_name_index,' AS ',v_SQLCommand);]+CRLF
+                    l_cSQLCommand += [EXECUTE v_SQLCommand;]+CRLF
+                    // -------------------------------------------------------------------------------------
+                    l_cSQLCommand += [SET enable_nestloop = true;]+CRLF
+                    // l_cSQLCommand += [RAISE NOTICE '%',v_SQLCommand;]
+                    l_cSQLCommand += [RETURN v_lReturn;]+CRLF
+                    l_cSQLCommand += [END]+CRLF
+                    l_cSQLCommand += [$BODY$;]+CRLF
+                    //====================================
+                    l_cSQLCommand += [SELECT ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache(']+l_CacheFullNameField+[',']+l_CacheFullNameIndex+[');]+CRLF
+                    //====================================
+                    l_cSQLCommand += [DROP FUNCTION IF EXISTS ]+l_HBORMNamespaceName+[.hb_orm_update_schema_cache;]+CRLF
+                    //====================================
 
-// -------------------------------------------------------------------------------------
-                if ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
-
-
-                    l_cSQLCommand := [UPDATE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
-                    l_cSQLCommand += [ SET cachedschema = TRUE]
-                    l_cSQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
-
+                    // -------------------------------------------------------------------------------------
                     if ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
-                    
-                        //Remove any previous cache
-                        l_cSQLCommand := [SELECT pk]
-                        l_cSQLCommand += [ FROM ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
-                        l_cSQLCommand += [ WHERE cachedschema]
-                        l_cSQLCommand += [ AND pk < ]+trans(SchemaCacheLogLast->pk)
-                        l_cSQLCommand += [ ORDER BY pk]  // Oldest to newest
 
-                        if ::SQLExec("UpdateSchemaCache",l_cSQLCommand,"SchemaCacheLogLast")
-                            select SchemaCacheLogLast
-                            scan all
-                                if recno() == reccount()  // Since last record is the latest beside the one just added, will exit the scan
-                                    exit
-                                endif
-                                l_cSQLCommand := [UPDATE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
-                                l_cSQLCommand += [ SET cachedschema = FALSE]
-                                l_cSQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
-                                
-                                if ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
-                                    l_cSQLCommand := [DROP TABLE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
-                                    ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
-                                    l_cSQLCommand := [DROP TABLE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
-                                    ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
-                                endif
-                            endscan
+                        l_cSQLCommand := [UPDATE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+                        l_cSQLCommand += [ SET cachedschema = TRUE]
+                        l_cSQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
 
+                        if ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
+                        
+                            //Remove any previous cache
+                            l_cSQLCommand := [SELECT pk]
+                            l_cSQLCommand += [ FROM ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+                            l_cSQLCommand += [ WHERE cachedschema]
+                            l_cSQLCommand += [ AND pk < ]+trans(SchemaCacheLogLast->pk)
+                            l_cSQLCommand += [ ORDER BY pk]  // Oldest to newest
+
+                            if ::SQLExec("UpdateSchemaCache",l_cSQLCommand,"SchemaCacheLogLast")
+                                select SchemaCacheLogLast
+                                scan all
+                                    if recno() == reccount()  // Since last record is the latest beside the one just added, will exit the scan
+                                        exit
+                                    endif
+                                    l_cSQLCommand := [UPDATE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheLog"])
+                                    l_cSQLCommand += [ SET cachedschema = FALSE]
+                                    l_cSQLCommand += [ WHERE pk = ]+trans(SchemaCacheLogLast->pk)
+                                    
+                                    if ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
+                                        l_cSQLCommand := [DROP TABLE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheFields_])+trans(SchemaCacheLogLast->pk)+["]
+                                        ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
+                                        l_cSQLCommand := [DROP TABLE ]+l_HBORMNamespaceName+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+trans(SchemaCacheLogLast->pk)+["]
+                                        ::SQLExec("UpdateSchemaCache",l_cSQLCommand)
+                                    endif
+                                endscan
+
+                            endif
                         endif
                     endif
+                    // ::LoadMetadata()
+                    l_lResult := .t.
                 endif
-                // ::LoadMetadata()
-                l_lResult := .t.
             endif
         endif
+        CloseAlias("SchemaCacheLogLast")
+        select (l_nSelect)
     endif
-    CloseAlias("SchemaCacheLogLast")
-    select (l_nSelect)
-
 endcase
 
 return l_lResult
@@ -3123,7 +3134,7 @@ l_cSQLCommand += [       upper(pg_indexes.schemaname) AS tag1,]+CRLF
 l_cSQLCommand += [       upper(pg_indexes.tablename) AS tag2]+CRLF
 l_cSQLCommand += [ FROM pg_indexes]+CRLF
 l_cSQLCommand += [ WHERE NOT (lower(left(pg_indexes.tablename,11)) = 'schemacache' OR lower(pg_indexes.schemaname) in ('information_schema','pg_catalog'))]+CRLF
-l_cSQLCommand += [ ORDER BY tag1,index_name;]+CRLF
+l_cSQLCommand += [ ORDER BY tag1,tag2,index_name;]+CRLF
 return l_cSQLCommand
 //-----------------------------------------------------------------------------------------------------------------
 method IsReservedWord(par_cIdentifier) class hb_orm_SQLConnect
@@ -3697,9 +3708,11 @@ return l_lResult
 method UpdateORMNamespaceTableNumber() class hb_orm_SQLConnect
 local l_cSQLCommand
 
-do case
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    TEXT TO VAR l_cSQLCommand
+if !(::p_HBORMNamespace == "nohborm")
+
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+        TEXT TO VAR l_cSQLCommand
 INSERT INTO `hborm.NamespaceTableNumber` (tablename)
  WITH
  ListOfTables AS (
@@ -3713,25 +3726,25 @@ INSERT INTO `hborm.NamespaceTableNumber` (tablename)
  FROM ListOfTables AS AllTables
  LEFT OUTER JOIN `hborm.NamespaceTableNumber` AS TablesOnFile ON AllTables.tablename = TablesOnFile.tablename
  WHERE TablesOnFile.tablename IS NULL
-    ENDTEXT
+        ENDTEXT
 
-    if ::MySQLEngineConvertIdentifierToLowerCase
-        l_cSQLCommand := strtran(l_cSQLCommand,"NamespaceTableNumber","NamespaceTableNumber")
-    endif
-
-    if !(::p_HBORMNamespace == "hborm")
-        // l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
         if ::MySQLEngineConvertIdentifierToLowerCase
-            l_cSQLCommand := strtran(l_cSQLCommand,"hborm",lower(::p_HBORMNamespace))
-        else
-            l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::p_HBORMNamespace)
+            l_cSQLCommand := strtran(l_cSQLCommand,"NamespaceTableNumber","NamespaceTableNumber")
         endif
-    endif
 
-    l_cSQLCommand := strtran(l_cSQLCommand,"-DataBase-",::GetDatabase())
+        if !(::p_HBORMNamespace == "hborm")
+            // l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
+            if ::MySQLEngineConvertIdentifierToLowerCase
+                l_cSQLCommand := strtran(l_cSQLCommand,"hborm",lower(::p_HBORMNamespace))
+            else
+                l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::p_HBORMNamespace)
+            endif
+        endif
 
-case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    TEXT TO VAR l_cSQLCommand
+        l_cSQLCommand := strtran(l_cSQLCommand,"-DataBase-",::GetDatabase())
+
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        TEXT TO VAR l_cSQLCommand
 WITH
  ListOfTables AS (
     SELECT DISTINCT
@@ -3750,19 +3763,21 @@ WITH
     WHERE TablesOnFile.tablename IS NULL
 )
  INSERT INTO hborm."NamespaceTableNumber" ("namespacename","tablename") SELECT namespacename,tablename FROM ListOfMissingTablesInNamespaceTableNumber;
-    ENDTEXT
+        ENDTEXT
 
-    if ::PostgreSQLIdentifierCasing != 1  //HB_ORM_POSTGRESQL_CASE_SENSITIVE
-        l_cSQLCommand := Strtran(l_cSQLCommand,["NamespaceTableNumber"],[NamespaceTableNumber])
-    endif
+        if ::PostgreSQLIdentifierCasing != 1  //HB_ORM_POSTGRESQL_CASE_SENSITIVE
+            l_cSQLCommand := Strtran(l_cSQLCommand,["NamespaceTableNumber"],[NamespaceTableNumber])
+        endif
 
-    if !(::p_HBORMNamespace == "hborm")
-        l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
-    endif
+        if !(::p_HBORMNamespace == "hborm")
+            l_cSQLCommand := strtran(l_cSQLCommand,"hborm",::FormatIdentifier(::p_HBORMNamespace))
+        endif
 
-endcase
+    endcase
 
-::SQLExec("UpdateORMNamespaceTableNumber",l_cSQLCommand)
+    ::SQLExec("UpdateORMNamespaceTableNumber",l_cSQLCommand)
+
+endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
@@ -4228,11 +4243,11 @@ local l_hField
 local l_cFieldName
 local l_hFieldDefinition
 local l_cFieldUsedAs
-local l_cParentNamespaceAndTable
-local l_cParentNamespaceName
-local l_cParentTableName
 local l_cSQLCommand
-local l_lForeignKeyOptional
+local l_cSQLForeignKeyConstraints
+local l_oCursor
+local l_cSQLScript := ""
+
 
 if ::UpdateSchemaCache()
     ::LoadMetadata("RemoveWharfForeignKeyConstraints")
@@ -4242,71 +4257,62 @@ do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+    hb_orm_SendToDebugView("RemoveWharfForeignKeyConstraints v2")
 
-    hb_orm_SendToDebugView("DeleteAllOrphanRecords - In Loop")
-    for each l_hTableDefinition in par_hTableSchemaDefinition
-        l_cNamespaceAndTableName := l_hTableDefinition:__enumKey()
+    l_cSQLForeignKeyConstraints := GetFetchPostgreSQLForeignKeyConstraintsQuery()
+    if ! ::SQLExec("198cb4e1-0789-412c-975f-8b6f9e9a2857",l_cSQLForeignKeyConstraints,"hb_orm_ListOfForeignKeyConstraints")
+        hb_orm_SendToDebugView("GenerateMigrateForeignKeyConstraintsScript - Failed on ListOfForeignKeyConstraints")
+    else
+        l_oCursor := hb_orm_Cursor():Init():Associate("hb_orm_ListOfForeignKeyConstraints")
 
-        l_nPos := at(".",l_cNamespaceAndTableName)
-        if empty(l_nPos)
-            l_cNamespaceName := "public"
-            l_cTableName     := l_cNamespaceAndTableName
-        else
-            l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
-            l_cTableName     := substr(l_cNamespaceAndTableName,l_nPos+1)
-        endif
-        if l_cNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
-            l_cNamespaceName := ::p_HBORMNamespace
-        endif
-        // l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
+        with object l_oCursor
+            :Index("tag1","padr(upper(ChildNamespace+'*'+ChildTable+'*'+ChildColumn+'*'),240)")
+            :CreateIndexes()
+            :SetOrder("tag1")
+        endwith
 
-        l_hFields := l_hTableDefinition[HB_ORM_SCHEMA_FIELD]
+        for each l_hTableDefinition in par_hTableSchemaDefinition
+            l_cNamespaceAndTableName := l_hTableDefinition:__enumKey()
 
-        for each l_hField in l_hFields
-            l_cFieldName       := l_hField:__enumKey()
-            l_hFieldDefinition := l_hField:__enumValue()
-            l_cFieldUsedAs     := hb_HGetDef(l_hFieldDefinition,"UsedAs","")
-            if l_cFieldUsedAs == "Foreign"
-                l_cParentNamespaceAndTable := hb_HGetDef(l_hFieldDefinition,"ParentTable","")
-
-                if !empty(l_cParentNamespaceAndTable)
-
-                    l_lForeignKeyOptional := hb_HGetDef(l_hFieldDefinition,"ForeignKeyOptional",.f.)
-
-                    l_nPos := at(".",l_cParentNamespaceAndTable)
-                    if empty(l_nPos)
-                        l_cParentNamespaceName := "public"
-                        l_cParentTableName     := l_cParentNamespaceAndTable
-                    else
-                        l_cParentNamespaceName := left(l_cParentNamespaceAndTable,l_nPos-1)
-                        l_cParentTableName     := substr(l_cParentNamespaceAndTable,l_nPos+1)
-                    endif
-                    if l_cParentNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
-                        l_cParentNamespaceName := ::p_HBORMNamespace
-                    endif
-
-                    //Will try to remove case sensitive and all lower case constraint name
-                    l_cSQLCommand := [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc"] //+CRLF
-                    if ! ::SQLExec("0350f45e-a7ab-49d4-8dd0-93b069b24a2f",l_cSQLCommand)
-                        hb_orm_SendToDebugView("RemoveWharfForeignKeyConstraints - Failed on Table: "+l_cTableName)
-                    endif
-
-                    if !(l_cFieldName == lower(l_cFieldName))
-                        l_cSQLCommand := [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+lower(l_cFieldName)+[_fkc"] //+CRLF
-                        if ! ::SQLExec("d81496b0-4546-46d3-81a9-e25a076b33dd",l_cSQLCommand)
-                            hb_orm_SendToDebugView("RemoveWharfForeignKeyConstraints - Failed on Table: "+l_cTableName)
-                        endif
-                    endif
-
-                endif
-
+            l_nPos := at(".",l_cNamespaceAndTableName)
+            if empty(l_nPos)
+                l_cNamespaceName := "public"
+                l_cTableName     := l_cNamespaceAndTableName
+            else
+                l_cNamespaceName := left(l_cNamespaceAndTableName,l_nPos-1)
+                l_cTableName     := substr(l_cNamespaceAndTableName,l_nPos+1)
+            endif
+            if l_cNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
+                l_cNamespaceName := ::p_HBORMNamespace
             endif
 
-        endfor
+            l_hFields := l_hTableDefinition[HB_ORM_SCHEMA_FIELD]
 
-    endfor
+            for each l_hField in l_hFields
+                l_cFieldName       := l_hField:__enumKey()
+                l_hFieldDefinition := l_hField:__enumValue()
+                l_cFieldUsedAs     := hb_HGetDef(l_hFieldDefinition,"UsedAs","")
+                if l_cFieldUsedAs == "Foreign"
+                    if el_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
+                        select hb_orm_ListOfForeignKeyConstraints
+                        scan while upper(hb_orm_ListOfForeignKeyConstraints->ChildNamespace) == upper(l_cNamespaceName) .and. ;
+                                   upper(hb_orm_ListOfForeignKeyConstraints->ChildTable)     == upper(l_cTableName)     .and. ;
+                                   upper(hb_orm_ListOfForeignKeyConstraints->ChildColumn)    == upper(l_cFieldName)
+                            l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+hb_orm_ListOfForeignKeyConstraints->ConstraintName+[";]+CRLF
+                        endscan
+                    endif
+                endif
+            endfor
+
+        endfor
+    endif
 
 endcase
+
+if !empty(l_cSQLScript)
+    ::SQLExec("4d11d309-2309-427e-ad9c-5e44d44495b5",l_cSQLScript)
+    // hb_orm_SendToDebugView(l_cSQLScript)
+endif
 
 return nil
 //-----------------------------------------------------------------------------------------------------------------
@@ -4324,6 +4330,8 @@ local l_cTableName
 local l_hFields
 local l_hField
 local l_cFieldName
+local l_cFieldStaticUID
+local l_cForeignKeyConstraintName
 local l_hFieldDefinition
 local l_cFieldUsedAs
 local l_cParentNamespaceAndTable
@@ -4331,6 +4339,7 @@ local l_cParentNamespaceName
 local l_cParentTableName
 local l_cParentTablePrimaryKey
 local l_cSQLScript := ""
+local l_cSQLScriptForeignKeyConstraints
 local l_lForeignKeyOptional
 local l_cOnDelete
 local l_cSQLForeignKeyConstraints
@@ -4349,6 +4358,7 @@ local l_cNamespaceAndTableFrom
 local l_cNamespaceAndTableTo
 local l_cColumnNameTo
 local l_cColumnNameFrom
+local l_nFkcCounter
 
 if !l_lSimulationMode
     if ::UpdateSchemaCache()
@@ -4369,40 +4379,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 // confdeltype char
 //     Foreign key deletion action code: a = no action, r = restrict, c = cascade, n = set null, d = set default
 
-    l_cSQLForeignKeyConstraints := [select ]
-    l_cSQLForeignKeyConstraints += [    con."ChildNamespace" as "ChildNamespace",]
-    l_cSQLForeignKeyConstraints += [    con."ChildTable"     as "ChildTable",]
-    l_cSQLForeignKeyConstraints += [    att2.attname         as "ChildColumn", ]
-    l_cSQLForeignKeyConstraints += [    ns.nspname           as "ParentNamespace",]
-    l_cSQLForeignKeyConstraints += [    cl.relname           as "ParentTable", ]
-    l_cSQLForeignKeyConstraints += [    att.attname          as "ParentColumn",]
-    l_cSQLForeignKeyConstraints += [    con.conname          as "ConstraintName",]
-    l_cSQLForeignKeyConstraints += [    con."UpdateAction"   as "UpdateAction",]
-    l_cSQLForeignKeyConstraints += [    con."DeleteAction"   as "DeleteAction"]
-    l_cSQLForeignKeyConstraints += [from]
-    l_cSQLForeignKeyConstraints += [   (select ]
-    l_cSQLForeignKeyConstraints += [        unnest(con1.conkey)  as "parent", ]
-    l_cSQLForeignKeyConstraints += [        unnest(con1.confkey) as "child", ]
-    l_cSQLForeignKeyConstraints += [        con1.confrelid, ]
-    l_cSQLForeignKeyConstraints += [        con1.conrelid,]
-    l_cSQLForeignKeyConstraints += [        con1.conname,]
-    l_cSQLForeignKeyConstraints += [        con1.confupdtype as "UpdateAction",]
-    l_cSQLForeignKeyConstraints += [        con1.confdeltype as "DeleteAction",]
-    l_cSQLForeignKeyConstraints += [        cl.relname     as "ChildTable",]
-    l_cSQLForeignKeyConstraints += [        ns.nspname     as "ChildNamespace"]
-    l_cSQLForeignKeyConstraints += [    from ]
-    l_cSQLForeignKeyConstraints += [        pg_class cl]
-    l_cSQLForeignKeyConstraints += [        join pg_namespace ns on cl.relnamespace = ns.oid]
-    l_cSQLForeignKeyConstraints += [        join pg_constraint con1 on con1.conrelid = cl.oid]
-    l_cSQLForeignKeyConstraints += [    where con1.contype = 'f']
-    l_cSQLForeignKeyConstraints += [    and   ns.nspname not in ('cyanaudit')]
-    // l_cSQLForeignKeyConstraints += [--        cl.relname = 'child_table']
-    // l_cSQLForeignKeyConstraints += [--        and ns.nspname = 'child_schema']
-    l_cSQLForeignKeyConstraints += [   ) con]
-    l_cSQLForeignKeyConstraints += [   join pg_attribute att  on att.attrelid = con.confrelid and att.attnum = con.child]
-    l_cSQLForeignKeyConstraints += [   join pg_class     cl   on cl.oid = con.confrelid]
-    l_cSQLForeignKeyConstraints += [   join pg_namespace ns   on cl.relnamespace = ns.oid]
-    l_cSQLForeignKeyConstraints += [   join pg_attribute att2 on att2.attrelid = con.conrelid and att2.attnum = con.parent]
+    l_cSQLForeignKeyConstraints := GetFetchPostgreSQLForeignKeyConstraintsQuery()
 
     if ! ::SQLExec("419ada7d-7e90-4c30-9c95-0d5c15ccdfd7",l_cSQLForeignKeyConstraints,"hb_orm_ListOfForeignKeyConstraints")
         hb_orm_SendToDebugView("GenerateMigrateForeignKeyConstraintsScript - Failed on ListOfForeignKeyConstraints")
@@ -4464,8 +4441,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
                         select hb_orm_ListOfForeignKeyConstraints
                         locate for lower(alltrim(field->ChildNamespace)) == lower(l_cNamespaceName) .and.;
-                                lower(alltrim(field->ChildTable))     == lower(l_cTableName)     .and.;
-                                lower(alltrim(field->ChildColumn))    == lower(l_cColumnNameFrom)
+                                   lower(alltrim(field->ChildTable))     == lower(l_cTableName)     .and.;
+                                   lower(alltrim(field->ChildColumn))    == lower(l_cColumnNameFrom)
                         if found()
                             l_cSQLScript += [ALTER TABLE IF EXISTS "]+l_cNamespaceName+["."]+l_cTableName+[" RENAME CONSTRAINT "]+lower(l_cColumnNameFrom)+[_fkc" TO "]+lower(l_cColumnNameTo)+[_fkc";]+CRLF
                             replace ChildColumn    with l_cColumnNameTo
@@ -4481,6 +4458,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         with object l_oCursor
             :Index("tag1","padr(upper(ChildNamespace+'*'+ChildTable+'*'+ChildColumn+'*'),240)")
             :CreateIndexes()
+            :SetOrder("tag1")
         endwith
 
         for each l_hTableDefinition in par_hTableSchemaDefinition
@@ -4510,6 +4488,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
                     if !empty(l_cParentNamespaceAndTable)
 
+                        l_cForeignKeyConstraintName := lower(l_cFieldName)+"_fkc"
+                        if len(l_cForeignKeyConstraintName) > POSTGRESQL_MAX_FOREIGN_KEY_NAME_LENGTH
+                            l_cFieldStaticUID := alltrim(hb_HGetDef(l_hFieldDefinition,"StaticUID",""))
+                            if empty(l_cFieldStaticUID)
+                                loop  // Should not happen
+                            endif
+                            l_cForeignKeyConstraintName := "dw_"+lower(l_cFieldStaticUID)+"_fkc"
+                        endif
+
                         l_lForeignKeyOptional := hb_HGetDef(l_hFieldDefinition,"ForeignKeyOptional",.f.)
                         l_cOnDelete           := hb_HGetDef(l_hFieldDefinition,"OnDelete","")
                         do case
@@ -4526,13 +4513,15 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                         if empty(l_cConstraintAction)
                             //Check if we should remove a constraint
                             if el_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
-                                l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc";]
-                                l_cSQLScript += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
-                                if !(l_cFieldName == lower(l_cFieldName))
-                                    l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+lower(l_cFieldName)+[_fkc";]
-                                    l_cSQLScript += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+lower(l_cFieldName)+[*/]+CRLF
-                                endif
+                                select hb_orm_ListOfForeignKeyConstraints
+                                scan while upper(hb_orm_ListOfForeignKeyConstraints->ChildNamespace) == upper(l_cNamespaceName) .and. ;
+                                           upper(hb_orm_ListOfForeignKeyConstraints->ChildTable)     == upper(l_cTableName)     .and. ;
+                                           upper(hb_orm_ListOfForeignKeyConstraints->ChildColumn)    == upper(l_cFieldName)
+                                    l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+hb_orm_ListOfForeignKeyConstraints->ConstraintName+[";]+CRLF
+                                    hb_orm_ListOfForeignKeyConstraints->Processed := 1
+                                endscan
                             endif
+
                         else
                             l_nPos := at(".",l_cParentNamespaceAndTable)
                             if empty(l_nPos)
@@ -4552,46 +4541,62 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                             else
 
                                 if el_seek(upper(l_cNamespaceName+"*"+l_cTableName+"*"+l_cFieldName+"*"),"hb_orm_ListOfForeignKeyConstraints","tag1")
-                                    //Compare if the constraint is the same
-                                    l_lAddConstraints := .f.
+                                    l_nFkcCounter := 0
+                                    l_cSQLScriptForeignKeyConstraints := ""
+                                    select hb_orm_ListOfForeignKeyConstraints
+                                    scan while upper(hb_orm_ListOfForeignKeyConstraints->ChildNamespace) == upper(l_cNamespaceName) .and. ;
+                                               upper(hb_orm_ListOfForeignKeyConstraints->ChildTable)     == upper(l_cTableName)     .and. ;
+                                               upper(hb_orm_ListOfForeignKeyConstraints->ChildColumn)    == upper(l_cFieldName)
+                                        l_nFkcCounter++
+                                        if l_nFkcCounter == 1
 
-                                    l_cCurrentOnUpdateConstraintAction := alltrim(hb_orm_ListOfForeignKeyConstraints->UpdateAction)
-                                    l_cCurrentOnDeleteConstraintAction := alltrim(hb_orm_ListOfForeignKeyConstraints->DeleteAction)
+                                            //Compare if the constraint is the same
+                                            l_lAddConstraints := .f.
 
-                                    do case
-                                    case l_cConstraintAction == "RESTRICT" .and. !(l_cCurrentOnDeleteConstraintAction == "r")   // r = restrict
-                                        l_lAddConstraints := .t.
-                                    case l_cConstraintAction == "CASCADE"  .and. !(l_cCurrentOnDeleteConstraintAction == "c")   // c = cascade
-                                        l_lAddConstraints := .t.
-                                    case l_cConstraintAction == "SET NULL" .and. !(l_cCurrentOnDeleteConstraintAction == "n")   // n = set null
-                                        l_lAddConstraints := .t.
-                                    case !(hb_orm_ListOfForeignKeyConstraints->ParentColumn == l_cParentTablePrimaryKey)
-                                        l_lAddConstraints := .t.
-                                    case !(hb_orm_ListOfForeignKeyConstraints->ParentNamespace == l_cParentNamespaceName)
-                                        l_lAddConstraints := .t.
-                                    case !(hb_orm_ListOfForeignKeyConstraints->ParentTable == l_cParentTableName)
-                                        l_lAddConstraints := .t.
-                                    case !(l_cCurrentOnUpdateConstraintAction == "c")
-                                        // We are always going to make the OnUpdate to CASCADE, meaning if the primary key is changed, it will be updated in all the related child tables.
-                                        l_lAddConstraints := .t.
-                                    case !(hb_orm_ListOfForeignKeyConstraints->ConstraintName == lower(l_cFieldName)+[_fkc])
-                                        l_lAddConstraints := .t.   // Probably constraint name is not in lower case
-                                    endcase
+                                            l_cCurrentOnUpdateConstraintAction := alltrim(hb_orm_ListOfForeignKeyConstraints->UpdateAction)
+                                            l_cCurrentOnDeleteConstraintAction := alltrim(hb_orm_ListOfForeignKeyConstraints->DeleteAction)
 
-                                    if l_lAddConstraints   //Remove the Constraints since it is different, will re-add it.
-                                        l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+l_cFieldName+[_fkc";]
-                                        l_cSQLScript += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
-                                        if !(l_cFieldName == lower(l_cFieldName))
-                                            l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+lower(l_cFieldName)+[_fkc";]
-                                            l_cSQLScript += [  /*OnFailMessage: Delete Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+lower(l_cFieldName)+[*/]+CRLF
+                                            do case
+                                            case l_cConstraintAction == "RESTRICT" .and. !(l_cCurrentOnDeleteConstraintAction == "r")   // r = restrict
+                                                l_lAddConstraints := .t.
+                                            case l_cConstraintAction == "CASCADE"  .and. !(l_cCurrentOnDeleteConstraintAction == "c")   // c = cascade
+                                                l_lAddConstraints := .t.
+                                            case l_cConstraintAction == "SET NULL" .and. !(l_cCurrentOnDeleteConstraintAction == "n")   // n = set null
+                                                l_lAddConstraints := .t.
+                                            case !(hb_orm_ListOfForeignKeyConstraints->ParentColumn == l_cParentTablePrimaryKey)
+                                                l_lAddConstraints := .t.
+                                            case !(hb_orm_ListOfForeignKeyConstraints->ParentNamespace == l_cParentNamespaceName)
+                                                l_lAddConstraints := .t.
+                                            case !(hb_orm_ListOfForeignKeyConstraints->ParentTable == l_cParentTableName)
+                                                l_lAddConstraints := .t.
+                                            case !(l_cCurrentOnUpdateConstraintAction == "c")
+                                                // We are always going to make the OnUpdate to CASCADE, meaning if the primary key is changed, it will be updated in all the related child tables.
+                                                l_lAddConstraints := .t.
+                                            case !(hb_orm_ListOfForeignKeyConstraints->ConstraintName == l_cForeignKeyConstraintName)
+                                                // Rename the constraints instead.
+                                                l_cSQLScriptForeignKeyConstraints += [ALTER TABLE IF EXISTS"]+l_cNamespaceName+["."]+l_cTableName+[" RENAME CONSTRAINT "]+hb_orm_ListOfForeignKeyConstraints->ConstraintName+[" TO "]+l_cForeignKeyConstraintName+[";]+CRLF
+                                            endcase
+
+                                            if l_lAddConstraints   //Remove the Constraints since it is different, will re-add it.
+                                                l_cSQLScriptForeignKeyConstraints += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+hb_orm_ListOfForeignKeyConstraints->ConstraintName+[";]+CRLF
+                                            endif
+                                            hb_orm_ListOfForeignKeyConstraints->Processed := 1
+
+                                        else
+                                            //Remove any other Foreign Key Constraints on the same ChildColumn. We only test on the first one
+                                            l_cSQLScriptForeignKeyConstraints := [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+hb_orm_ListOfForeignKeyConstraints->ConstraintName+[";]+CRLF+l_cSQLScriptForeignKeyConstraints
+                                            hb_orm_ListOfForeignKeyConstraints->Processed := 1
                                         endif
-                                    endif
+
+                                    endscan
+                                    l_cSQLScript += l_cSQLScriptForeignKeyConstraints
+                                    l_cSQLScriptForeignKeyConstraints := ""
                                 else
                                     l_lAddConstraints := .t.
                                 endif
 
                                 if l_lAddConstraints
-                                    l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" ADD CONSTRAINT "]+lower(l_cFieldName)+[_fkc" FOREIGN KEY ("]+l_cFieldName+[") REFERENCES "]+l_cParentNamespaceName+["."]+l_cParentTableName+[" ("]+l_cParentTablePrimaryKey+[") ON DELETE ]+l_cConstraintAction+[ ON UPDATE CASCADE;]
+                                    l_cSQLScript += [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" ADD CONSTRAINT "]+l_cForeignKeyConstraintName+[" FOREIGN KEY ("]+l_cFieldName+[") REFERENCES "]+l_cParentNamespaceName+["."]+l_cParentTableName+[" ("]+l_cParentTablePrimaryKey+[") ON DELETE ]+l_cConstraintAction+[ ON UPDATE CASCADE;]
                                     l_cSQLScript += [  /*OnFailMessage: Add Foreign Key Constraint Failed on Table: ]+l_cTableName+[ Field: ]+l_cFieldName+[*/]+CRLF
                                 endif
                             endif
@@ -4603,6 +4608,14 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             endfor
 
         endfor
+
+        // Remove all non defined and not processed _FKC constraints. Will remove before any other adds or renames
+        select hb_orm_ListOfForeignKeyConstraints
+        scan all for hb_orm_ListOfForeignKeyConstraints->Processed == 0 .and. upper(right(hb_orm_ListOfForeignKeyConstraints->ConstraintName,4)) == "_FKC"
+            l_cNamespaceName := hb_orm_ListOfForeignKeyConstraints->ChildNamespace
+            l_cTableName     := hb_orm_ListOfForeignKeyConstraints->ChildTable
+            l_cSQLScript := [ALTER TABLE "]+l_cNamespaceName+["."]+l_cTableName+[" DROP CONSTRAINT IF EXISTS "]+hb_orm_ListOfForeignKeyConstraints->ConstraintName+[";]+CRLF+l_cSQLScript
+        endscan
     endif
 
     CloseAlias("hb_orm_ListOfForeignKeyConstraints")
@@ -4652,7 +4665,6 @@ return {l_nResult,l_cSQLScript,l_cLastError}
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
 method RecordCurrentAppliedWharfConfig() class hb_orm_SQLConnect
-//123456
 local l_cGenerationTime
 local l_cGenerationSignature
 local l_lResult := .f.
@@ -4718,7 +4730,6 @@ local l_nResult := -1
         //3  Future Schema, meaning running an old app.
         //-1 Error
 
-
 local l_cGenerationTime
 local l_tGenerationTime
 
@@ -4783,4 +4794,43 @@ if !empty(::p_hWharfConfig)
 endif
 
 return l_nResult
+//-----------------------------------------------------------------------------------------------------------------
+static function GetFetchPostgreSQLForeignKeyConstraintsQuery()
+local l_cSQLForeignKeyConstraints
+l_cSQLForeignKeyConstraints := [select ]
+l_cSQLForeignKeyConstraints += [    con."ChildNamespace" as "ChildNamespace",]
+l_cSQLForeignKeyConstraints += [    con."ChildTable"     as "ChildTable",]
+l_cSQLForeignKeyConstraints += [    att2.attname         as "ChildColumn", ]
+l_cSQLForeignKeyConstraints += [    ns.nspname           as "ParentNamespace",]
+l_cSQLForeignKeyConstraints += [    cl.relname           as "ParentTable", ]
+l_cSQLForeignKeyConstraints += [    att.attname          as "ParentColumn",]
+l_cSQLForeignKeyConstraints += [    con.conname          as "ConstraintName",]
+l_cSQLForeignKeyConstraints += [    con."UpdateAction"   as "UpdateAction",]
+l_cSQLForeignKeyConstraints += [    con."DeleteAction"   as "DeleteAction",]
+l_cSQLForeignKeyConstraints += [    0                    as "Processed"]
+l_cSQLForeignKeyConstraints += [from]
+l_cSQLForeignKeyConstraints += [   (select ]
+l_cSQLForeignKeyConstraints += [        unnest(con1.conkey)  as "parent", ]
+l_cSQLForeignKeyConstraints += [        unnest(con1.confkey) as "child", ]
+l_cSQLForeignKeyConstraints += [        con1.confrelid, ]
+l_cSQLForeignKeyConstraints += [        con1.conrelid,]
+l_cSQLForeignKeyConstraints += [        con1.conname,]
+l_cSQLForeignKeyConstraints += [        con1.confupdtype as "UpdateAction",]
+l_cSQLForeignKeyConstraints += [        con1.confdeltype as "DeleteAction",]
+l_cSQLForeignKeyConstraints += [        cl.relname     as "ChildTable",]
+l_cSQLForeignKeyConstraints += [        ns.nspname     as "ChildNamespace"]
+l_cSQLForeignKeyConstraints += [    from ]
+l_cSQLForeignKeyConstraints += [        pg_class cl]
+l_cSQLForeignKeyConstraints += [        join pg_namespace ns on cl.relnamespace = ns.oid]
+l_cSQLForeignKeyConstraints += [        join pg_constraint con1 on con1.conrelid = cl.oid]
+l_cSQLForeignKeyConstraints += [    where con1.contype = 'f']
+l_cSQLForeignKeyConstraints += [    and   ns.nspname not in ('cyanaudit')]
+// l_cSQLForeignKeyConstraints += [--        cl.relname = 'child_table']
+// l_cSQLForeignKeyConstraints += [--        and ns.nspname = 'child_schema']
+l_cSQLForeignKeyConstraints += [   ) con]
+l_cSQLForeignKeyConstraints += [   join pg_attribute att  on att.attrelid = con.confrelid and att.attnum = con.child]
+l_cSQLForeignKeyConstraints += [   join pg_class     cl   on cl.oid = con.confrelid]
+l_cSQLForeignKeyConstraints += [   join pg_namespace ns   on cl.relnamespace = ns.oid]
+l_cSQLForeignKeyConstraints += [   join pg_attribute att2 on att2.attrelid = con.conrelid and att2.attnum = con.parent]
+return l_cSQLForeignKeyConstraints
 //-----------------------------------------------------------------------------------------------------------------

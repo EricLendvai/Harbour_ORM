@@ -1,7 +1,7 @@
 //Copyright (c) 2024 Eric Lendvai MIT License
 
 #ifndef HB_ORM_BUILDVERSION
-#define HB_ORM_BUILDVERSION "4.6"
+#define HB_ORM_BUILDVERSION "4.7"
 
 #define HB_ORM_TRIGGERVERSION 2
 
@@ -60,5 +60,8 @@
 #define COMBINE_ACTION_UNION     1
 #define COMBINE_ACTION_EXCEPT    2
 #define COMBINE_ACTION_INTERSECT 3
+
+#define POSTGRESQL_MAX_FOREIGN_KEY_NAME_LENGTH 63   //A PostgreSQL limitation, unless recompiled otherwise
+#define POSTGRESQL_MAX_INDEX_NAME_LENGTH 63         //A PostgreSQL limitation, unless recompiled otherwise
 
 #endif /* HB_ORM_BUILDVERSION */

@@ -38,8 +38,8 @@ class hb_orm_SQLConnect
         //Acronym: GMSS = Generate Migrate Schema Script
         method GMSSAddTable(par_cNamespaceName,par_cTableName,par_hStructure,par_lUnlogged)
         method GMSSAddField(par_cNamespaceName,par_cTableName,par_cFieldName,par_hFieldDefinition)
-        method GMSSAddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_hIndexDefinition)
-        method GMSSDeleteIndex(par_cNamespaceName,par_cTableName,par_cIndexName)
+        method GMSSAddIndex(par_cNamespaceName,par_cTableName,par_hFields,par_cIndexName,par_cIndexStaticUID,par_hIndexDefinition)
+        method GMSSDeleteIndex(par_cNamespaceName,par_cTableName,par_cIndexNameOnFile)
         method GMSSUpdateNamespaceName(par_cNamespaceName,par_cCurrentNamespaceName)
         method GMSSUpdateTableName(par_cNamespaceName,par_cTableName,par_cCurrentNamespaceName,par_cCurrentTableName)
         method GMSSUpdateFieldName(par_cNamespaceName,par_cTableName,par_cFieldName,par_cCurrentFieldName)
