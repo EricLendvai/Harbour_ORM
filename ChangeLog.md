@@ -1,5 +1,13 @@
 # Harbour ORM - Change Log
 
+## 05/03/2024 V 4.8
+* Discontinued the use of the methods SetPrimaryKeyFieldName() and GetPrimaryKeyFieldName().   
+  The are no longer needed since we are now using WharfConfig, which does specify the primary key for every tables.
+* Please note Example/SQL_CRUD is not fully compatible with MySQL. 
+* Removed Connection Methods SetPrimaryKeyFieldName and GetPrimaryKeyFieldName
+* Removed parameter par_cPKFN from connection method SetAllSettings(). For code readability, it is encouraged to not used SetAllSettings() and instead use individual method to set each settings.
+* Fix on Migration Script generation, failed to detect new Enumeration Value for Native PostgreSQL Enumerations.
+
 ## 04/04/2024 V 4.7
 * Foreign Key Constraint Generation will handled manually altered changes.
 * Indexes and Foreign Key Names that are beyond PostgreSQL length limit will be replace using StaticUIDs from DataWharf. Must use WharfConfig structures from DataWharf 4.6+.

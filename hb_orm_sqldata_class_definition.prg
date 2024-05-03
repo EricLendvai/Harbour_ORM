@@ -12,7 +12,6 @@ class hb_orm_SQLData
         data p_ConnectionNumber              init 0     // Unique number across all instances in current running program. Can be used to help generate some names.
         data p_Database                      init ""
         data p_NamespaceName                 init ""
-        data p_PrimaryKeyFieldName           init "key"        // Primary Key Field Name
         data p_CreationTimeFieldName         init "sysc"       // Creation Time Field Name
         data p_ModificationTimeFieldName     init "sysm"       // Modification Time Field Name
 
@@ -78,15 +77,15 @@ class hb_orm_SQLData
 
         data p_NonTableAliases init {=>}       //List of CTE and Temp Alias to exclude from table/column auto format and validate
 
-        method IsConnected()                                                       //Return .t. if has a connection
-        method PrepExpression(par_cExpression,...)                                 //Used to "Freeze" parameters as values in "^" places
-        method ExpressionToMYSQL(par_cSource,par_cExpression)                      //_M_  to generalize UDF translation to backend
-        method ExpressionToPostgreSQL(par_cSource,par_cExpression)                 //_M_  to generalize UDF translation to backend
-        method FixAliasAndFieldNameCasingInExpression(par_cSourcepar_cExpression)  // to handle the casing of tables and fields, by using the connection's :p_hMetadataTable Since it is more of alias.field for now will assume alias same as table name and will use ::p_NamespaceName
+        method IsConnected()                                                        //Return .t. if has a connection
+        method PrepExpression(par_cExpression,...)                                  //Used to "Freeze" parameters as values in "^" places
+        method ExpressionToMYSQL(par_cSource,par_cExpression)                       //_M_  to generalize UDF translation to backend
+        method ExpressionToPostgreSQL(par_cSource,par_cExpression)                  //_M_  to generalize UDF translation to backend
+        method FixAliasAndFieldNameCasingInExpression(par_cSource,par_cExpression)  // to handle the casing of tables and fields, by using the connection's :p_hMetadataTable Since it is more of alias.field for now will assume alias same as table name and will use ::p_NamespaceName
         method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_hFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_hFieldInfo,l_aAutoTrimmedFields,l_aErrors)
-        method SetEventId(par_xId)                                              // Called by Table() and Delete(). Used to identify SQL(), Add(), Update(), Delete() query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
-        method FieldSet(par_cName,par_nType,par_xValue)                         // Called by all other Field* methods. par_nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array
+        method SetEventId(par_xId)                                                  // Called by Table() and Delete(). Used to identify SQL(), Add(), Update(), Delete() query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
+        method FieldSet(par_cName,par_nType,par_xValue)                             // Called by all other Field* methods. par_nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array
         method GetPostgreSQLCastForFieldType(par_cFieldType,par_nFieldLen,par_nFieldDec)   // Used by :Add() and :Update()
     exported:
         data Tally init 0 READONLY

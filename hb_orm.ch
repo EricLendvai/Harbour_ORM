@@ -1,7 +1,7 @@
 //Copyright (c) 2024 Eric Lendvai MIT License
 
 #ifndef HB_ORM_BUILDVERSION
-#define HB_ORM_BUILDVERSION "4.7"
+#define HB_ORM_BUILDVERSION "4.8"
 
 #define HB_ORM_TRIGGERVERSION 2
 
@@ -43,6 +43,10 @@
 
 #define HB_ORM_SCHEMA_MYSQL_OBJECT      "M"
 #define HB_ORM_SCHEMA_POSTGRESQL_OBJECT "P"
+
+#define PRIMARY_KEY_INFO_NAME 1
+#define PRIMARY_KEY_INFO_TYPE 2
+
 
 #define HB_ORM_MAX_EVENTID_SIZE 50
 

@@ -24,7 +24,6 @@ method UseConnection(par_oSQLConnection) class hb_orm_SQLData
 ::p_ConnectionNumber          := ::p_oSQLConnection:GetConnectionNumber()
 ::p_Database                  := ::p_oSQLConnection:GetDatabase()
 ::p_NamespaceName             := ::p_oSQLConnection:GetCurrentNamespaceName()   // Will "Freeze" the current connection p_NamespaceName
-::p_PrimaryKeyFieldName       := ::p_oSQLConnection:GetPrimaryKeyFieldName()
 ::p_CreationTimeFieldName     := ::p_oSQLConnection:GetCreationTimeFieldName()
 ::p_ModificationTimeFieldName := ::p_oSQLConnection:GetModificationTimeFieldName()
 return Self
@@ -332,6 +331,8 @@ local l_aAutoTrimmedFields := {}
 local l_aErrors := {}
 local l_xKeyFieldValue
 local l_nPos
+local l_aPrimaryKeyInfo
+local l_cPrimaryKeyFieldName
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
@@ -353,216 +354,222 @@ if empty(::p_ErrorMessage)
         ::p_ErrorMessage = [Missing Table]
         
     otherwise
-        l_nSelect := iif(used(),select(),0)
-        
-        do case
-        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-            if pcount() == 1
-                //Used in case the KEY field is not auto-increment
-                l_cFields := ::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
-                l_cValues := Trans(par_iKey)
-            else
-                l_cFields := ""
-                l_cValues := ""
-            endif
+        l_aPrimaryKeyInfo      := hb_HGetDef(::p_oSQLConnection:p_hTablePrimaryKeyInfo,::p_NamespaceAndTableName,{"",""})
+        l_cPrimaryKeyFieldName := l_aPrimaryKeyInfo[PRIMARY_KEY_INFO_NAME]
+
+        if empty(l_cPrimaryKeyFieldName)
+            ::p_ErrorMessage = [Failed to find Primary Field Name.]
+        else
+            l_nSelect := iif(used(),select(),0)
             
-            //Check if a CreationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
-                if !empty(l_cFields)
-                    l_cFields += ","
-                    l_cValues += ","
+            do case
+            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+                if pcount() == 1
+                    //Used in case the KEY field is not auto-increment
+                    l_cFields := ::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)
+                    l_cValues := Trans(par_iKey)
+                else
+                    l_cFields := ""
+                    l_cValues := ""
                 endif
-                l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
-                l_cValues += "current_timestamp()"
-            endif
-            
-            //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
-                if !empty(l_cFields)
-                    l_cFields += ","
-                    l_cValues += ","
-                endif
-                l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
-                l_cValues += "current_timestamp()"
-            endif
-            
-            for each l_oField in ::p_FieldsAndValues
-                l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_hFieldInfo := ::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
-                l_aValue     := l_oField:__enumValue()
-
-                switch l_aValue[1]
-                case 1  // Value
-                    l_cFieldValue := ""
-                    if !el_AUnpack(::PrepValueForMySQL("adding",l_aValue[2],::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
-                        loop
-                    endif
-                    exit
-                case 2  // Expression
-                    l_cFieldValue := l_aValue[2]
-                    exit
-                otherwise
-                    loop
-                endswitch
-
-                if !empty(l_cFields)
-                    l_cFields += ","
-                    l_cValues += ","
-                endif
-                l_cFields += ::p_oSQLConnection:FormatIdentifier(l_cFieldName)
-                l_cValues += l_cFieldValue
-
-            endfor
-            l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ (]+l_cFields+[) VALUES (]+l_cValues+[)]
-            
-            // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
-
-            ::p_LastSQLCommand = l_cSQLCommand
-
-            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
-                do case
-                case pcount() == 1
-                    ::p_Key = par_iKey
-                    
-                otherwise
-                    // LastInsertedID := hb_RDDInfo(RDDI_INSERTID,,"SQLMIX",::p_oSQLConnection:GetHandle())
-                    if ::p_oSQLConnection:SQLExec(::p_cEventId,[SELECT LAST_INSERT_ID() as result],"c_DB_Result")
-                        ::Tally := 1
-                        if Valtype(c_DB_Result->result) == "C"
-                            ::p_Key := val(c_DB_Result->result)
-                        else
-                            ::p_Key := c_DB_Result->result
-                        endif
-                        // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand+[ -> Key = ]+trans(::p_Key))
-                    else
-                        // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> Failed Get Added Key])
-                        ::p_ErrorMessage = [Failed To Get Added KEY]
-                    endif
-                    CloseAlias("c_DB_Result")
-                    
-                endcase
                 
-            else
-                //Failed To Add
-                // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
-                ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
-                // hb_orm_SendToDebugView(::p_ErrorMessage)
-
-            endif
-   
-        case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-            if pcount() == 1
-                //Used in case the KEY field is not auto-increment
-                l_cFields := ::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
-                l_cValues := Trans(par_iKey)
-            else
-                l_cFields := ""
-                l_cValues := ""
-            endif
-            
-            //Check if a CreationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
-                if !empty(l_cFields)
-                    l_cFields += ","
-                    l_cValues += ","
-                endif
-                l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
-                l_cValues += "now()"
-            endif
-            
-            //Check if a ModificationTimeFieldName exists and if yes, set it to now()
-            if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
-                if !empty(l_cFields)
-                    l_cFields += ","
-                    l_cValues += ","
-                endif
-                l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
-                l_cValues += "now()"
-            endif
-
-            for each l_oField in ::p_FieldsAndValues
-                l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
-                l_hFieldInfo := ::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
-                l_aValue     := l_oField:__enumValue()
-
-                switch l_aValue[1]
-                case 1  // Value
-                    l_cFieldValue := ""
-                    if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
-                        loop
+                //Check if a CreationTimeFieldName exists and if yes, set it to now()
+                if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
+                    if !empty(l_cFields)
+                        l_cFields += ","
+                        l_cValues += ","
                     endif
-                    exit
-                case 2  // Expression
-                    l_cFieldValue := l_aValue[2]
-                    exit
-                case 3  // Array
-                    //Example: array['614417fb-9aec-4a6a-961a-12c9b3f58985','11111111-2222-3333-4444-000000000001']::uuid[]
-                    l_cFieldValue := "array["
-                    for each l_xValue in l_aValue[2]
-                        l_cArrayValue := ""
-                        if el_AUnpack(::PrepValueForPostgreSQL("adding",l_xValue,::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cArrayValue)
-                            if l_xValue:__enumindex > 1
-                                l_cFieldValue += ","
-                            endif
-                            //Will be casting the entire array afterwards, will remove any casting in l_cFieldValue
-                            l_nPos := at("::",l_cArrayValue)
-                            if l_nPos > 0
-                                l_cArrayValue := left(l_cArrayValue,l_nPos-1)
-                            endif
-                            l_cFieldValue += l_cArrayValue
-                        else
+                    l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
+                    l_cValues += "current_timestamp()"
+                endif
+                
+                //Check if a ModificationTimeFieldName exists and if yes, set it to now()
+                if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+                    if !empty(l_cFields)
+                        l_cFields += ","
+                        l_cValues += ","
+                    endif
+                    l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
+                    l_cValues += "current_timestamp()"
+                endif
+                
+                for each l_oField in ::p_FieldsAndValues
+                    l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                    l_hFieldInfo := ::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                    l_aValue     := l_oField:__enumValue()
+
+                    switch l_aValue[1]
+                    case 1  // Value
+                        l_cFieldValue := ""
+                        if !el_AUnpack(::PrepValueForMySQL("adding",l_aValue[2],::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
                             loop
                         endif
-                    endfor
-                    l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],;
-                                                                           hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0),;
-                                                                           hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0))+"[]"
-                    exit
-                otherwise
-                    loop
-                endswitch
+                        exit
+                    case 2  // Expression
+                        l_cFieldValue := l_aValue[2]
+                        exit
+                    otherwise
+                        loop
+                    endswitch
 
-                if !empty(l_cFields)
-                    l_cFields += ","
-                    l_cValues += ","
-                endif
-                l_cFields += ::p_oSQLConnection:FormatIdentifier(l_cFieldName)
-                l_cValues += l_cFieldValue
-
-            endfor
-
-            l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ (]+l_cFields+[) VALUES (]+l_cValues+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)
-            
-            // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
-
-            ::p_LastSQLCommand = l_cSQLCommand
-            if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,"c_DB_Result")
-                do case
-                case pcount() == 1
-                    ::p_Key = par_iKey
-                    
-                otherwise
-                    ::Tally := 1
-                    l_xKeyFieldValue := c_DB_Result->(FieldGet(FieldPos(::p_PrimaryKeyFieldName)))
-                    if Valtype(l_xKeyFieldValue) == "C"
-                        ::p_Key := val(l_xKeyFieldValue)
-                    else
-                        ::p_Key := l_xKeyFieldValue
+                    if !empty(l_cFields)
+                        l_cFields += ","
+                        l_cValues += ","
                     endif
-                    // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand+[ -> Key = ]+trans(::p_Key))
-                    
-                endcase
+                    l_cFields += ::p_oSQLConnection:FormatIdentifier(l_cFieldName)
+                    l_cValues += l_cFieldValue
+
+                endfor
+                l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ (]+l_cFields+[) VALUES (]+l_cValues+[)]
                 
-            else
-                //Failed To Add
-                ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
+                // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
-            endif
-            CloseAlias("c_DB_Result")
+                ::p_LastSQLCommand = l_cSQLCommand
 
-        endcase
+                if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
+                    do case
+                    case pcount() == 1
+                        ::p_Key = par_iKey
+                        
+                    otherwise
+                        // LastInsertedID := hb_RDDInfo(RDDI_INSERTID,,"SQLMIX",::p_oSQLConnection:GetHandle())
+                        if ::p_oSQLConnection:SQLExec(::p_cEventId,[SELECT LAST_INSERT_ID() as result],"c_DB_Result")
+                            ::Tally := 1
+                            if Valtype(c_DB_Result->result) == "C"
+                                ::p_Key := val(c_DB_Result->result)
+                            else
+                                ::p_Key := c_DB_Result->result
+                            endif
+                            // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand+[ -> Key = ]+trans(::p_Key))
+                        else
+                            // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> Failed Get Added Key])
+                            ::p_ErrorMessage = [Failed To Get Added KEY]
+                        endif
+                        CloseAlias("c_DB_Result")
+                        
+                    endcase
+                    
+                else
+                    //Failed To Add
+                    // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
+                    ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
+                    // hb_orm_SendToDebugView(::p_ErrorMessage)
 
-        select (l_nSelect)
+                endif
+    
+            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+                if pcount() == 1
+                    //Used in case the KEY field is not auto-increment
+                    l_cFields := ::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)
+                    l_cValues := Trans(par_iKey)
+                else
+                    l_cFields := ""
+                    l_cValues := ""
+                endif
+                
+                //Check if a CreationTimeFieldName exists and if yes, set it to now()
+                if !empty(::p_CreationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_CreationTimeFieldName)
+                    if !empty(l_cFields)
+                        l_cFields += ","
+                        l_cValues += ","
+                    endif
+                    l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_CreationTimeFieldName)
+                    l_cValues += "now()"
+                endif
+                
+                //Check if a ModificationTimeFieldName exists and if yes, set it to now()
+                if !empty(::p_ModificationTimeFieldName) .and. hb_HGetRef(::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD],::p_ModificationTimeFieldName)
+                    if !empty(l_cFields)
+                        l_cFields += ","
+                        l_cValues += ","
+                    endif
+                    l_cFields += ::p_oSQLConnection:FormatIdentifier(::p_ModificationTimeFieldName)
+                    l_cValues += "now()"
+                endif
+
+                for each l_oField in ::p_FieldsAndValues
+                    l_cFieldName := l_oField:__enumKey()  // Will not fix Field name casing since this was already done in the method Field()
+                    l_hFieldInfo := ::p_oSQLConnection:p_hMetadataTable[::p_NamespaceAndTableName][HB_ORM_SCHEMA_FIELD][l_cFieldName]
+                    l_aValue     := l_oField:__enumValue()
+
+                    switch l_aValue[1]
+                    case 1  // Value
+                        l_cFieldValue := ""
+                        if !el_AUnpack(::PrepValueForPostgreSQL("adding",l_aValue[2],::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cFieldValue)
+                            loop
+                        endif
+                        exit
+                    case 2  // Expression
+                        l_cFieldValue := l_aValue[2]
+                        exit
+                    case 3  // Array
+                        //Example: array['614417fb-9aec-4a6a-961a-12c9b3f58985','11111111-2222-3333-4444-000000000001']::uuid[]
+                        l_cFieldValue := "array["
+                        for each l_xValue in l_aValue[2]
+                            l_cArrayValue := ""
+                            if el_AUnpack(::PrepValueForPostgreSQL("adding",l_xValue,::p_NamespaceAndTableName,0,l_cFieldName,l_hFieldInfo,@l_aAutoTrimmedFields,@l_aErrors),,@l_cArrayValue)
+                                if l_xValue:__enumindex > 1
+                                    l_cFieldValue += ","
+                                endif
+                                //Will be casting the entire array afterwards, will remove any casting in l_cFieldValue
+                                l_nPos := at("::",l_cArrayValue)
+                                if l_nPos > 0
+                                    l_cArrayValue := left(l_cArrayValue,l_nPos-1)
+                                endif
+                                l_cFieldValue += l_cArrayValue
+                            else
+                                loop
+                            endif
+                        endfor
+                        l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],;
+                                                                            hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0),;
+                                                                            hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0))+"[]"
+                        exit
+                    otherwise
+                        loop
+                    endswitch
+
+                    if !empty(l_cFields)
+                        l_cFields += ","
+                        l_cValues += ","
+                    endif
+                    l_cFields += ::p_oSQLConnection:FormatIdentifier(l_cFieldName)
+                    l_cValues += l_cFieldValue
+
+                endfor
+
+                l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ (]+l_cFields+[) VALUES (]+l_cValues+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)
+                
+                // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
+
+                ::p_LastSQLCommand = l_cSQLCommand
+                if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,"c_DB_Result")
+                    do case
+                    case pcount() == 1
+                        ::p_Key = par_iKey
+                        
+                    otherwise
+                        ::Tally := 1
+                        l_xKeyFieldValue := c_DB_Result->(FieldGet(FieldPos(l_cPrimaryKeyFieldName)))
+                        if Valtype(l_xKeyFieldValue) == "C"
+                            ::p_Key := val(l_xKeyFieldValue)
+                        else
+                            ::p_Key := l_xKeyFieldValue
+                        endif
+                        // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand+[ -> Key = ]+trans(::p_Key))
+                        
+                    endcase
+                    
+                else
+                    //Failed To Add
+                    ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
+
+                endif
+                CloseAlias("c_DB_Result")
+
+            endcase
+            select (l_nSelect)
+        endif
         
     endcase
 endif
@@ -589,6 +596,8 @@ local l_nSelect
 local l_cSQLCommand
 local l_cNonTableAlias
 local l_cNamespaceAndTableName
+local l_aPrimaryKeyInfo
+local l_cPrimaryKeyFieldName
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
@@ -637,6 +646,14 @@ if empty(::p_ErrorMessage)
         endif
 
     endif
+    
+    if empty(::p_ErrorMessage) .and. !empty(l_cNamespaceAndTableName)
+        l_aPrimaryKeyInfo      := hb_HGetDef(::p_oSQLConnection:p_hTablePrimaryKeyInfo,l_cNamespaceAndTableName,{"",""})
+        l_cPrimaryKeyFieldName := l_aPrimaryKeyInfo[PRIMARY_KEY_INFO_NAME]
+        if empty(l_cPrimaryKeyFieldName)
+            ::p_ErrorMessage := [Failed to find Primary Field Name.]
+        endif
+    endif
 
     do case
     case !empty(::p_ErrorMessage)
@@ -644,12 +661,12 @@ if empty(::p_ErrorMessage)
         ::p_ErrorMessage := [Missing Table]
         
     case empty(par_iKey)
-        ::p_ErrorMessage := [Missing ]+upper(::p_PrimaryKeyFieldName)
+        ::p_ErrorMessage := [Missing ]+upper(l_cPrimaryKeyFieldName)
         
     otherwise
         l_nSelect := iif(used(),select(),0)
         
-        l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(l_cNamespaceAndTableName))+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[=]+trans(par_iKey)
+        l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(l_cNamespaceAndTableName))+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[=]+trans(par_iKey)
         ::p_LastSQLCommand = l_cSQLCommand
 
         if empty(::p_ErrorMessage)
@@ -687,6 +704,8 @@ local l_oField
 local l_aAutoTrimmedFields := {}
 local l_aErrors := {}
 local l_nPos
+local l_aPrimaryKeyInfo
+local l_cPrimaryKeyFieldName
 
 if pcount() == 1
     ::p_KEY = par_iKey
@@ -704,6 +723,14 @@ case  empty(::p_oSQLConnection:p_hWharfConfig)
     ::p_ErrorMessage := [WharfConfig structure required]
 endcase
 
+if empty(::p_ErrorMessage) .and. !empty(::p_NamespaceAndTableName)
+    l_aPrimaryKeyInfo      := hb_HGetDef(::p_oSQLConnection:p_hTablePrimaryKeyInfo,::p_NamespaceAndTableName,{"",""})
+    l_cPrimaryKeyFieldName := l_aPrimaryKeyInfo[PRIMARY_KEY_INFO_NAME]
+    if empty(l_cPrimaryKeyFieldName)
+        ::p_ErrorMessage := [Failed to find Primary Field Name.]
+    endif
+endif
+
 if empty(::p_ErrorMessage)
     do case
     case len(::p_FieldsAndValues) == 0
@@ -713,7 +740,7 @@ if empty(::p_ErrorMessage)
         ::p_ErrorMessage = [Missing Table]
         
     case empty(::p_KEY)
-        ::p_ErrorMessage = [Missing ]+::p_PrimaryKeyFieldName
+        ::p_ErrorMessage = [Missing ]+l_cPrimaryKeyFieldName
         
     otherwise
         l_nSelect = iif(used(),select(),0)
@@ -756,7 +783,7 @@ if empty(::p_ErrorMessage)
 
             endfor
 
-            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
             ::p_LastSQLCommand = l_cSQLCommand
             
             if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
@@ -833,7 +860,7 @@ if empty(::p_ErrorMessage)
 
             endfor
 
-            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
+            l_cSQLCommand := [UPDATE ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ SET ]+l_cSQLCommand+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[ = ]+trans(::p_KEY)
 
             ::p_LastSQLCommand = l_cSQLCommand
             
@@ -1036,39 +1063,8 @@ else
             l_cAlias := l_cNamespaceAndTableName
         endif
         ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
+
     else
-        // l_cNamespaceAndTableName := ::NormalizeTableNameInternal(par_cNamespaceAndTableName)
-
-        // if ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL   //empty(::p_NamespaceName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
-        //     l_cNamespaceAndTableName = ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
-        //     if pcount() >= 3 .and. !empty(par_cAlias)
-        //         l_cAlias := lower(par_cAlias)
-        //     else
-        //         l_cAlias := lower(l_cNamespaceAndTableName)
-        //     endif
-        // else
-        //     l_nPos = at(".",par_cNamespaceAndTableName)
-        //     if empty(l_nPos)
-        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(::p_NamespaceName+"."+par_cNamespaceAndTableName)
-        //         l_nPos = at(".",l_cNamespaceAndTableName)
-        //     else
-        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
-        //     endif
-        //     if pcount() >= 3 .and. !empty(par_cAlias)
-        //         l_cAlias := lower(par_cAlias)
-        //     else
-        //         l_cAlias := lower(substr(l_cNamespaceAndTableName,l_nPos+1))
-        //     endif
-        // endif
-        // if empty(l_cNamespaceAndTableName)
-        //     AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".],hb_orm_GetApplicationStack()})
-        //     ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
-        // else
-        //     ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
-        // endif
-
-
-// altd()
         l_cNamespaceAndTableName := ::p_oSQLConnection:NormalizeTableNameInternal(par_cNamespaceAndTableName)
         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(l_cNamespaceAndTableName)
 
@@ -1087,10 +1083,6 @@ else
             ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
             
         endif
-
-
-
-
 
     endif
 
@@ -1120,35 +1112,6 @@ else
         ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
 
     else
-        // if ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL   //empty(::p_NamespaceName)   // Meaning not on HB_ORM_ENGINETYPE_POSTGRESQL
-        //     l_cNamespaceAndTableName = ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
-        //     if pcount() >= 4 .and. !empty(par_cAlias)
-        //         l_cAlias := lower(par_cAlias)
-        //     else
-        //         l_cAlias := lower(l_cNamespaceAndTableName)
-        //     endif
-        // else
-        //     l_nPos = at(".",par_cNamespaceAndTableName)
-        //     if empty(l_nPos)
-        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(::p_NamespaceName+"."+par_cNamespaceAndTableName)
-        //         l_nPos = at(".",l_cNamespaceAndTableName)
-        //     else
-        //         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(par_cNamespaceAndTableName)
-        //     endif
-        //     if pcount() >= 4 .and. !empty(par_cAlias)
-        //         l_cAlias := lower(par_cAlias)
-        //     else
-        //         l_cAlias := lower(substr(l_cNamespaceAndTableName,l_nPos+1))
-        //     endif
-        // endif
-        // if empty(l_cNamespaceAndTableName)
-        //     AAdd(l_aErrors,{par_cNamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find table "]+par_cNamespaceAndTableName+[".],hb_orm_GetApplicationStack()})
-        //     ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
-        // else
-        //     ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
-        // endif
-
-
         l_cNamespaceAndTableName := ::p_oSQLConnection:NormalizeTableNameInternal(par_cNamespaceAndTableName)
         l_cNamespaceAndTableName := ::p_oSQLConnection:CaseTableName(l_cNamespaceAndTableName)
 
@@ -1167,8 +1130,6 @@ else
             ::p_AliasToNamespaceAndTableNames[l_cAlias] := l_cNamespaceAndTableName
             
         endif
-
-
 
     endif
 
@@ -1715,6 +1676,16 @@ local l_nMaxTextLength3
 local l_cEndOfLine    := CRLF
 local l_cColumnIndent := replicate(chr(1),7)
 
+local l_aPrimaryKeyInfo
+local l_cPrimaryKeyFieldName
+
+
+if !empty(::p_NamespaceAndTableName)
+    l_aPrimaryKeyInfo      := hb_HGetDef(::p_oSQLConnection:p_hTablePrimaryKeyInfo,::p_NamespaceAndTableName,{"",""})
+    l_cPrimaryKeyFieldName := l_aPrimaryKeyInfo[PRIMARY_KEY_INFO_NAME]
+endif
+
+
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommand := [SELECT ]
@@ -1730,7 +1701,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cSQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count") + l_cEndOfLine
 
     case empty(l_nNumberOfColumnsToReturn)
-        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName) + l_cEndOfLine
+        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName) + l_cEndOfLine
 
     otherwise
         //Precompute the max length of the Column Expression
@@ -1958,7 +1929,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSQLCommand += [ COUNT(*) AS ]+::p_oSQLConnection:FormatIdentifier("count")+l_cEndOfLine
 
     case empty(l_nNumberOfColumnsToReturn)
-        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+l_cEndOfLine
+        l_cSQLCommand += [ ]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[ AS ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+l_cEndOfLine
 
     otherwise
         //Precompute the max length of the Column Expression
@@ -2542,6 +2513,8 @@ local l_nMaxTextLength1
 local l_nMaxTextLength2
 local l_nMaxTextLength3
 
+local l_aPrimaryKeyInfo
+local l_cPrimaryKeyFieldName
 
 ::p_Key = par_iKey
 
@@ -2549,6 +2522,9 @@ local l_nMaxTextLength3
 ::p_ErrorMessage = ""
 
 l_oResult := NIL
+
+l_aPrimaryKeyInfo      := hb_HGetDef(::p_oSQLConnection:p_hTablePrimaryKeyInfo,::p_NamespaceAndTableName,{"",""})
+l_cPrimaryKeyFieldName := l_aPrimaryKeyInfo[PRIMARY_KEY_INFO_NAME]
 
 do case
 case len(::p_FieldsAndValues) > 0
@@ -2653,9 +2629,9 @@ otherwise
         endfor
         
         if l_nNumberOfWheres == 0
-            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]+l_cEndOfLine
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]+l_cEndOfLine
         else
-            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+l_cEndOfLine
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+l_cEndOfLine
             for l_nCounter = 1 to l_nNumberOfWheres
                 l_cSQLCommand += l_cEndOfLine+ padl([ AND ],7,chr(1))
                 l_cSQLCommand += [(]+::ExpressionToMYSQL("where",::p_Where[l_nCounter])+[)]
@@ -2789,9 +2765,9 @@ otherwise
         endfor
 
         if l_nNumberOfWheres == 0
-            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]+l_cEndOfLine
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+[)]+l_cEndOfLine
         else
-            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(::p_PrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+l_cEndOfLine
+            l_cSQLCommand += [ WHERE (]+::p_oSQLConnection:FormatIdentifier(::p_TableAlias)+[.]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[ = ]+trans(::p_KEY)+l_cEndOfLine
             for l_nCounter = 1 to l_nNumberOfWheres
                 l_cSQLCommand += l_cEndOfLine+ padl([ AND ],7,chr(1))
                 l_cSQLCommand += [(]+::ExpressionToPostgreSQL("where",::p_Where[l_nCounter])+[)]
@@ -3610,7 +3586,6 @@ case len(par_CTime) > 8
 endcase
 
 return l_lResult
-
 //-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
 method SaveFile(par_xEventId,par_cNamespaceAndTableName,par_iKey,par_cOidFieldName,par_cFullPathFileName) class hb_orm_SQLData   // Where par_cFieldName must be of type OID. Will store in PostgreSQL a file using Large Objects

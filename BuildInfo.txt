@@ -1,1 +1,1 @@
-local l_cBuildInfo := "mingw64 release 04/04/2024  3:25:13.38"
+local l_cBuildInfo := "msvc64 debug 05/03/2024 14:23:00.27"

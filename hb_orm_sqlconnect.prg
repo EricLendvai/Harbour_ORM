@@ -166,10 +166,6 @@ if ::Connected
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method SetPrimaryKeyFieldName(par_cName) class hb_orm_SQLConnect
-::p_PrimaryKeyFieldName := par_cName
-return ::p_PrimaryKeyFieldName
-//-----------------------------------------------------------------------------------------------------------------
 method SetCreationTimeFieldName(par_cName) class hb_orm_SQLConnect
 ::p_CreationTimeFieldName := par_cName
 return ::p_CreationTimeFieldName
@@ -178,7 +174,7 @@ method SetModificationTimeFieldName(par_cName) class hb_orm_SQLConnect
 ::p_ModificationTimeFieldName := par_cName
 return ::p_ModificationTimeFieldName
 //-----------------------------------------------------------------------------------------------------------------
-method SetAllSettings(par_cBackendType,par_cDriver,par_Server,par_nPort,par_cUser,par_cPassword,par_cDatabase,par_cSchema,par_cPKFN) class hb_orm_SQLConnect
+method SetAllSettings(par_cBackendType,par_cDriver,par_Server,par_nPort,par_cUser,par_cPassword,par_cDatabase,par_cSchema) class hb_orm_SQLConnect
 if !hb_IsNil(par_cBackendType)
     ::SetBackendType(par_cBackendType)
 endif
@@ -202,9 +198,6 @@ if !hb_IsNil(par_cDatabase)
 endif
 if !hb_IsNil(par_cSchema)
     ::SetCurrentNamespaceName(par_cSchema)
-endif
-if !hb_IsNil(par_cPKFN)
-    ::SetPrimaryKeyFieldName(par_cPKFN)
 endif
 return Self
 //-----------------------------------------------------------------------------------------------------------------
@@ -323,7 +316,7 @@ otherwise
 
         //Load the entire schema
         ::LoadMetadata("Connect")
-        // altd()
+// altd()
 
         if !l_lNoCache
             //AutoFix ORM supporting tables
@@ -1003,10 +996,42 @@ method SetForeignKeyNullAndZeroParity(par_lMode) class hb_orm_SQLConnect
 return nil
 //-----------------------------------------------------------------------------------------------------------------
 method LoadWharfConfiguration(par_hConfig) class hb_orm_SQLConnect
+local l_hReferenceTables
+local l_hReferenceFields
+local l_cReferenceFieldUsedAs
+local l_cReferenceFieldType
+local l_hTable
+local l_hField
+local l_cNamespaceAndTableName
+local l_cColumnName
+
 if !hb_IsNil(par_hConfig) .and. !empty(par_hConfig)
     hb_HMerge(::p_hWharfConfig,par_hConfig)
 endif
 ::p_LoadedWharfConfiguration := .t.
+
+hb_HCaseMatch(::p_hTablePrimaryKeyInfo,.f.)
+
+//Update the list of Table Primary Key field Names and Types
+l_hReferenceTables = hb_HGetDef(::p_hWharfConfig,"Tables",NIL)    //Find the equivalent of the p_hMetadataTable definitions
+if !hb_IsNil(l_hReferenceTables)
+    for each l_hTable in l_hReferenceTables
+        l_cNamespaceAndTableName = l_hTable:__enumKey
+        l_hReferenceFields := hb_HGetDef(l_hTable,HB_ORM_SCHEMA_FIELD,NIL)
+        if !hb_IsNil(l_hReferenceFields)
+            for each l_hField in l_hReferenceFields
+                l_cReferenceFieldUsedAs := hb_HGetDef(l_hField,HB_ORM_SCHEMA_FIELD_USEDAS,NIL)
+                if !hb_IsNil(l_cReferenceFieldUsedAs) .and. l_cReferenceFieldUsedAs == "Primary"
+                    l_cReferenceFieldType := hb_HGetDef(l_hField,HB_ORM_SCHEMA_FIELD_TYPE,"I")
+                    l_cColumnName = l_hField:__enumKey
+                    ::p_hTablePrimaryKeyInfo[l_cNamespaceAndTableName] := {l_cColumnName,l_cReferenceFieldType}
+                    exit
+                endif
+            endfor
+        endif
+    endfor
+endif
+
 return nil
 //-----------------------------------------------------------------------------------------------------------------
 method GetColumnConfiguration(par_cNamespaceAndTableName,par_cFieldName) class hb_orm_SQLConnect
@@ -1014,7 +1039,7 @@ method GetColumnConfiguration(par_cNamespaceAndTableName,par_cFieldName) class h
 static l_cLastDefinitionSignature := ""
 static l_hDefinitionCache := {=>}
 local l_cDefinitionSignature
-local l_hDefinition := {=>}
+local l_hDefinition
 local l_hReference
 local l_cType               := ""
 local l_cUsedAs             := ""
@@ -1093,7 +1118,7 @@ method GetColumnsConfiguration(par_cNamespaceAndTableName) class hb_orm_SQLConne
 static l_cLastDefinitionSignature := ""
 static l_aColumnsCache := {=>}
 local l_cDefinitionSignature
-local l_aColumns := {}
+local l_aColumns
 local l_hFieldDefinition
 local l_hReference
 local l_cHashKey := par_cNamespaceAndTableName
@@ -1192,9 +1217,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             if l_cNamespaceName == "hborm" .and. !(::p_HBORMNamespace == "hborm")
                 l_cNamespaceName := ::p_HBORMNamespace
             endif
-            l_cNamespaceAndTableName := l_cNamespaceName+"."+l_cTableName
-
-            // l_hCurrentTableDefinition := hb_HGetDef(::p_hMetadataTable,l_cNamespaceAndTableName,NIL)
 
             l_hFields := l_hTableDefinition[HB_ORM_SCHEMA_FIELD]
 
@@ -1267,10 +1289,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
                         endif
 
-// if l_cTableName == "Column"
-//     altd()
-// endif
-                        // altd()
                         CloseAlias("hb_orm_ListOfDeletedRecords")
 
                     endif
@@ -1288,14 +1306,6 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 endcase
 
 return nil
-
-
-
-
-
-
-
-
 //-----------------------------------------------------------------------------------------------------------------
 // Find and replace any Zero in Integer type foreign key columns. Used to prepare data to handle foreign key constraints.
 method ForeignKeyConvertAllZeroToNull(par_hTableSchemaDefinition) class hb_orm_SQLConnect
@@ -1311,7 +1321,6 @@ local l_cFieldName
 local l_hFieldDefinition
 local l_cFieldUsedAs
 local l_cSQLCommand
-local l_oCursor
 local l_cFieldType
 
 if ::UpdateSchemaCache()

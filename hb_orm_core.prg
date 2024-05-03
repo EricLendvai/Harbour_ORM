@@ -48,9 +48,6 @@ return NIL
 method AddField(par_cName,par_xValue) class hb_orm_Data
 ::p_FieldValues[par_cName] := par_xValue
 return NIL
-
-
-
 //=================================================================================================================
 function hb_orm_PostgresqlEncodeUTF8String(par_cString,par_cAdditionalCharactersToEscape)
 //https://www.postgresql.org/docs/current/sql-syntax-lexical.html    4.1.2.2. String Constants with C-Style Escapes

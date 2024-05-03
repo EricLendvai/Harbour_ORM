@@ -29,7 +29,6 @@ method UseConnection(par_oSQLConnection) class hb_orm_SQLCompoundQuery
 ::p_ConnectionNumber          := ::p_oSQLConnection:GetConnectionNumber()
 ::p_Database                  := ::p_oSQLConnection:GetDatabase()
 ::p_NamespaceName             := ::p_oSQLConnection:GetCurrentNamespaceName()   // Will "Freeze" the current connection p_NamespaceName
-::p_PrimaryKeyFieldName       := ::p_oSQLConnection:GetPrimaryKeyFieldName()
 ::p_CreationTimeFieldName     := ::p_oSQLConnection:GetCreationTimeFieldName()
 ::p_ModificationTimeFieldName := ::p_oSQLConnection:GetModificationTimeFieldName()
 return Self
@@ -92,7 +91,6 @@ local l_nReplaceCounter := 0
 local l_cSubstituteString
 local l_oSQLData
 local l_cAlias
-
 
 if len(::p_aSQLCTQueries) > 0
     l_cSQLCommand := "WITH "
@@ -490,50 +488,6 @@ if len(l_aErrors) > 0
 endif
 
 return l_xResult
-//-----------------------------------------------------------------------------------------------------------------
-// method Count() class hb_orm_SQLCompoundQuery                                          // Similar to SQL() but will not get the list of Column() and return a numeric, the number or records found. Will return -1 in case of error.
-
-// local l_cCursorTempName
-// local l_nSelect := iif(used(),select(),0)
-// local l_cSQLCommand
-// local l_nTimeEnd
-// local l_nTimeStart
-// local l_lSQLResult
-// local l_aErrors := {}
-
-// ::Tally          := -1
-// ::p_ErrorMessage := ""
-
-// l_cSQLCommand := ::BuildSQL("Count")  //_M_ 
-
-// l_cCursorTempName := "c_DB_Temp"
-
-// l_nTimeStart := seconds()
-// l_lSQLResult := ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
-// l_nTimeEnd := seconds()
-// ::p_LastRunTime := l_nTimeEnd-l_nTimeStart+0.0000
-
-// if !l_lSQLResult
-//     AAdd(l_aErrors,{::p_cAnchorAlias,NIL,[Failed SQLExec in :Count().],hb_orm_GetApplicationStack()})
-
-// else
-//     if (l_cCursorTempName)->(reccount()) == 1
-//         ::Tally := (l_cCursorTempName)->(FieldGet(1))
-//     else
-//         AAdd(l_aErrors,{::p_cAnchorAlias,NIL,[Did not return a single row in :Count().],hb_orm_GetApplicationStack()})
-//     endif
-// endif
-// CloseAlias(l_cCursorTempName)
-
-// select (l_nSelect)
-
-// if len(l_aErrors) > 0
-//     ::p_ErrorMessage := l_aErrors
-//     ::p_oSQLConnection:LogErrorEvent(::p_cEventId,l_aErrors)
-// endif
-
-// return ::Tally
-//-----------------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------
 method AnchorAlias(par_xEventId,par_cAlias) class hb_orm_SQLCompoundQuery
 

@@ -14,7 +14,6 @@ class hb_orm_SQLCompoundQuery
         data p_Database                    init ""
         data p_NamespaceName               init ""
 
-        data p_PrimaryKeyFieldName         init "key"        // Primary Key Field Name
         data p_CreationTimeFieldName       init "sysc"       // Creation Time Field Name
         data p_ModificationTimeFieldName   init "sysm"       // Modification Time Field Name
 
