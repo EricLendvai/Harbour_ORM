@@ -316,8 +316,6 @@ otherwise
 
         //Load the entire schema
         ::LoadMetadata("Connect")
-// altd()
-
         if !l_lNoCache
             //AutoFix ORM supporting tables
             if ::UpdateORMSupportSchema()  //l_cBackendType
@@ -1034,6 +1032,56 @@ endif
 
 return nil
 //-----------------------------------------------------------------------------------------------------------------
+method GetTableConfiguration(par_cNamespaceAndTableName) class hb_orm_SQLConnect
+
+static l_cLastDefinitionSignature := ""
+static l_hDefinitionCache := {=>}
+local l_cDefinitionSignature
+local l_hDefinition
+local l_hReference
+local l_cAKA      := ""
+local l_lUnlogged := .f.
+local l_cHashKey := iif(::p_ForeignKeyNullAndZeroParity,"T","F")+par_cNamespaceAndTableName
+
+l_cDefinitionSignature := hb_HGetDef(::p_hWharfConfig,"GenerationSignature","")
+if empty(l_cDefinitionSignature)
+    // No Loaded Wharf Configuration
+    l_hDefinition := {=>}
+else
+    //Purge Cache if DefinitionSignature changed
+    if !(l_cDefinitionSignature == l_cLastDefinitionSignature)
+        l_hDefinitionCache := {=>}
+        l_cLastDefinitionSignature := l_cDefinitionSignature
+    endif
+
+    //Try to load from Cache
+    l_hDefinition := hb_HGetDef(l_hDefinitionCache,l_cHashKey,{=>})
+
+    //No Cache Entry
+    if empty(l_hDefinition)
+        // Find out if we are getting or setting a Foreign Key at is Nullable and if 0 is equivalent to NULL
+        l_hReference = hb_HGetDef(::p_hWharfConfig,"Tables",NIL)    //Find the equivalent of the p_hMetadataTable definitions
+        if !hb_IsNil(l_hReference)
+            l_hReference := hb_HGetDef(l_hReference,par_cNamespaceAndTableName,NIL)       //Find the Table definition
+            if !hb_IsNil(l_hReference)
+                l_cAKA      := hb_HGetDef(l_hReference,"AKA"                ,"")
+                l_lUnlogged := hb_HGetDef(l_hReference,"Unlogged"             ,.f.)
+            endif
+        endif
+
+        l_hDefinition := {"AKA"                =>l_cAKA      ,;
+                          "Unlogged"           =>l_lUnlogged  ;
+                          }
+
+        //Add to cache
+        l_hDefinitionCache[l_cHashKey] := hb_HClone(l_hDefinition)
+
+    endif
+
+endif
+
+return l_hDefinition
+//-----------------------------------------------------------------------------------------------------------------
 method GetColumnConfiguration(par_cNamespaceAndTableName,par_cFieldName) class hb_orm_SQLConnect
 
 static l_cLastDefinitionSignature := ""
@@ -1041,6 +1089,7 @@ static l_hDefinitionCache := {=>}
 local l_cDefinitionSignature
 local l_hDefinition
 local l_hReference
+local l_cAKA                := ""
 local l_cType               := ""
 local l_cUsedAs             := ""
 local l_cParentTable        := ""
@@ -1080,6 +1129,7 @@ else
                 if !hb_IsNil(l_hReference)
                     l_hReference := hb_HGetDef(l_hReference,par_cFieldName,NIL)            //Find the column definition
                     if !hb_IsNil(l_hReference)
+                        l_cAKA                := hb_HGetDef(l_hReference,"AKA"                ,"")
                         l_cType               := hb_HGetDef(l_hReference,"Type"               ,"?")
                         l_cUsedAs             := hb_HGetDef(l_hReference,"UsedAs"             ,"")
                         l_cParentTable        := hb_HGetDef(l_hReference,"ParentTable"        ,"")
@@ -1093,7 +1143,8 @@ else
             endif
         endif
 
-        l_hDefinition := {"Type"               =>l_cType               ,;
+        l_hDefinition := {"AKA"                =>l_cAKA                ,;
+                          "Type"               =>l_cType               ,;
                           "UsedAs"             =>l_cUsedAs             ,;
                           "ParentTable"        =>l_cParentTable        ,;
                           "IsNullable"         =>l_lIsNullable         ,;

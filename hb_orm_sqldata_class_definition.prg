@@ -85,7 +85,7 @@ class hb_orm_SQLData
         method PrepValueForMySQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_hFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method PrepValueForPostgreSQL(par_cAction,par_xValue,par_cTableName,par_nKey,par_cFieldName,par_hFieldInfo,l_aAutoTrimmedFields,l_aErrors)
         method SetEventId(par_xId)                                                  // Called by Table() and Delete(). Used to identify SQL(), Add(), Update(), Delete() query and updates in logs, including error logs. par_xId may be a number of string. Numbers will be converted to string. Id must be max HB_ORM_MAX_EVENTID_SIZE character long.
-        method FieldSet(par_cName,par_nType,par_xValue)                             // Called by all other Field* methods. par_nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array
+        method FieldSet(par_cName,par_nType,par_xValue,par_nPrecision)              // Called by all other Field* methods. par_nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array, 4 = Time with precision
         method GetPostgreSQLCastForFieldType(par_cFieldType,par_nFieldLen,par_nFieldDec)   // Used by :Add() and :Update()
     exported:
         data Tally init 0 READONLY

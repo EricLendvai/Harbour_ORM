@@ -175,7 +175,7 @@ else
 endif
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
-method FieldSet(par_cName,par_nType,par_xValue) class hb_orm_SQLData                         // Called by all other Field* methods. par_nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array
+method FieldSet(par_cName,par_nType,par_xValue,par_nPrecision) class hb_orm_SQLData                         // Called by all other Field* methods. par_nType 1 = Regular Value, 2 = Server Side Expression, 3 = Array, 4 = Time with precision
 local l_xResult := NIL
 
 local l_cFieldName
@@ -190,7 +190,7 @@ if !empty(par_cName)
     if l_nPos > 0
         l_cFieldName := substr(l_cFieldName,l_nPos+1)
     endif
-
+    
     l_cFieldName := ::p_oSQLConnection:CaseFieldName(::p_NamespaceAndTableName,l_cFieldName)
     if empty(l_cFieldName)
         AAdd(l_aErrors,{::p_NamespaceAndTableName,NIL,[Auto-Casing Error: Failed To find Field "]+par_cName+["],hb_orm_GetApplicationStack()})
@@ -198,11 +198,15 @@ if !empty(par_cName)
     else
         l_hColumnDefinition := ::p_oSQLConnection:GetColumnConfiguration(::p_NamespaceAndTableName,l_cFieldName)
 
-        if pcount() == 3
-           if l_hColumnDefinition["NullZeroEquivalent"] .and. (ValType(par_xValue) == "N") .and. (par_xValue == 0)
-                ::p_FieldsAndValues[l_cFieldName] := {par_nType,nil}
+        if pcount() >= 3
+            if par_nType == 4
+                ::p_FieldsAndValues[l_cFieldName] := {par_nType,par_xValue,par_nPrecision}
             else
-                ::p_FieldsAndValues[l_cFieldName] := {par_nType,par_xValue}
+                if l_hColumnDefinition["NullZeroEquivalent"] .and. (ValType(par_xValue) == "N") .and. (par_xValue == 0)
+                    ::p_FieldsAndValues[l_cFieldName] := {par_nType,nil       ,nil}
+                else
+                    ::p_FieldsAndValues[l_cFieldName] := {par_nType,par_xValue,nil}
+                endif
             endif
         else
             l_xResult := hb_HGetDef(::p_FieldsAndValues, l_cFieldName, NIL)
@@ -224,11 +228,25 @@ local l_xResult
 if pcount() == 1
     l_xResult := ::FieldSet(par_cName)
 else
-    if ValType( par_xValue ) == "A" .and. par_xValue[1] == "S"
-        l_xResult := ::FieldSet(par_cName,2,par_xValue[2])
+    // if ValType( par_xValue ) == "A" .and. par_xValue[1] == "S"
+    //     l_xResult := ::FieldSet(par_cName,2,par_xValue[2])
+    // else
+    //     l_xResult := ::FieldSet(par_cName,1,par_xValue)
+    // endif
+
+    if ValType( par_xValue ) == "A" 
+        do case
+        case left(par_xValue[1],1) == "S"   // Server side value
+            l_xResult := ::FieldSet(par_cName,2,par_xValue[2])
+        case left(par_xValue[1],1) == "T"   // A Harbour Time with precision
+            l_xResult := ::FieldSet(par_cName,4,par_xValue[2],par_xValue[3])
+        otherwise
+            l_xResult := ::FieldSet(par_cName,1,par_xValue)
+        endcase
     else
         l_xResult := ::FieldSet(par_cName,1,par_xValue)
     endif
+
 endif
 return l_xResult
 //-----------------------------------------------------------------------------------------------------------------
@@ -333,6 +351,7 @@ local l_xKeyFieldValue
 local l_nPos
 local l_aPrimaryKeyInfo
 local l_cPrimaryKeyFieldName
+local l_lNonDefaultKey := .f.
 
 ::p_ErrorMessage := ""
 ::Tally          := 0
@@ -368,6 +387,7 @@ if empty(::p_ErrorMessage)
                     //Used in case the KEY field is not auto-increment
                     l_cFields := ::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)
                     l_cValues := Trans(par_iKey)
+                    l_lNonDefaultKey := .t.
                 else
                     l_cFields := ""
                     l_cValues := ""
@@ -407,6 +427,11 @@ if empty(::p_ErrorMessage)
                         exit
                     case 2  // Expression
                         l_cFieldValue := l_aValue[2]
+                        exit
+                    case 3  // Array
+                        loop
+                    case 4  // Time with precision
+                        l_cFieldValue := ::FormatDateTimeForSQLUpdate(l_aValue[2],l_aValue[3])
                         exit
                     otherwise
                         loop
@@ -462,6 +487,7 @@ if empty(::p_ErrorMessage)
                     //Used in case the KEY field is not auto-increment
                     l_cFields := ::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)
                     l_cValues := Trans(par_iKey)
+                    l_lNonDefaultKey := .t.
                 else
                     l_cFields := ""
                     l_cValues := ""
@@ -525,6 +551,9 @@ if empty(::p_ErrorMessage)
                                                                             hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0),;
                                                                             hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0))+"[]"
                         exit
+                    case 4  // Time with precision
+                        l_cFieldValue := ::FormatDateTimeForSQLUpdate(l_aValue[2],l_aValue[3])
+                        exit
                     otherwise
                         loop
                     endswitch
@@ -538,8 +567,12 @@ if empty(::p_ErrorMessage)
 
                 endfor
 
-                l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ (]+l_cFields+[) VALUES (]+l_cValues+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)
-                
+                l_cSQLCommand := [INSERT INTO ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(::p_NamespaceAndTableName))+[ (]+l_cFields+[)]
+                if l_lNonDefaultKey
+                    l_cSQLCommand += [ OVERRIDING SYSTEM VALUE]
+                endif
+                l_cSQLCommand += [ VALUES (]+l_cValues+[) RETURNING ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)
+
                 // l_cSQLCommand := strtran(l_cSQLCommand,"->",".")  // Harbour can use  "table->field" instead of "table.field"
 
                 ::p_LastSQLCommand = l_cSQLCommand
@@ -772,6 +805,11 @@ if empty(::p_ErrorMessage)
                 case 2  // Expression
                     l_cFieldValue := l_aValue[2]
                     exit
+                case 3  // Array
+                    loop
+                case 4  // Time with precision
+                    l_cFieldValue := ::FormatDateTimeForSQLUpdate(l_aValue[2],l_aValue[3])
+                    exit
                 otherwise
                     loop
                 endswitch
@@ -848,6 +886,9 @@ if empty(::p_ErrorMessage)
                     l_cFieldValue += "]::"+::GetPostgreSQLCastForFieldType(l_hFieldInfo[HB_ORM_SCHEMA_FIELD_TYPE],;
                                                                            hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_LENGTH,0),;
                                                                            hb_HGetDef(l_hFieldInfo,HB_ORM_SCHEMA_FIELD_DECIMALS,0))+"[]"
+                    exit
+                case 4  // Time with precision
+                    l_cFieldValue := ::FormatDateTimeForSQLUpdate(l_aValue[2],l_aValue[3])
                     exit
                 otherwise
                     loop
@@ -3354,7 +3395,7 @@ else
     case "DT" // Date Time without time zone
     case  "T" // Date Time without time zone
         if l_cValueType == "T"
-            l_cValue := ::FormatDateTimeForSQLUpdate(par_xValue,3)
+            l_cValue := ::FormatDateTimeForSQLUpdate(par_xValue,0)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Datetime',hb_orm_GetApplicationStack()})
             l_lResult := .f.

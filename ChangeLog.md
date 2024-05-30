@@ -1,5 +1,12 @@
 # Harbour ORM - Change Log
 
+## 05/30/2024 V 4.9
+* Enhanced connection method GetColumnConfiguration to also include Column AKA.
+* New connection method GetTableConfiguration(par_cNamespaceAndTableName).
+* Fix Add method in PostgreSQL to allow to specify a primary key for its optional parameter.
+* Fix Add() method in PostgreSQL when setting a blob field with a all blank character string.
+* Fix on redundant schema structure loading.
+
 ## 05/03/2024 V 4.8
 * Discontinued the use of the methods SetPrimaryKeyFieldName() and GetPrimaryKeyFieldName().   
   The are no longer needed since we are now using WharfConfig, which does specify the primary key for every tables.

@@ -159,6 +159,8 @@ class hb_orm_SQLConnect
         method SetForeignKeyNullAndZeroParity(par_lMode)                                   // If should make Zero values stored as Null when used for Foreign Keys
         method GetForeignKeyNullAndZeroParity() inline ::p_ForeignKeyNullAndZeroParity
         method LoadWharfConfiguration(par_hConfig)                                         // Register a DataWharf Configuration
+
+        method GetTableConfiguration(par_cNamespaceAndTableName)                           // Get Table Configuration
         method GetColumnConfiguration(par_cNamespaceAndTableName,par_cFieldName)           // Get Column Configuration
         method GetColumnsConfiguration(par_cNamespaceAndTableName)                         // Returns an array of column names
 

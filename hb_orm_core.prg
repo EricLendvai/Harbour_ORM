@@ -60,7 +60,7 @@ local l_nNumberOfBytesOfTheCharacter := 0
 local l_cAdditionalCharactersToEscape := hb_DefaultValue(par_cAdditionalCharactersToEscape,"")
 
 if empty(par_cString)
-    l_cEncodedText := []
+    l_cEncodedText := [']+par_cString+[']   //It could be a long string with only blanks
 else
     l_cEncodedText := [E']
 
