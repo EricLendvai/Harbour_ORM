@@ -148,7 +148,7 @@ if !empty(par_cAlias) .and. (par_cAlias)->(used())
                             for l_nFieldCounter := 1 to l_nNumberOfFields
                                 l_xFieldValue   := FieldGet(l_nFieldCounter)
                                 l_xFieldNilInfo := DBFieldInfo( DBS_ISNULL, l_nFieldCounter )
-                                if ((!hb_IsNIL(l_xFieldNilInfo) .and. l_xFieldNilInfo) .or. hb_IsNIL(l_xFieldValue))   //Method to handle mem:tables and SQLMIX tables
+                                if ((!hb_IsNil(l_xFieldNilInfo) .and. l_xFieldNilInfo) .or. hb_IsNil(l_xFieldValue))   //Method to handle mem:tables and SQLMIX tables
                                     l_html_record += '<td class="isnull"></td>'
                                 else
                                     do case

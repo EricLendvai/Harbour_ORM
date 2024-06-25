@@ -267,7 +267,7 @@ if ((select(par_cAliasName)>0)) //Alias is in use.
     if l_nFieldCounter > 0
         l_xFieldValue   := (par_cAliasName)->(FieldGet(l_nFieldCounter))
         l_xFieldNilInfo := (par_cAliasName)->(DBFieldInfo( DBS_ISNULL, l_nFieldCounter ))
-        l_lResult := ((!hb_IsNIL(l_xFieldNilInfo) .and. l_xFieldNilInfo) .or. hb_IsNIL(l_xFieldValue))   //Method to handle mem:tables and SQLMIX tables
+        l_lResult := ((!hb_IsNil(l_xFieldNilInfo) .and. l_xFieldNilInfo) .or. hb_IsNil(l_xFieldValue))   //Method to handle mem:tables and SQLMIX tables
     endif
 endif
 

@@ -26,9 +26,14 @@ class hb_orm_SQLConnect
         data p_SQLExecErrorMessage         init ""
         data p_DoNotReportErrors           init .f.
         data p_iMetadataTableCacheLogLastPk   init 0            // Used in case of schema caching
-        data p_HBORMNamespace              init "hborm"      // The name of the postgresql schema (in a database), that will hold the log, cache files and trigger to speed up schema structure queries, and other hb_orm managed tables
-        data p_ForeignKeyNullAndZeroParity init .f.                      //If 0 should be stored as NULL and NULL returned as 0 for Nullable Foreign keys. Makes it easier to query field ( "= 0" same as "IS NULL")
+        data p_HBORMNamespace              init "hborm"         // The name of the postgresql schema (in a database), that will hold the log, cache files and trigger to speed up schema structure queries, and other hb_orm managed tables
+        data p_ForeignKeyNullAndZeroParity init .f.             // If 0 should be stored as NULL and NULL returned as 0 for Nullable Foreign keys. Makes it easier to query field ( "= 0" same as "IS NULL")
         data p_LoadedWharfConfiguration    init .f.
+        data p_fk_User                     init nil
+        data p_ApplicationVersion          init nil
+        data p_ApplicationBuildInfo        init nil
+        data p_TimeZoneName                init "UTC"           // Default Time Zone
+        data p_cLastConnectTimestamp       init ""              // In Postgresql will be the last time the connection was checked when calling CheckIfStillConnected()
         
         classdata MaxDigitsInTableNumber  init  5  // Needed for the lock/unlock methods. With 5 digits we should have less than 99999 tables.
         classdata ReservedWordsMySQL      init {"ACCESSIBLE","ADD","ALL","ALTER","ANALYZE","AND","AS","ASC","ASENSITIVE","BEFORE","BETWEEN","BIGINT","BINARY","BLOB","BOTH","BY","CALL","CASCADE","CASE","CHANGE","CHAR","CHARACTER","CHECK","COLLATE","COLUMN","CONDITION","CONSTRAINT","CONTINUE","CONVERT","CREATE","CROSS","CUBE","CUME_DIST","CURRENT_DATE","CURRENT_TIME","CURRENT_TIMESTAMP","CURRENT_USER","CURSOR","DATABASE","DATABASES","DAY_HOUR","DAY_MICROSECOND","DAY_MINUTE","DAY_SECOND","DEC","DECIMAL","DECLARE","DEFAULT","DELAYED","DELETE","DENSE_RANK","DESC","DESCRIBE","DETERMINISTIC","DISTINCT","DISTINCTROW","DIV","DOUBLE","DROP","DUAL","EACH","ELSE","ELSEIF","EMPTY","ENCLOSED","ESCAPED","EXCEPT","EXISTS","EXIT","EXPLAIN","FALSE","FETCH","FIRST_VALUE","FLOAT","FLOAT4","FLOAT8","FOR","FORCE","FOREIGN","FROM","FULLTEXT","FUNCTION","GENERATED","GET","GRANT","GROUP","GROUPING","GROUPS","HAVING","HIGH_PRIORITY","HOUR_MICROSECOND","HOUR_MINUTE","HOUR_SECOND","IF","IGNORE","IN","INDEX","INFILE","INNER","INOUT","INSENSITIVE","INSERT","INT","INT1","INT2","INT3","INT4","INT8","INTEGER","INTERVAL","INTO","IO_AFTER_GTIDS","IO_BEFORE_GTIDS","IS","ITERATE","JOIN","JSON_TABLE","KEY","KEYS","KILL","LAG","LAST_VALUE","LATERAL","LEAD","LEADING","LEAVE","LEFT","LIKE","LIMIT","LINEAR","LINES","LOAD","LOCALTIME","LOCALTIMESTAMP","LOCK","LONG","LONGBLOB","LONGTEXT","LOOP","LOW_PRIORITY","MASTER_BIND","MASTER_SSL_VERIFY_SERVER_CERT","MATCH","MAXVALUE","MEDIUMBLOB","MEDIUMINT","MEDIUMTEXT","MIDDLEINT","MINUTE_MICROSECOND","MINUTE_SECOND","MOD","MODIFIES","NATURAL","NOT","NO_WRITE_TO_BINLOG","NTH_VALUE","NTILE","NULL","NUMERIC","OF","ON","OPTIMIZE","OPTIMIZER_COSTS","OPTION","OPTIONALLY","OR","ORDER","OUT","OUTER","OUTFILE","OVER","PARTITION","PERCENT_RANK","PRECISION","PRIMARY","PROCEDURE","PURGE","RANGE","RANK","READ","READS","READ_WRITE","REAL","RECURSIVE","REFERENCES","REGEXP","RELEASE","RENAME","REPEAT","REPLACE","REQUIRE","RESIGNAL","RESTRICT","RETURN","REVOKE","RIGHT","RLIKE","ROW","ROWS","ROW_NUMBER","SCHEMA","SCHEMAS","SECOND_MICROSECOND","SELECT","SENSITIVE","SEPARATOR","SET","SHOW","SIGNAL","SMALLINT","SPATIAL","SPECIFIC","SQL","SQLEXCEPTION","SQLSTATE","SQLWARNING","SQL_BIG_RESULT","SQL_CALC_FOUND_ROWS","SQL_SMALL_RESULT","SSL","STARTING","STORED","STRAIGHT_JOIN","SYSTEM","TABLE","TERMINATED","THEN","TINYBLOB","TINYINT","TINYTEXT","TO","TRAILING","TRIGGER","TRUE","UNDO","UNION","UNIQUE","UNLOCK","UNSIGNED","UPDATE","USAGE","USE","USING","UTC_DATE","UTC_TIME","UTC_TIMESTAMP","VALUES","VARBINARY","VARCHAR","VARCHARACTER","VARYING","VIRTUAL","WHEN","WHERE","WHILE","WINDOW","WITH","WRITE","XOR","YEAR_MONTH","ZEROFILL"}
@@ -169,6 +174,25 @@ class hb_orm_SQLConnect
         method GenerateMigrateForeignKeyConstraintsScript(par_hTableSchemaDefinition,par_lSimulationMode,par_hAppliedRenameNamespace,par_hAppliedRenameTable,par_hAppliedRenameColumn)      // Generate the Script to Add/Update if missing any Foreign Key Constraint that and with "_fkc"
         method MigrateForeignKeyConstraints(par_hTableSchemaDefinition)                    // Add/Update if missing any Foreign Key Constraint that and with "_fkc"
         method ForeignKeyConvertAllZeroToNull(par_hTableSchemaDefinition)                  // Find and replace any Zero in Integer type foreign key columns. Used to prepare data to handle foreign key constraints.
+
+        method SetCurrentUserPk(par_iKey)  inline ::p_fk_User := par_iKey ,par_iKey // Records the primary key to a User, to be used when a data error occurs.   Parameter can be a Big Integer.
+        method ClearCurrentUserPk()        inline ::p_fk_User := nil      , nil     // Clear the primary key to a User.
+        method GetCurrentUserPk()          inline ::p_fk_User                       // Returns previously set key to User.
+
+        method SetApplicationVersion(par_cText)  inline ::p_ApplicationVersion := strtran(par_cText,"'","") ,strtran(par_cText,"'","")     // To be used when a data error occurs.
+        method ClearApplicationVersion()         inline ::p_ApplicationVersion := nil      , nil
+        method GetApplicationVersion()           inline ::p_ApplicationVersion
+
+        method SetApplicationBuildInfo(par_cText)  inline ::p_ApplicationBuildInfo := strtran(par_cText,"'","") ,strtran(par_cText,"'","") // To be used when a data error occurs.
+        method ClearApplicationBuildInfo()         inline ::p_ApplicationBuildInfo := nil      , nil
+        method GetApplicationBuildInfo()           inline ::p_ApplicationBuildInfo
+        
+        method SetTimeZoneName(par_cName)  inline ::p_TimeZoneName := par_cName,par_cName
+        method ClearTimeZoneName()         inline ::p_TimeZoneName := "UTC"
+        method GetTimeZoneName()           inline ::p_TimeZoneName
+
+        method GetLastCheckConnectionUTCTime()
+        method GetCurrentTimeInTimeZoneAsText(par_cTimeZone)
 
     DESTRUCTOR destroy()
         

@@ -525,8 +525,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                 l_cSQLCommandIndexes += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace)+::FixCasingOfSchemaCacheTables([."SchemaCacheIndexes_])+[p_iMetadataTableCacheLogLastPk]+["]
                 l_cSQLCommandIndexes += [ ORDER BY tag1,tag2,index_name]
 
-                if       ::SQLExec("LoadMetadata",strtran(l_cSQLCommandFields ,"p_iMetadataTableCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
-                .and. ::SQLExec("LoadMetadata",strtran(l_cSQLCommandIndexes,"p_iMetadataTableCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
+                if ::SQLExec("LoadMetadata",strtran(l_cSQLCommandFields ,"p_iMetadataTableCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_fields") ;
+                   .and. ::SQLExec("LoadMetadata",strtran(l_cSQLCommandIndexes,"p_iMetadataTableCacheLogLastPk",trans(SchemaCacheLogLast->pk)),"hb_orm_sqlconnect_schema_indexes")
                     l_lLoadedCache := .t.
                     ::p_iMetadataTableCacheLogLastPk := SchemaCacheLogLast->pk
                 else
@@ -1251,7 +1251,7 @@ if !empty( hb_hGetDef(par_hWharfConfig,"Enumerations",{=>}) )
                 l_hEnumValues := hb_hGetDef(l_hEnumerationDefinition,"Values",{=>})
                 if len(l_hEnumValues) > 0
                     l_hCurrentEnumerationDefinition := hb_HGetDef(::p_hMetadataEnumeration,l_cNamespaceAndEnumerationName,NIL)
-                    if hb_IsNIL(l_hCurrentEnumerationDefinition)
+                    if hb_IsNil(l_hCurrentEnumerationDefinition)
                         // Enumeration does not exists
                         l_cSQLScript += [CREATE TYPE ]+::FormatIdentifier(l_cNamespaceName)+[.]+::FormatIdentifier(l_cEnumerationName)+[ AS ENUM (]
                         l_lProcessedValue := .f.
@@ -1344,14 +1344,14 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
     l_aPrimaryKeyInfo      := hb_HGetDef(l_hTablePrimaryKeyInfo,l_cNamespaceAndTableName,{"",""})
     l_cPrimaryKeyFieldName := l_aPrimaryKeyInfo[PRIMARY_KEY_INFO_NAME]
 
-    if hb_IsNIL(l_hCurrentTableDefinition)
+    if hb_IsNil(l_hCurrentTableDefinition)
 
         // Table does not exist in the current catalog
         hb_orm_SendToDebugView("Add Table: "+l_cNamespaceAndTableName)
         l_cSQLScript += ::GMSSAddTable(l_hTablePrimaryKeyInfo,l_cNamespaceName,l_cTableName,l_hFields,l_lUnlogged)
         
         // Add all the indexes
-        if !hb_IsNIL(l_hIndexes)
+        if !hb_IsNil(l_hIndexes)
             for each l_hIndex in l_hIndexes
                 l_cIndexName       := lower(l_hIndex:__enumKey())
                 l_hIndexDefinition := l_hIndex:__enumValue()
@@ -1436,7 +1436,7 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
             endif
 
             l_hCurrentFieldDefinition := hb_HGetDef(::p_hMetadataTable[l_cNamespaceAndTableName][HB_ORM_SCHEMA_FIELD],l_cFieldName,NIL)
-            if hb_IsNIL(l_hCurrentFieldDefinition)
+            if hb_IsNil(l_hCurrentFieldDefinition)
                 //Missing Field
                 hb_orm_SendToDebugView("Table: "+l_cNamespaceAndTableName+" Add Field: "+l_cFieldName)
 
@@ -1578,7 +1578,7 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
         //Clone the list of existing indexes, so to search them and remove the ones we don't have defined afterwards
         l_hExistingIndexesOfExistingTable := hb_Deserialize(hb_Serialize(nvl(hb_HGetDef(::p_hMetadataTable[l_cNamespaceAndTableName],HB_ORM_SCHEMA_INDEX,{=>}),{=>})))
 
-        if !hb_IsNIL(l_hIndexes)
+        if !hb_IsNil(l_hIndexes)
             for each l_hIndex in l_hIndexes
 
                 // l_cIndexName       := hb_orm_RootIndexName(l_cTableName,l_hIndex:__enumKey())
@@ -1598,7 +1598,7 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
                         l_hCurrentIndexDefinition := hb_HGetDef(l_hExistingIndexesOfExistingTable,l_cIndexNameOnFile,NIL)  //l_cIndexName
                     endif
                     
-                    if hb_IsNIL(l_hCurrentIndexDefinition)
+                    if hb_IsNil(l_hCurrentIndexDefinition)
                         //Missing Index
                         hb_orm_SendToDebugView("Table: "+l_cNamespaceAndTableName+" Add Index: "+l_cIndexNameOnFile)  //l_cIndexName
                         l_cSQLScript += ::GMSSAddIndex(l_cNamespaceName,l_cTableName,l_hFields,l_cIndexName,l_cIndexStaticUID,l_hIndexDefinition)  //Passing l_hFields to help with index expressions
@@ -3738,55 +3738,71 @@ local l_PreviousNamespaceName
 local l_hWharfConfig
 
 l_hWharfConfig := ;
-    {"DataWharfVersion"=>4.3,;
-     "Enumerations"=>{=>},;
-     "Tables"=>;
-        {"hborm.SchemaAndDataErrorLog"=>{HB_ORM_SCHEMA_FIELD=>;
-            {"pk"            =>{"Type"=>"IB","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
-            ,"eventid"       =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
-            ,"datetime"      =>{"Type"=>"DTZ"};
-            ,"ip"            =>{"Type"=>"CV","Length"=>43};
-            ,"namespacename" =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
-            ,"tablename"     =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
-            ,"recordpk"      =>{"Type"=>"IB","Nullable"=>.t.};
-            ,"errormessage"  =>{"Type"=>"M","Nullable"=>.t.};
-            ,"appstack"      =>{"Type"=>"M","Nullable"=>.t.}};
-                                    };
-        ,"hborm.SchemaAutoTrimLog"=>{HB_ORM_SCHEMA_FIELD=>;
-            {"pk"            =>{"Type"=>"IB","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
-            ,"eventid"       =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
-            ,"datetime"      =>{"Type"=>"DTZ"};
-            ,"ip"            =>{"Type"=>"CV","Length"=>43};
-            ,"namespacename" =>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
-            ,"tablename"     =>{"Type"=>"CV","Length"=>254};
-            ,"recordpk"      =>{"Type"=>"IB"};
-            ,"fieldname"     =>{"Type"=>"CV","Length"=>254};
-            ,"fieldtype"     =>{"Type"=>"C","Length"=>3};
-            ,"fieldlen"      =>{"Type"=>"I"};
-            ,"fieldvaluer"   =>{"Type"=>"R","Nullable"=>.t.};
-            ,"fieldvaluem"   =>{"Type"=>"M","Nullable"=>.t.}};
-                                };
-        ,"hborm.NamespaceTableNumber"=>{HB_ORM_SCHEMA_FIELD=>;
-            {"pk"           =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};   //Will never have more than 2**32 tables.
-            ,"namespacename"=>{"Type"=>"CV","Length"=>254,"Nullable"=>.t.};
-            ,"tablename"    =>{"Type"=>"CV","Length"=>254}};
-                                ,HB_ORM_SCHEMA_INDEX=>;
-            {"namespacename"=>{"Expression"=>"namespacename"};
-            ,"tablename"    =>{"Expression"=>"tablename"}}};
-        ,"hborm.WharfConfig"=>{HB_ORM_SCHEMA_FIELD=>;
-            {"pk"                  =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
-            ,"taskname"            =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};      // Since the pk is not constant it is better to Search/Add by a Task Name
-            ,"datetime"            =>{"Type"=>"DTZ","Nullable"=>.t.};                  // Time the task ran last
-            ,"ip"                  =>{"Type"=>"CV","Length"=>43,"Nullable"=>.t.};      // Where the task ran
-            ,"generationtime"      =>{"Type"=>"CV","Length"=>24,"Nullable"=>.t.};      // The GenerationTime of a WharfConfig structure.
-            ,"generationsignature" =>{"Type"=>"CV","Length"=>36,"Nullable"=>.t.}}};    // The GenerationSignature of a WharfConfig structure.
-        ,"hborm.SchemaVersion"=>{HB_ORM_SCHEMA_FIELD=>;
-            {"pk"     =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
+    {"HarbourORMVersion"=>4.10,;
+    "DataWharfVersion"=>4.11,;
+    "GenerationTime"=>"2024-06-17T06:16:50.950Z",;
+    "GenerationSignature"=>"b0c42201-e0e0-4140-8e91-eefd1255693d",;
+    "Enumerations"=>{=>},;
+    "Tables"=>;
+        {"hborm.SchemaAndDataErrorLog"=>{"Fields"=>;
+            {"pk"                          =>{"UsedAs"=>"Primary","Type"=>"IB","AutoIncrement"=>.t.};
+            ,"fk_schemaanddataerrormessage"=>{"UsedAs"=>"Foreign","ParentTable"=>"hborm.SchemaAndDataErrorMessage","ForeignKeyOptional"=>.t.,"StaticUID"=>"2bbb90d2-f525-4a50-a87c-f9c4c6079b85","Type"=>"IB","Nullable"=>.t.,"OnDelete"=>"Protect"};   //Set as optional due to past structure, when SchemaAndDataErrorMessage table did not exists.
+            ,"eventid"                     =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
+            ,"datetime"                    =>{"Type"=>"DTZ"};
+            ,"ip"                          =>{"Type"=>"CV","Length"=>43};
+            ,"schemaname"                  =>{"Type"=>"M","Nullable"=>.t.};
+            ,"tablename"                   =>{"Type"=>"M","Nullable"=>.t.};
+            ,"recordpk"                    =>{"Type"=>"IB","Nullable"=>.t.};
+            ,"fk_user"                     =>{"Type"=>"IB","Nullable"=>.t.};   //Not a real foreign key, since it is not application specific. Will be set to a value previously recording by a connection method SetCurrentUserPk(var) To not have a value call connection method ClearCurrentUserPk()
+            ,"applicationversion"          =>{"Type"=>"CV","Length"=>100,"Nullable"=>.t.};   //Will be set to a value previously recording by a connection method SetApplicationVersion(var) To not have a value call connection method ClearApplicationVersion()
+            ,"applicationbuildinfo"        =>{"Type"=>"CV","Length"=>100,"Nullable"=>.t.}};   //Will be set to a value previously recording by a connection method SetApplicationBuildInfo(var) To not have a value call connection method ClearApplicationBuildInfo()
+                                        ,"Indexes"=>;
+            {"applicationbuildinfo"=>{"Expression"=>"applicationbuildinfo","StaticUID"=>"e2ae40ca-8453-47f8-9828-275aaf85f42a"};
+            ,"applicationversion"  =>{"Expression"=>"applicationversion","StaticUID"=>"6672b470-783b-4652-a642-b1898a3d973a"};
+            ,"datetime"            =>{"Expression"=>"datetime","StaticUID"=>"d01e0945-b234-42df-b036-627189d066d6"};
+            ,"fk_user"             =>{"Expression"=>"fk_user","StaticUID"=>"31b27721-ecd6-43b2-84a6-34bf80121d3c"}}};
+        ,"hborm.SchemaAndDataErrorMessage"=>{"Fields"=>;
+            {"pk"          =>{"UsedAs"=>"Primary","Type"=>"IB","AutoIncrement"=>.t.};
+            ,"sha256"      =>{"Type"=>"B","Length"=>32,"Nullable"=>.t.};   //The Sha-256 of the text of AppStack+ErrorMessage.
+            ,"appstack"    =>{"Type"=>"M","Nullable"=>.t.};   //Trace of Application Calling stack
+            ,"errormessage"=>{"Type"=>"M","Nullable"=>.t.}};
+                                            ,"Indexes"=>;
+            {"sha256"=>{"Expression"=>"sha256","StaticUID"=>"c75b91ff-fcfe-4c4e-b091-6139349163b8"}}};
+        ,"hborm.SchemaAutoTrimLog"=>{"Fields"=>;
+            {"pk"                  =>{"UsedAs"=>"Primary","Type"=>"IB","AutoIncrement"=>.t.};
+            ,"eventid"             =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
+            ,"datetime"            =>{"Type"=>"DTZ"};
+            ,"ip"                  =>{"Type"=>"CV","Length"=>43};
+            ,"schemaname"          =>{"Type"=>"CV","Length"=>254};
+            ,"tablename"           =>{"Type"=>"CV","Length"=>254};
+            ,"recordpk"            =>{"Type"=>"IB"};
+            ,"fieldname"           =>{"Type"=>"CV","Length"=>254};
+            ,"fieldtype"           =>{"Type"=>"C","Length"=>3};
+            ,"fieldlen"            =>{"Type"=>"I"};
+            ,"fieldvaluer"         =>{"Type"=>"R","Nullable"=>.t.};   //Field Value of type Raw
+            ,"fieldvaluem"         =>{"Type"=>"M","Nullable"=>.t.};   //Field Value of type Memo
+            ,"fk_user"             =>{"Type"=>"IB","Nullable"=>.t.};   //Not a real foreign key, since it is not application specific. Will be set to a value previously recording by a connection method SetCurrentUserPk(var) To not have a value call connection method ClearCurrentUserPk()
+            ,"applicationversion"  =>{"Type"=>"CV","Length"=>100,"Nullable"=>.t.};   //Will be set to a value previously recording by a connection method SetApplicationVersion(var) To not have a value call connection method ClearApplicationVersion()
+            ,"applicationbuildinfo"=>{"Type"=>"CV","Length"=>100,"Nullable"=>.t.}};   //Will be set to a value previously recording by a connection method SetApplicationBuildInfo(var) To not have a value call connection method ClearApplicationBuildInfo()
+                                    ,"Indexes"=>;
+            {"applicationbuildinfo"=>{"Expression"=>"applicationbuildinfo","StaticUID"=>"deac6c6f-a7da-4fd1-92a0-c74076348f2b"};
+            ,"applicationversion"  =>{"Expression"=>"applicationversion","StaticUID"=>"2d7d3cce-1025-4ea0-988e-d67e804b12cb"};
+            ,"datetime"            =>{"Expression"=>"datetime","StaticUID"=>"a839809d-d4ee-4c3a-931a-7cde4371dbc1"};
+            ,"fk_user"             =>{"Expression"=>"fk_user","StaticUID"=>"b0a73bcb-4057-4c25-8d32-01b6ab2b389d"}}};
+        ,"hborm.SchemaTableNumber"=>{"Fields"=>;
+            {"pk"        =>{"UsedAs"=>"Primary","Type"=>"I","AutoIncrement"=>.t.};   //Will never have more than 2**32 tables.
+            ,"schemaname"=>{"Type"=>"CV","Length"=>254};
+            ,"tablename" =>{"Type"=>"CV","Length"=>254}};
+                                    ,"Indexes"=>;
+            {"schemaname"=>{"Expression"=>"schemaname","StaticUID"=>"10d5b84e-3c55-4d50-8875-7928cb91add7"};
+            ,"tablename" =>{"Expression"=>"tablename","StaticUID"=>"e7cd37d6-39d3-4715-ad21-3d7f8e0e24e6"}}};
+        ,"hborm.SchemaVersion"=>{"Fields"=>;
+            {"pk"     =>{"UsedAs"=>"Primary","Type"=>"I","AutoIncrement"=>.t.};
             ,"name"   =>{"Type"=>"CV","Length"=>254};
             ,"version"=>{"Type"=>"I"}};
-                            };
-        };
-    }
+                                };
+        },;
+    "GenerationSource"=>"DataWharf"}
 
 l_PreviousNamespaceName := ::SetCurrentNamespaceName(::p_HBORMNamespace)
 
@@ -4050,7 +4066,7 @@ local l_cFieldDefault := par_cFieldDefault
 
 //Auto Adjust Field Default definition for Engine Type
 do case
-case hb_IsNIL(l_cFieldDefault)
+case hb_IsNil(l_cFieldDefault)
 
 case par_cFieldType == "L"
     do case
@@ -4141,7 +4157,7 @@ local l_cFieldDefault := par_cFieldDefault
 local l_nPos
 
 do case
-case hb_IsNIL(l_cFieldDefault)
+case hb_IsNil(l_cFieldDefault)
     //Nothing todo
 
 case par_cSQLEngineType == HB_ORM_ENGINETYPE_MYSQL
@@ -4311,7 +4327,7 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     endcase
 
-    if !hb_IsNIL(l_cFieldDefault)
+    if !hb_IsNil(l_cFieldDefault)
         //Get rid of casting
         l_nPos := rat("::",l_cFieldDefault)
         if l_nPos > 0
@@ -4350,7 +4366,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     hb_orm_SendToDebugView("RemoveWharfForeignKeyConstraints v2")
 
-    l_cSQLForeignKeyConstraints := GetFetchPostgreSQLForeignKeyConstraintsQuery()
+    l_cSQLForeignKeyConstraints := GetPostgresForeignKeyConstraintsQuery()
     if ! ::SQLExec("198cb4e1-0789-412c-975f-8b6f9e9a2857",l_cSQLForeignKeyConstraints,"hb_orm_ListOfForeignKeyConstraints")
         hb_orm_SendToDebugView("GenerateMigrateForeignKeyConstraintsScript - Failed on ListOfForeignKeyConstraints")
     else
@@ -4471,7 +4487,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 // confdeltype char
 //     Foreign key deletion action code: a = no action, r = restrict, c = cascade, n = set null, d = set default
 
-    l_cSQLForeignKeyConstraints := GetFetchPostgreSQLForeignKeyConstraintsQuery()
+    l_cSQLForeignKeyConstraints := GetPostgresForeignKeyConstraintsQuery()
 
     if ! ::SQLExec("419ada7d-7e90-4c30-9c95-0d5c15ccdfd7",l_cSQLForeignKeyConstraints,"hb_orm_ListOfForeignKeyConstraints")
         hb_orm_SendToDebugView("GenerateMigrateForeignKeyConstraintsScript - Failed on ListOfForeignKeyConstraints")
@@ -4890,7 +4906,7 @@ endif
 
 return l_nResult
 //-----------------------------------------------------------------------------------------------------------------
-static function GetFetchPostgreSQLForeignKeyConstraintsQuery()
+static function GetPostgresForeignKeyConstraintsQuery()
 local l_cSQLForeignKeyConstraints
 l_cSQLForeignKeyConstraints := [select ]
 l_cSQLForeignKeyConstraints += [    con."ChildNamespace" as "ChildNamespace",]

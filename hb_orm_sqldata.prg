@@ -1431,6 +1431,9 @@ local l_cNonTableAlias
 local l_hColumnDefinition
 local l_lLastFieldWasAForeignKeyZeroNullConversion := .f.  // Only used if par_cSource <> "column", since in column mode we are using a COALESCE() to deal with NULLs
 local l_lLastFieldWasAForeignKeyZeroNullFoundOperator
+
+local l_cTimeZoneName := ""
+
 // if par_cExpression == "table.pk"
 //     altd()
 // endif
@@ -1675,6 +1678,7 @@ else
 endif
 
 if l_nColumnTypeDetectCount == 1
+    // Check this is a single field with only its <TableName>+"."+<ColumnName>
     if lower(hb_StrReplace(par_cExpression,{' ' => '','"' => '',"'" => ""})) == lower(hb_StrReplace(l_cColumnTypeDetectExpression,{' ' => '','"' => '',"'" => ""}))
         do case
         case l_lColumnTypeDetectArray
@@ -1686,6 +1690,21 @@ if l_nColumnTypeDetectCount == 1
             l_cResult := "("+l_cResult+")::text"
         case l_cColumnTypeDetectType == "JS"
             l_cResult := "("+l_cResult+")::text"
+        case l_cColumnTypeDetectType == "DTZ"   // Date Time with time zone. If will be possible with return the data in the current Time Zone.
+
+            do case
+            case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+                if empty(l_cTimeZoneName)
+                    l_cTimeZoneName := ::p_oSQLConnection:GetTimeZoneName()
+                endif
+                if !empty(l_cTimeZoneName)
+                    l_cResult := "timezone('"+l_cTimeZoneName+"',"+l_cResult+")"
+                endif
+            // case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+            // MySQL DOES NOT STORE TIME ZONE
+            endcase
+
+        // case l_cColumnTypeDetectType == "TOZ"   // Time with time zone   _M_
         endcase
     endif
 endif
@@ -2983,7 +3002,7 @@ local l_nFieldLen,l_nFieldDec
 local l_nMaxValue
 local l_nUnsignedLength,l_nDecimals
 
-if hb_IsNIL(par_xValue)
+if hb_IsNil(par_xValue)
     if hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
         l_cValue  := "NULL"
     else
@@ -3211,7 +3230,7 @@ local l_nFieldLen,l_nFieldDec
 local l_nMaxValue
 local l_nUnsignedLength,l_nDecimals
 
-if hb_IsNIL(par_xValue)
+if hb_IsNil(par_xValue)
     if hb_HGetDef(par_hFieldInfo,HB_ORM_SCHEMA_FIELD_NULLABLE,.f.)
         l_cValue  := "NULL"
     else
@@ -3304,8 +3323,6 @@ else
         exit
     case  "C" // char 
     case "CV" // variable length char (with option max length value)
-    case  "B" // binary
-    case "BV" // variable length binary (with option max length value)
         if l_cValueType == "C"
             if empty(par_xValue)  // At this point we already know it is not null
                 l_cValue := "''"
@@ -3330,6 +3347,15 @@ else
             endif
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Character',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+        exit
+    case  "B" // binary
+    case "BV" // variable length binary (with option max length value)
+        if l_cValueType == "C"   // In Harbour binary is also char, since chr(0) is also allowed.
+            l_cValue := [decode(']+hb_StrToHex(par_xValue,"")+[','hex')]
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a binary',hb_orm_GetApplicationStack()})
             l_lResult := .f.
         endif
         exit
@@ -3784,3 +3810,8 @@ method ClearNonTableAliases() class hb_orm_SQLData  // Used clear :p_NonTableAli
 hb_HClear(::p_NonTableAliases)
 return nil
 //-----------------------------------------------------------------------------------------------------------------
+method GetArrayForFieldValueOfTimestampWithTimeZoneAsText(par_cText,par_cTimeZone) class hb_orm_SQLData
+//Will allow to store a par_cText timestamp as if it was specified for the TimeZone par_cTimeZone
+return {"S","TO_TIMESTAMP('"+par_cText+"','YYYY-MM-DD HH24:MI:SS.US')::timestamp AT TIME ZONE '"+par_cTimeZone+"'"}
+//-----------------------------------------------------------------------------------------------------------------
+

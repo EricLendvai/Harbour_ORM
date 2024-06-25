@@ -165,6 +165,8 @@ class hb_orm_SQLData
         method AddNonTableAliases(par_aAliases)  // Used to add an alias to :p_NonTableAliases to prevent casing the aliases and columns.
         method ClearNonTableAliases()            // Used clear :p_NonTableAliases since calling :Table() will not do so, since its own source table might be a CTE alias.
 
+        method GetArrayForFieldValueOfTimestampWithTimeZoneAsText(par_cText,par_cTimeZone)
+
     DESTRUCTOR destroy()
 
 endclass

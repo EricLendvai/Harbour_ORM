@@ -590,13 +590,25 @@ local l_iAutoTrimmedInfo
 local l_cValue
 local l_cFieldName,l_cFieldType,l_nFieldLen
 local l_nPos,l_cNamespaceName,l_cTableName
+local l_iUserPk               := ::GetCurrentUserPk()
+local l_cApplicationVersion   := ::GetApplicationVersion()
+local l_cApplicationBuildInfo := ::GetApplicationBuildInfo()
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier(::p_HBORMNamespace+".SchemaAutoTrimLog")+[ (]
     
-    if !hb_IsNIL(par_xEventId)
+    if !hb_IsNil(par_xEventId)
         l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
+    endif
+    if !hb_IsNil(l_iUserPk)
+        l_cSQLCommand += ::FormatIdentifier("fk_user")+[,]
+    endif
+    if !hb_IsNil(l_cApplicationVersion)
+        l_cSQLCommand += ::FormatIdentifier("applicationversion")+[,]
+    endif
+    if !hb_IsNil(l_cApplicationBuildInfo)
+        l_cSQLCommand += ::FormatIdentifier("applicationbuildinfo")+[,]
     endif
     l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
     l_cSQLCommand += ::FormatIdentifier("ip")+[,]
@@ -617,17 +629,26 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_nFieldLen  := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][4]
         
         hb_orm_SendToDebugView("Auto Trim Event:"+;
-                              iif(hb_IsNIL(par_cNamespaceAndTableName) , "" , [  Table = "]+par_cNamespaceAndTableName+["])+;
-                              iif(hb_IsNIL(par_nKey)                , "" , [  Key = ]+trans(par_nKey))+;
-                              iif(hb_IsNIL(l_cFieldName)             , "" , [  Field = "]+l_cFieldName+["]))
+                              iif(hb_IsNil(par_cNamespaceAndTableName) , "" , [  Table = "]+par_cNamespaceAndTableName+["])+;
+                              iif(hb_IsNil(par_nKey)                , "" , [  Key = ]+trans(par_nKey))+;
+                              iif(hb_IsNil(l_cFieldName)             , "" , [  Field = "]+l_cFieldName+["]))
         
         if l_iAutoTrimmedInfo > 1
             l_cSQLCommand +=  [,]
         endif
         l_cSQLCommand +=  [(]
 
-        if !hb_IsNIL(par_xEventId)
+        if !hb_IsNil(par_xEventId)
             l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
+        endif
+        if !hb_IsNil(l_iUserPk)
+            l_cSQLCommand += trans(l_iUserPk)+[,]
+        endif
+        if !hb_IsNil(l_cApplicationVersion)
+            l_cSQLCommand += [']+l_cApplicationVersion+[',]
+        endif
+        if !hb_IsNil(l_cApplicationBuildInfo)
+            l_cSQLCommand += [']+l_cApplicationBuildInfo+[',]
         endif
         l_cSQLCommand += [now(),]
         l_cSQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
@@ -669,8 +690,17 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier(::p_HBORMNamespace+".SchemaAutoTrimLog")+[ (]
     
-    if !hb_IsNIL(par_xEventId)
+    if !hb_IsNil(par_xEventId)
         l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
+    endif
+    if !hb_IsNil(l_iUserPk)
+        l_cSQLCommand += ::FormatIdentifier("fk_user")+[,]
+    endif
+    if !hb_IsNil(l_cApplicationVersion)
+        l_cSQLCommand += ::FormatIdentifier("applicationversion")+[,]
+    endif
+    if !hb_IsNil(l_cApplicationBuildInfo)
+        l_cSQLCommand += ::FormatIdentifier("applicationbuildinfo")+[,]
     endif
     l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
     l_cSQLCommand += ::FormatIdentifier("ip")+[,]
@@ -692,17 +722,26 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_nFieldLen  := par_aAutoTrimmedFields[l_iAutoTrimmedInfo][4]
 
         hb_orm_SendToDebugView("Auto Trim Event:"+;
-                              iif(hb_IsNIL(par_cNamespaceAndTableName) , "" , [  Table = "]+par_cNamespaceAndTableName+["])+;
-                              iif(hb_IsNIL(par_nKey)                   , "" , [  Key = ]+trans(par_nKey))+;
-                              iif(hb_IsNIL(l_cFieldName)               , "" , [  Field = "]+l_cFieldName+["]))
+                              iif(hb_IsNil(par_cNamespaceAndTableName) , "" , [  Table = "]+par_cNamespaceAndTableName+["])+;
+                              iif(hb_IsNil(par_nKey)                   , "" , [  Key = ]+trans(par_nKey))+;
+                              iif(hb_IsNil(l_cFieldName)               , "" , [  Field = "]+l_cFieldName+["]))
         
         if l_iAutoTrimmedInfo > 1
             l_cSQLCommand +=  [,]
         endif
         l_cSQLCommand +=  [(]
 
-        if !hb_IsNIL(par_xEventId)
+        if !hb_IsNil(par_xEventId)
             l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
+        endif
+        if !hb_IsNil(l_iUserPk)
+            l_cSQLCommand += trans(l_iUserPk)+[,]
+        endif
+        if !hb_IsNil(l_cApplicationVersion)
+            l_cSQLCommand += [']+l_cApplicationVersion+[',]
+        endif
+        if !hb_IsNil(l_cApplicationBuildInfo)
+            l_cSQLCommand += [']+l_cApplicationBuildInfo+[',]
         endif
         l_cSQLCommand += [current_timestamp,]
         l_cSQLCommand += [inet_client_addr(),]
@@ -747,6 +786,9 @@ local l_cNamespaceAndTableName,l_nKey,l_cErrorMessage
 local l_lDoNotReportErrors := ::p_DoNotReportErrors
 local l_nPos,l_cNamespaceName,l_cTableName
 local l_cAppStack
+local l_iUserPk               := ::GetCurrentUserPk()
+local l_cApplicationVersion   := ::GetApplicationVersion()
+local l_cApplicationBuildInfo := ::GetApplicationBuildInfo()
 
 ::p_DoNotReportErrors := .t.  // To avoid cycling reporting of errors
 
@@ -754,10 +796,18 @@ do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
     l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier("SchemaAndDataErrorLog")+[ (]
     
-    if !hb_IsNIL(par_xEventId)
+    if !hb_IsNil(par_xEventId)
         l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
-
+    if !hb_IsNil(l_iUserPk)
+        l_cSQLCommand += ::FormatIdentifier("fk_user")+[,]
+    endif
+    if !hb_IsNil(l_cApplicationVersion)
+        l_cSQLCommand += ::FormatIdentifier("applicationversion")+[,]
+    endif
+    if !hb_IsNil(l_cApplicationBuildInfo)
+        l_cSQLCommand += ::FormatIdentifier("applicationbuildinfo")+[,]
+    endif
     l_cSQLCommand += ::FormatIdentifier("appstack")+[,]
     l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
     l_cSQLCommand += ::FormatIdentifier("ip")+[,]
@@ -774,8 +824,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         l_cAppStack           := par_aErrors[l_iErrors][4]
 
         hb_orm_SendToDebugView("Error Event:"+;
-                              iif(hb_IsNIL(l_cNamespaceAndTableName) , "" , [  Table = "]+l_cNamespaceAndTableName+["])+;
-                              iif(hb_IsNIL(l_nKey)                , "" , [  Key = ]+trans(l_nKey))+;
+                              iif(hb_IsNil(l_cNamespaceAndTableName) , "" , [  Table = "]+l_cNamespaceAndTableName+["])+;
+                              iif(hb_IsNil(l_nKey)                , "" , [  Key = ]+trans(l_nKey))+;
                               [  ]+l_cErrorMessage)
 
         if l_iErrors > 1
@@ -783,18 +833,27 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
         endif
         l_cSQLCommand +=  [(]
 
-        if !hb_IsNIL(par_xEventId)
+        if !hb_IsNil(par_xEventId)
             l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
         endif
-        if hb_IsNIL(l_cAppStack)
+        if !hb_IsNil(l_iUserPk)
+            l_cSQLCommand += trans(l_iUserPk)+[,]
+        endif
+        if !hb_IsNil(l_cApplicationVersion)
+            l_cSQLCommand += [']+l_cApplicationVersion+[',]
+        endif
+        if !hb_IsNil(l_cApplicationBuildInfo)
+            l_cSQLCommand += [']+l_cApplicationBuildInfo+[',]
+        endif
+        if hb_IsNil(l_cAppStack)
             l_cSQLCommand += [NULL,]
         else
             l_cSQLCommand += [x']+hb_StrToHex(l_cAppStack)+[',]
         endif
         l_cSQLCommand += [now(),]
         l_cSQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
-        l_cSQLCommand += iif(hb_IsNIL(l_cTableName) , [NULL,] , [']+l_cTableName+[',])
-        l_cSQLCommand += iif(hb_IsNIL(l_nKey)       , [NULL,] , trans(l_nKey)+[,])
+        l_cSQLCommand += iif(hb_IsNil(l_cTableName) , [NULL,] , [']+l_cTableName+[',])
+        l_cSQLCommand += iif(hb_IsNil(l_nKey)       , [NULL,] , trans(l_nKey)+[,])
         l_cSQLCommand += [x']+hb_StrToHex(l_cErrorMessage)+[']
 
         l_cSQLCommand +=  [)]
@@ -810,10 +869,18 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
     l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier(::p_HBORMNamespace+".SchemaAndDataErrorLog")+[ (]
     
-    if !hb_IsNIL(par_xEventId)
+    if !hb_IsNil(par_xEventId)
         l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
     endif
-
+    if !hb_IsNil(l_iUserPk)
+        l_cSQLCommand += ::FormatIdentifier("fk_user")+[,]
+    endif
+    if !hb_IsNil(l_cApplicationVersion)
+        l_cSQLCommand += ::FormatIdentifier("applicationversion")+[,]
+    endif
+    if !hb_IsNil(l_cApplicationBuildInfo)
+        l_cSQLCommand += ::FormatIdentifier("applicationbuildinfo")+[,]
+    endif
     l_cSQLCommand += ::FormatIdentifier("appstack")+[,]
     l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
     l_cSQLCommand += ::FormatIdentifier("ip")+[,]
@@ -830,7 +897,7 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cErrorMessage       := par_aErrors[l_iErrors][3]
         l_cAppStack           := par_aErrors[l_iErrors][4]
 
-        if hb_IsNIL(l_cNamespaceAndTableName)
+        if hb_IsNil(l_cNamespaceAndTableName)
             l_cNamespaceName := NIL
             l_cTableName  := NIL
         else
@@ -846,8 +913,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
 
         hb_orm_SendToDebugView("Error Event:"+;
-                              iif(hb_IsNIL(l_cNamespaceAndTableName) , "" , [  Table = "]+l_cNamespaceAndTableName+["])+;
-                              iif(hb_IsNIL(l_nKey)                   , "" , [  Key = ]   +trans(l_nKey))+;
+                              iif(hb_IsNil(l_cNamespaceAndTableName) , "" , [  Table = "]+l_cNamespaceAndTableName+["])+;
+                              iif(hb_IsNil(l_nKey)                   , "" , [  Key = ]   +trans(l_nKey))+;
                               [  ]+l_cErrorMessage)
 
         if l_iErrors > 1
@@ -855,10 +922,19 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         endif
         l_cSQLCommand +=  [(]
 
-        if !hb_IsNIL(par_xEventId)
+        if !hb_IsNil(par_xEventId)
             l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
         endif
-        if hb_IsNIL(l_cAppStack)
+        if !hb_IsNil(l_iUserPk)
+            l_cSQLCommand += trans(l_iUserPk)+[,]
+        endif
+        if !hb_IsNil(l_cApplicationVersion)
+            l_cSQLCommand += [']+l_cApplicationVersion+[',]
+        endif
+        if !hb_IsNil(l_cApplicationBuildInfo)
+            l_cSQLCommand += [']+l_cApplicationBuildInfo+[',]
+        endif
+        if hb_IsNil(l_cAppStack)
             l_cSQLCommand += [NULL,]
         else
             // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cAppStack,"\x")+[',]
@@ -866,9 +942,9 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         endif
         l_cSQLCommand += [current_timestamp,]
         l_cSQLCommand += [inet_client_addr(),]
-        l_cSQLCommand += iif(hb_IsNIL(l_cNamespaceName) , [NULL,] , [']+l_cNamespaceName+[',])
-        l_cSQLCommand += iif(hb_IsNIL(l_cTableName)  , [NULL,] , [']+l_cTableName+[',])
-        l_cSQLCommand += iif(hb_IsNIL(l_nKey)        , [NULL,] , trans(l_nKey)+[,])
+        l_cSQLCommand += iif(hb_IsNil(l_cNamespaceName) , [NULL,] , [']+l_cNamespaceName+[',])
+        l_cSQLCommand += iif(hb_IsNil(l_cTableName)  , [NULL,] , [']+l_cTableName+[',])
+        l_cSQLCommand += iif(hb_IsNil(l_nKey)        , [NULL,] , trans(l_nKey)+[,])
         // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cErrorMessage,"\x")+[']
         l_cSQLCommand += hb_orm_PostgresqlEncodeUTF8String(l_cErrorMessage)
 
@@ -899,9 +975,11 @@ if ::Connected
             l_lResult := .t.
         endif
     case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-        if ::SQLExec("CheckIfStillConnected",[select current_time;])
+        if ::SQLExec("CheckIfStillConnected",[select timezone('UTC',current_timestamp(6))::text as "LastConnectTime";],"ServerLastConnectTime")
             l_lResult := .t.
+            ::p_cLastConnectTimestamp := ServerLastConnectTime->LastConnectTime
         endif
+        CloseAlias("ServerLastConnectTime")
     endcase
     if l_lResult == .f.
         hb_orm_SendToDebugView("SQL Connection was lost")
@@ -1412,7 +1490,7 @@ endfor
 
 return nil
 //-----------------------------------------------------------------------------------------------------------------
-method GetListOfPrimaryKeysForAllTables(par_hTableSchemaDefinition)
+method GetListOfPrimaryKeysForAllTables(par_hTableSchemaDefinition) class hb_orm_SQLConnect
 local l_hPrimaryKeys := {=>}
 local l_hTableDefinition
 local l_cNamespaceAndTableName
@@ -1457,6 +1535,28 @@ for each l_hTableDefinition in par_hTableSchemaDefinition
 endfor
 
 return l_hPrimaryKeys
+//-----------------------------------------------------------------------------------------------------------------
+method GetLastCheckConnectionUTCTime() class hb_orm_SQLConnect
+if empty(::p_cLastConnectTimestamp)
+    ::CheckIfStillConnected()
+endif
+return ::p_cLastConnectTimestamp
+//-----------------------------------------------------------------------------------------------------------------
+method GetCurrentTimeInTimeZoneAsText(par_cTimeZone) class hb_orm_SQLConnect
+local l_cResult := ""
+
+if ::Connected
+    do case
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
+    case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+        if ::SQLExec("GetCurrentTimeInTimeZoneAsText",[select timezone(']+par_cTimeZone+[',current_timestamp(6))::text as "TimeInTimeZone";],"CurrentTimeInTimeZoneAsText")
+            l_cResult := CurrentTimeInTimeZoneAsText->TimeInTimeZone
+        endif
+        CloseAlias("CurrentTimeInTimeZoneAsText")
+    endcase
+endif
+
+return l_cResult
 //-----------------------------------------------------------------------------------------------------------------
 #include "hb_orm_schema.prg"
 //-----------------------------------------------------------------------------------------------------------------

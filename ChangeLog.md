@@ -1,5 +1,16 @@
 # Harbour ORM - Change Log
 
+## 06/23/2024 V 4.10
+* Fixed Inserting/Updating Binary and Variable Binary in PostgreSQL.
+* Added "fk_user" column to the ORM error logs.
+* New connection methods SetCurrentUserPk(<UserPk>), GetCurrentUserPk() and ClearCurrentUserPk(). A UserPk can be a Big Integer and will be used when SchemaAndDataErrorLog or SchemaAutoTrimLog records are added.
+* New connection methods SetApplicationVersion(<Text>),ClearApplicationVersion(),GetApplicationVersion(). Will be used when SchemaAndDataErrorLog or SchemaAutoTrimLog records are added.
+* New connection methods SetApplicationBuildInfo(<Text>),ClearApplicationBuildInfo(),GetApplicationBuildInfo(). Will be used when SchemaAndDataErrorLog or SchemaAutoTrimLog records are added.
+* New connection methods SetTimeZoneName(<TimeZoneName>),ClearTimeZoneName(),GetTimeZoneName(). By default the time zone is "UTC". Any query via SQLData class that includes columns on non transformed (or expression) of "Date Time with time zone" type columns will be displayed in the TimeZone set by previously called SetTimeZoneName(..).
+*New connection method GetLastCheckConnectionUTCTime(), PostgreSQL only, which returns the last time the CheckIfStillConnected() method was called. The return value is a string formatted as 'YYYY-MM-DD HH24:MI:SS.USTZH', which is the format returned for Timestamps with Time Zone casted as 'Text'.
+* New connection method GetCurrentTimeInTimeZoneAsText(<cTimeZone>), PostgreSQL only.
+* New sqldata method GetArrayForFieldValueOfTimestampWithTimeZoneAsText(<cDateTimeUTC>,<cTimeZone>). Will return an array to be used by the Field() method to store Postgresql timestamp values with high precision. Parameters is a text formatted as 'YYYY-MM-DD HH24:MI:SS.USTZH'
+
 ## 05/30/2024 V 4.9
 * Enhanced connection method GetColumnConfiguration to also include Column AKA.
 * New connection method GetTableConfiguration(par_cNamespaceAndTableName).
