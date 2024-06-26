@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 06/26/2024 V 4.11
+* Fix on Missing creation of table WharfConfig in ORM Namespace.
+
 ## 06/23/2024 V 4.10
 * Fixed Inserting/Updating Binary and Variable Binary in PostgreSQL.
 * Added "fk_user" column to the ORM error logs.

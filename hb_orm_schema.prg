@@ -3740,8 +3740,8 @@ local l_hWharfConfig
 l_hWharfConfig := ;
     {"HarbourORMVersion"=>4.10,;
     "DataWharfVersion"=>4.11,;
-    "GenerationTime"=>"2024-06-17T06:16:50.950Z",;
-    "GenerationSignature"=>"b0c42201-e0e0-4140-8e91-eefd1255693d",;
+    "GenerationTime"=>"2024-06-26T07:45:43.832Z",;
+    "GenerationSignature"=>"1564c667-d0f8-4f41-b4de-86a6a72a7053",;
     "Enumerations"=>{=>},;
     "Tables"=>;
         {"hborm.SchemaAndDataErrorLog"=>{"Fields"=>;
@@ -3801,6 +3801,14 @@ l_hWharfConfig := ;
             ,"name"   =>{"Type"=>"CV","Length"=>254};
             ,"version"=>{"Type"=>"I"}};
                                 };
+        ,"hborm.WharfConfig"=>{"Fields"=>;
+            {"pk"                 =>{"UsedAs"=>"Primary","Type"=>"I","AutoIncrement"=>.t.};
+            ,"taskname"           =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};   //Since the pk is not constant it is better to Search/Add by a Task Name
+            ,"datetime"           =>{"Type"=>"DTZ","Scale"=>6,"Nullable"=>.t.};   //Time the task ran last
+            ,"ip"                 =>{"Type"=>"CV","Length"=>43,"Nullable"=>.t.};   //Where the task ran
+            ,"generationtime"     =>{"Type"=>"CV","Length"=>24,"Nullable"=>.t.};   //The GenerationTime of a WharfConfig structure.
+            ,"generationsignature"=>{"Type"=>"CV","Length"=>36,"Nullable"=>.t.}};   //The GenerationSignature of a WharfConfig structure.
+                            };
         },;
     "GenerationSource"=>"DataWharf"}
 
