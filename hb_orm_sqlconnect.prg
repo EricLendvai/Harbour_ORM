@@ -779,43 +779,53 @@ endcase
 return NIL
 //-----------------------------------------------------------------------------------------------------------------
 method LogErrorEvent(par_xEventId,par_aErrors) class hb_orm_SQLConnect
-local l_cSQLCommand
+local l_select := iif(used(),select(),0)
+local l_cSQLCommandLog
+local l_cSQLCommandMessage
 local l_cLastErrorMessage
 local l_iErrors
-local l_cNamespaceAndTableName,l_nKey,l_cErrorMessage
+local l_cNamespaceAndTableName
+local l_nKey
+local l_cErrorMessage
 local l_lDoNotReportErrors := ::p_DoNotReportErrors
-local l_nPos,l_cNamespaceName,l_cTableName
+local l_nPos
+local l_cNamespaceName
+local l_cTableName
 local l_cAppStack
 local l_iUserPk               := ::GetCurrentUserPk()
 local l_cApplicationVersion   := ::GetApplicationVersion()
 local l_cApplicationBuildInfo := ::GetApplicationBuildInfo()
 
+local l_bSha256
+local l_iSchemaAndDataErrorMessagePk
+
+
 ::p_DoNotReportErrors := .t.  // To avoid cycling reporting of errors
 
 do case
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
-    l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier("SchemaAndDataErrorLog")+[ (]
+    l_cSQLCommandLog := [INSERT INTO ]+::FormatIdentifier("SchemaAndDataErrorLog")+[ (]
     
     if !hb_IsNil(par_xEventId)
-        l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
+        l_cSQLCommandLog += ::FormatIdentifier("eventid")+[,]
     endif
     if !hb_IsNil(l_iUserPk)
-        l_cSQLCommand += ::FormatIdentifier("fk_user")+[,]
+        l_cSQLCommandLog += ::FormatIdentifier("fk_user")+[,]
     endif
     if !hb_IsNil(l_cApplicationVersion)
-        l_cSQLCommand += ::FormatIdentifier("applicationversion")+[,]
+        l_cSQLCommandLog += ::FormatIdentifier("applicationversion")+[,]
     endif
     if !hb_IsNil(l_cApplicationBuildInfo)
-        l_cSQLCommand += ::FormatIdentifier("applicationbuildinfo")+[,]
+        l_cSQLCommandLog += ::FormatIdentifier("applicationbuildinfo")+[,]
     endif
-    l_cSQLCommand += ::FormatIdentifier("appstack")+[,]
-    l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
-    l_cSQLCommand += ::FormatIdentifier("ip")+[,]
-    l_cSQLCommand += ::FormatIdentifier("tablename")+[,]
-    l_cSQLCommand += ::FormatIdentifier("recordpk")+[,]
-    l_cSQLCommand += ::FormatIdentifier("errormessage")
+    l_cSQLCommandLog += ::FormatIdentifier("appstack")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("datetime")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("ip")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("tablename")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("recordpk")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("errormessage")
 
-    l_cSQLCommand += [) VALUES ]
+    l_cSQLCommandLog += [) VALUES ]
 
     for l_iErrors := 1 to len(par_aErrors)
         l_cNamespaceAndTableName := par_aErrors[l_iErrors][1]
@@ -828,74 +838,77 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_MYSQL
                               iif(hb_IsNil(l_nKey)                , "" , [  Key = ]+trans(l_nKey))+;
                               [  ]+l_cErrorMessage)
 
+        l_iSchemaAndDataErrorMessagePk := 0
+
         if l_iErrors > 1
-            l_cSQLCommand +=  [,]
+            l_cSQLCommandLog +=  [,]
         endif
-        l_cSQLCommand +=  [(]
+        l_cSQLCommandLog +=  [(]
 
         if !hb_IsNil(par_xEventId)
-            l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
+            l_cSQLCommandLog += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
         endif
         if !hb_IsNil(l_iUserPk)
-            l_cSQLCommand += trans(l_iUserPk)+[,]
+            l_cSQLCommandLog += trans(l_iUserPk)+[,]
         endif
         if !hb_IsNil(l_cApplicationVersion)
-            l_cSQLCommand += [']+l_cApplicationVersion+[',]
+            l_cSQLCommandLog += [']+l_cApplicationVersion+[',]
         endif
         if !hb_IsNil(l_cApplicationBuildInfo)
-            l_cSQLCommand += [']+l_cApplicationBuildInfo+[',]
+            l_cSQLCommandLog += [']+l_cApplicationBuildInfo+[',]
         endif
         if hb_IsNil(l_cAppStack)
-            l_cSQLCommand += [NULL,]
+            l_cSQLCommandLog += [NULL,]
         else
-            l_cSQLCommand += [x']+hb_StrToHex(l_cAppStack)+[',]
+            l_cSQLCommandLog += [x']+hb_StrToHex(l_cAppStack)+[',]
         endif
-        l_cSQLCommand += [now(),]
-        l_cSQLCommand += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
-        l_cSQLCommand += iif(hb_IsNil(l_cTableName) , [NULL,] , [']+l_cTableName+[',])
-        l_cSQLCommand += iif(hb_IsNil(l_nKey)       , [NULL,] , trans(l_nKey)+[,])
-        l_cSQLCommand += [x']+hb_StrToHex(l_cErrorMessage)+[']
+        l_cSQLCommandLog += [now(),]
+        l_cSQLCommandLog += [SUBSTRING(USER(), LOCATE('@', USER())+1),]
+        l_cSQLCommandLog += iif(hb_IsNil(l_cTableName) , [NULL,] , [']+l_cTableName+[',])
+        l_cSQLCommandLog += iif(hb_IsNil(l_nKey)       , [NULL,] , trans(l_nKey)+[,])
+        l_cSQLCommandLog += [x']+hb_StrToHex(l_cErrorMessage)+[']
 
-        l_cSQLCommand +=  [)]
+        l_cSQLCommandLog +=  [)]
     endfor
 
-    l_cSQLCommand += [;]
+    l_cSQLCommandLog += [;]
 
-    if !::SQLExec("LogErrorEvent",l_cSQLCommand)
+    if !::SQLExec("LogErrorEvent",l_cSQLCommandLog)
         l_cLastErrorMessage := ::GetSQLExecErrorMessage()
         hb_orm_SendToDebugView("Error on Auto Trim: "+l_cLastErrorMessage)
     endif
 
 case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
-    l_cSQLCommand := [INSERT INTO ]+::FormatIdentifier(::p_HBORMNamespace+".SchemaAndDataErrorLog")+[ (]
+    l_cSQLCommandLog := [INSERT INTO ]+::FormatIdentifier(::p_HBORMNamespace+".SchemaAndDataErrorLog")+[ (]
     
     if !hb_IsNil(par_xEventId)
-        l_cSQLCommand += ::FormatIdentifier("eventid")+[,]
+        l_cSQLCommandLog += ::FormatIdentifier("eventid")+[,]
     endif
     if !hb_IsNil(l_iUserPk)
-        l_cSQLCommand += ::FormatIdentifier("fk_user")+[,]
+        l_cSQLCommandLog += ::FormatIdentifier("fk_user")+[,]
     endif
     if !hb_IsNil(l_cApplicationVersion)
-        l_cSQLCommand += ::FormatIdentifier("applicationversion")+[,]
+        l_cSQLCommandLog += ::FormatIdentifier("applicationversion")+[,]
     endif
     if !hb_IsNil(l_cApplicationBuildInfo)
-        l_cSQLCommand += ::FormatIdentifier("applicationbuildinfo")+[,]
+        l_cSQLCommandLog += ::FormatIdentifier("applicationbuildinfo")+[,]
     endif
-    l_cSQLCommand += ::FormatIdentifier("appstack")+[,]
-    l_cSQLCommand += ::FormatIdentifier("datetime")+[,]
-    l_cSQLCommand += ::FormatIdentifier("ip")+[,]
-    l_cSQLCommand += ::FormatIdentifier("namespacename")+[,]
-    l_cSQLCommand += ::FormatIdentifier("tablename")+[,]
-    l_cSQLCommand += ::FormatIdentifier("recordpk")+[,]
-    l_cSQLCommand += ::FormatIdentifier("errormessage")
+    l_cSQLCommandLog += ::FormatIdentifier("appstack")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("datetime")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("ip")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("namespacename")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("tablename")+[,]
+    l_cSQLCommandLog += ::FormatIdentifier("recordpk")+[,]
+    // l_cSQLCommandLog += ::FormatIdentifier("errormessage")
+    l_cSQLCommandLog += ::FormatIdentifier("fk_schemaanddataerrormessage")
 
-    l_cSQLCommand += [) VALUES ]
+    l_cSQLCommandLog += [) VALUES ]
 
     for l_iErrors := 1 to len(par_aErrors)
         l_cNamespaceAndTableName := par_aErrors[l_iErrors][1]
-        l_nKey                := par_aErrors[l_iErrors][2]
-        l_cErrorMessage       := par_aErrors[l_iErrors][3]
-        l_cAppStack           := par_aErrors[l_iErrors][4]
+        l_nKey                   := par_aErrors[l_iErrors][2]
+        l_cErrorMessage          := par_aErrors[l_iErrors][3]
+        l_cAppStack              := par_aErrors[l_iErrors][4]
 
         if hb_IsNil(l_cNamespaceAndTableName)
             l_cNamespaceName := NIL
@@ -917,43 +930,86 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                               iif(hb_IsNil(l_nKey)                   , "" , [  Key = ]   +trans(l_nKey))+;
                               [  ]+l_cErrorMessage)
 
-        if l_iErrors > 1
-            l_cSQLCommand +=  [,]
-        endif
-        l_cSQLCommand +=  [(]
 
-        if !hb_IsNil(par_xEventId)
-            l_cSQLCommand += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
-        endif
-        if !hb_IsNil(l_iUserPk)
-            l_cSQLCommand += trans(l_iUserPk)+[,]
-        endif
-        if !hb_IsNil(l_cApplicationVersion)
-            l_cSQLCommand += [']+l_cApplicationVersion+[',]
-        endif
-        if !hb_IsNil(l_cApplicationBuildInfo)
-            l_cSQLCommand += [']+l_cApplicationBuildInfo+[',]
-        endif
-        if hb_IsNil(l_cAppStack)
-            l_cSQLCommand += [NULL,]
-        else
-            // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cAppStack,"\x")+[',]
-            l_cSQLCommand += hb_orm_PostgresqlEncodeUTF8String(l_cAppStack)+[,]
-        endif
-        l_cSQLCommand += [current_timestamp,]
-        l_cSQLCommand += [inet_client_addr(),]
-        l_cSQLCommand += iif(hb_IsNil(l_cNamespaceName) , [NULL,] , [']+l_cNamespaceName+[',])
-        l_cSQLCommand += iif(hb_IsNil(l_cTableName)  , [NULL,] , [']+l_cTableName+[',])
-        l_cSQLCommand += iif(hb_IsNil(l_nKey)        , [NULL,] , trans(l_nKey)+[,])
-        // l_cSQLCommand += [E'\x]+hb_StrToHex(l_cErrorMessage,"\x")+[']
-        l_cSQLCommand += hb_orm_PostgresqlEncodeUTF8String(l_cErrorMessage)
+        l_iSchemaAndDataErrorMessagePk := 0
+        l_bSha256 := hb_SHA256(l_cErrorMessage,.t.)
+        l_cSQLCommandMessage := [SELECT ]+::FormatIdentifier("pk")+[,]
+        l_cSQLCommandMessage +=           ::FormatIdentifier("errormessage")
+        l_cSQLCommandMessage += [ FROM ]+::FormatIdentifier(::p_HBORMNamespace+".SchemaAndDataErrorMessage")
+        l_cSQLCommandMessage += [ WHERE ]+::FormatIdentifier("sha256")+[ = decode(']+hb_StrToHex(l_bSha256,"")+[','hex')]
 
-        l_cSQLCommand +=  [)]
+        if ::SQLExec("LogErrorEvent1",l_cSQLCommandMessage,"ListSchemaAndDataErrorMessage")
+
+            if ("ListSchemaAndDataErrorMessage")->(reccount()) > 0
+                l_iSchemaAndDataErrorMessagePk := 0
+                select ListSchemaAndDataErrorMessage   // Since in theory more than one text could create the same hash we need to deal with collisions. 2**256 out of 1, which is one out of 1.15E77 
+                scan all
+                    if ListSchemaAndDataErrorMessage->ErrorMessage == l_cErrorMessage
+                        l_iSchemaAndDataErrorMessagePk := ListSchemaAndDataErrorMessage->pk
+                        exit
+                    endif
+                endif
+            else
+                l_iSchemaAndDataErrorMessagePk := 0
+            endif
+            if l_iSchemaAndDataErrorMessagePk == 0
+                l_cSQLCommandMessage := [INSERT INTO ]+::FormatIdentifier(::p_HBORMNamespace+".SchemaAndDataErrorMessage")+[ (]
+                l_cSQLCommandMessage += ::FormatIdentifier("sha256")+[,]
+                l_cSQLCommandMessage += ::FormatIdentifier("errormessage")
+                l_cSQLCommandMessage += [) VALUES (]
+                l_cSQLCommandMessage += [decode(']+hb_StrToHex(l_bSha256,"")+[','hex'),]
+                l_cSQLCommandMessage += hb_orm_PostgresqlEncodeUTF8String(l_cErrorMessage)
+                l_cSQLCommandMessage += [) RETURNING ]+::FormatIdentifier("pk")+[;]
+
+                if ::SQLExec("LogErrorEvent2",l_cSQLCommandMessage,"c_DB_Result")
+                    l_iSchemaAndDataErrorMessagePk := c_DB_Result->pk
+                endif
+                CloseAlias("c_DB_Result")
+                
+            endif
+        endif
+        CloseAlias("ListSchemaAndDataErrorMessage")
+
+        if !empty(l_iSchemaAndDataErrorMessagePk)
+            if l_iErrors > 1
+                l_cSQLCommandLog +=  [,]
+            endif
+            l_cSQLCommandLog +=  [(]
+
+            if !hb_IsNil(par_xEventId)
+                l_cSQLCommandLog += [']+iif(ValType(par_xEventId) == "N",trans(par_xEventId),left(AllTrim(par_xEventId),HB_ORM_MAX_EVENTID_SIZE))+[',]
+            endif
+            if !hb_IsNil(l_iUserPk)
+                l_cSQLCommandLog += trans(l_iUserPk)+[,]
+            endif
+            if !hb_IsNil(l_cApplicationVersion)
+                l_cSQLCommandLog += [']+l_cApplicationVersion+[',]
+            endif
+            if !hb_IsNil(l_cApplicationBuildInfo)
+                l_cSQLCommandLog += [']+l_cApplicationBuildInfo+[',]
+            endif
+            if hb_IsNil(l_cAppStack)
+                l_cSQLCommandLog += [NULL,]
+            else
+                l_cSQLCommandLog += hb_orm_PostgresqlEncodeUTF8String(l_cAppStack)+[,]
+            endif
+            l_cSQLCommandLog += [current_timestamp,]
+            l_cSQLCommandLog += [inet_client_addr(),]
+            l_cSQLCommandLog += iif(hb_IsNil(l_cNamespaceName) , [NULL,] , [']+l_cNamespaceName+[',])
+            l_cSQLCommandLog += iif(hb_IsNil(l_cTableName)  , [NULL,] , [']+l_cTableName+[',])
+            l_cSQLCommandLog += iif(hb_IsNil(l_nKey)        , [NULL,] , trans(l_nKey)+[,])
+            // l_cSQLCommandLog += hb_orm_PostgresqlEncodeUTF8String(l_cErrorMessage)
+            l_cSQLCommandLog += trans(l_iSchemaAndDataErrorMessagePk)
+
+            l_cSQLCommandLog +=  [)]
+        endif
+
+
     endfor
 
-    l_cSQLCommand += [;]
+    l_cSQLCommandLog += [;]
 
-    if !::SQLExec("LogErrorEvent",l_cSQLCommand)
+    if !::SQLExec("LogErrorEvent3",l_cSQLCommandLog)
         l_cLastErrorMessage := ::GetSQLExecErrorMessage()
         hb_orm_SendToDebugView("Error on Error Log: "+l_cLastErrorMessage)
     endif
@@ -962,6 +1018,7 @@ endcase
 
 ::p_DoNotReportErrors := l_lDoNotReportErrors
 
+select (l_select)
 return NIL
 
 //-----------------------------------------------------------------------------------------------------------------

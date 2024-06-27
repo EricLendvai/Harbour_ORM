@@ -1,7 +1,7 @@
 //Copyright (c) 2024 Eric Lendvai MIT License
 
 #ifndef HB_ORM_BUILDVERSION
-#define HB_ORM_BUILDVERSION "4.11"
+#define HB_ORM_BUILDVERSION "4.12"
 
 #define HB_ORM_TRIGGERVERSION 2
 
@@ -10,6 +10,8 @@
 
 #xtranslate CloseAlias(<cAlias>) => (select(<cAlias>))->(dbCloseArea())
 #xtranslate GetTimeDeltaInMs(<DateTime1>,<DateTime2>) => (<DateTime2>-<DateTime1>)*(24*3600*1000)
+
+#define HB_ORM_INVALUEWITCH chr(1)
 
 #define HB_ORM_BACKENDTYPE_MARIADB     1
 #define HB_ORM_BACKENDTYPE_MYSQL       2

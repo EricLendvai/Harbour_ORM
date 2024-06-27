@@ -3738,22 +3738,29 @@ local l_PreviousNamespaceName
 local l_hWharfConfig
 
 l_hWharfConfig := ;
-    {"HarbourORMVersion"=>4.10,;
-    "DataWharfVersion"=>4.11,;
-    "GenerationTime"=>"2024-06-26T07:45:43.832Z",;
-    "GenerationSignature"=>"1564c667-d0f8-4f41-b4de-86a6a72a7053",;
-    "Enumerations"=>{=>},;
+    {"HarbourORMVersion"=>4.11,;
+    "DataWharfVersion"=>4.12,;
+    "GenerationTime"=>"2024-06-27T06:34:39.304Z",;
+    "GenerationSignature"=>"b0982c5b-2d34-4b78-a0c4-610404b2ef4a",;
     "Tables"=>;
-        {"hborm.SchemaAndDataErrorLog"=>{"Fields"=>;
+        {"hborm.NamespaceTableNumber"=>{"Fields"=>;
+            {"pk"           =>{"UsedAs"=>"Primary","Type"=>"I","AutoIncrement"=>.t.};   //Will never have more than 2**32 tables.
+            ,"namespacename"=>{"Type"=>"CV","Length"=>254};
+            ,"tablename"    =>{"Type"=>"CV","Length"=>254}};
+                                    ,"Indexes"=>;
+            {"namespacename"=>{"Expression"=>"namespacename","StaticUID"=>"10d5b84e-3c55-4d50-8875-7928cb91add7"};
+            ,"tablename"    =>{"Expression"=>"tablename","StaticUID"=>"e7cd37d6-39d3-4715-ad21-3d7f8e0e24e6"}}};
+        ,"hborm.SchemaAndDataErrorLog"=>{"Fields"=>;
             {"pk"                          =>{"UsedAs"=>"Primary","Type"=>"IB","AutoIncrement"=>.t.};
             ,"fk_schemaanddataerrormessage"=>{"UsedAs"=>"Foreign","ParentTable"=>"hborm.SchemaAndDataErrorMessage","ForeignKeyOptional"=>.t.,"StaticUID"=>"2bbb90d2-f525-4a50-a87c-f9c4c6079b85","Type"=>"IB","Nullable"=>.t.,"OnDelete"=>"Protect"};   //Set as optional due to past structure, when SchemaAndDataErrorMessage table did not exists.
+            ,"fk_user"                     =>{"Type"=>"IB","Nullable"=>.t.};   //Not a real foreign key, since it is not application specific. Will be set to a value previously recording by a connection method SetCurrentUserPk(var) To not have a value call connection method ClearCurrentUserPk()
             ,"eventid"                     =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
             ,"datetime"                    =>{"Type"=>"DTZ"};
             ,"ip"                          =>{"Type"=>"CV","Length"=>43};
-            ,"schemaname"                  =>{"Type"=>"M","Nullable"=>.t.};
+            ,"namespacename"               =>{"Type"=>"M","Nullable"=>.t.};
             ,"tablename"                   =>{"Type"=>"M","Nullable"=>.t.};
             ,"recordpk"                    =>{"Type"=>"IB","Nullable"=>.t.};
-            ,"fk_user"                     =>{"Type"=>"IB","Nullable"=>.t.};   //Not a real foreign key, since it is not application specific. Will be set to a value previously recording by a connection method SetCurrentUserPk(var) To not have a value call connection method ClearCurrentUserPk()
+            ,"appstack"                    =>{"Type"=>"M","Nullable"=>.t.};
             ,"applicationversion"          =>{"Type"=>"CV","Length"=>100,"Nullable"=>.t.};   //Will be set to a value previously recording by a connection method SetApplicationVersion(var) To not have a value call connection method ClearApplicationVersion()
             ,"applicationbuildinfo"        =>{"Type"=>"CV","Length"=>100,"Nullable"=>.t.}};   //Will be set to a value previously recording by a connection method SetApplicationBuildInfo(var) To not have a value call connection method ClearApplicationBuildInfo()
                                         ,"Indexes"=>;
@@ -3764,16 +3771,16 @@ l_hWharfConfig := ;
         ,"hborm.SchemaAndDataErrorMessage"=>{"Fields"=>;
             {"pk"          =>{"UsedAs"=>"Primary","Type"=>"IB","AutoIncrement"=>.t.};
             ,"sha256"      =>{"Type"=>"B","Length"=>32,"Nullable"=>.t.};   //The Sha-256 of the text of AppStack+ErrorMessage.
-            ,"appstack"    =>{"Type"=>"M","Nullable"=>.t.};   //Trace of Application Calling stack
             ,"errormessage"=>{"Type"=>"M","Nullable"=>.t.}};
                                             ,"Indexes"=>;
             {"sha256"=>{"Expression"=>"sha256","StaticUID"=>"c75b91ff-fcfe-4c4e-b091-6139349163b8"}}};
         ,"hborm.SchemaAutoTrimLog"=>{"Fields"=>;
             {"pk"                  =>{"UsedAs"=>"Primary","Type"=>"IB","AutoIncrement"=>.t.};
+            ,"fk_user"             =>{"Type"=>"IB","Nullable"=>.t.};   //Not a real foreign key, since it is not application specific. Will be set to a value previously recording by a connection method SetCurrentUserPk(var) To not have a value call connection method ClearCurrentUserPk()
             ,"eventid"             =>{"Type"=>"CV","Length"=>50,"Nullable"=>.t.};
             ,"datetime"            =>{"Type"=>"DTZ"};
             ,"ip"                  =>{"Type"=>"CV","Length"=>43};
-            ,"schemaname"          =>{"Type"=>"CV","Length"=>254};
+            ,"namespacename"       =>{"Type"=>"CV","Length"=>254};
             ,"tablename"           =>{"Type"=>"CV","Length"=>254};
             ,"recordpk"            =>{"Type"=>"IB"};
             ,"fieldname"           =>{"Type"=>"CV","Length"=>254};
@@ -3781,7 +3788,6 @@ l_hWharfConfig := ;
             ,"fieldlen"            =>{"Type"=>"I"};
             ,"fieldvaluer"         =>{"Type"=>"R","Nullable"=>.t.};   //Field Value of type Raw
             ,"fieldvaluem"         =>{"Type"=>"M","Nullable"=>.t.};   //Field Value of type Memo
-            ,"fk_user"             =>{"Type"=>"IB","Nullable"=>.t.};   //Not a real foreign key, since it is not application specific. Will be set to a value previously recording by a connection method SetCurrentUserPk(var) To not have a value call connection method ClearCurrentUserPk()
             ,"applicationversion"  =>{"Type"=>"CV","Length"=>100,"Nullable"=>.t.};   //Will be set to a value previously recording by a connection method SetApplicationVersion(var) To not have a value call connection method ClearApplicationVersion()
             ,"applicationbuildinfo"=>{"Type"=>"CV","Length"=>100,"Nullable"=>.t.}};   //Will be set to a value previously recording by a connection method SetApplicationBuildInfo(var) To not have a value call connection method ClearApplicationBuildInfo()
                                     ,"Indexes"=>;
@@ -3789,13 +3795,6 @@ l_hWharfConfig := ;
             ,"applicationversion"  =>{"Expression"=>"applicationversion","StaticUID"=>"2d7d3cce-1025-4ea0-988e-d67e804b12cb"};
             ,"datetime"            =>{"Expression"=>"datetime","StaticUID"=>"a839809d-d4ee-4c3a-931a-7cde4371dbc1"};
             ,"fk_user"             =>{"Expression"=>"fk_user","StaticUID"=>"b0a73bcb-4057-4c25-8d32-01b6ab2b389d"}}};
-        ,"hborm.SchemaTableNumber"=>{"Fields"=>;
-            {"pk"        =>{"UsedAs"=>"Primary","Type"=>"I","AutoIncrement"=>.t.};   //Will never have more than 2**32 tables.
-            ,"schemaname"=>{"Type"=>"CV","Length"=>254};
-            ,"tablename" =>{"Type"=>"CV","Length"=>254}};
-                                    ,"Indexes"=>;
-            {"schemaname"=>{"Expression"=>"schemaname","StaticUID"=>"10d5b84e-3c55-4d50-8875-7928cb91add7"};
-            ,"tablename" =>{"Expression"=>"tablename","StaticUID"=>"e7cd37d6-39d3-4715-ad21-3d7f8e0e24e6"}}};
         ,"hborm.SchemaVersion"=>{"Fields"=>;
             {"pk"     =>{"UsedAs"=>"Primary","Type"=>"I","AutoIncrement"=>.t.};
             ,"name"   =>{"Type"=>"CV","Length"=>254};
@@ -3811,6 +3810,8 @@ l_hWharfConfig := ;
                             };
         },;
     "GenerationSource"=>"DataWharf"}
+
+
 
 l_PreviousNamespaceName := ::SetCurrentNamespaceName(::p_HBORMNamespace)
 

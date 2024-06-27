@@ -1,5 +1,9 @@
 # Harbour ORM - Change Log
 
+## 06/26/2024 V 4.12
+* Added definition of HB_ORM_INVALUEWITCH to allow to mark any parts of expressions as values, disabling the automatic casing of columns.
+* Added "SchemaAndDataErrorMessage" in ORM namespace, to reduce the size of repeating errors.
+
 ## 06/26/2024 V 4.11
 * Fix on Missing creation of table WharfConfig in ORM Namespace.
 

@@ -2,8 +2,6 @@
 
 #include "hb_orm.ch"
 
-#define INVALUEWITCH chr(1)
-
 // List of future enhancements:
 //    Somehow initialize  ::p_ColumnToReturn
 //    Support for more than 2 combined queries (like for example "unions")

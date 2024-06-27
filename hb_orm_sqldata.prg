@@ -2,7 +2,6 @@
 
 #include "hb_orm.ch"
 
-#define INVALUEWITCH              chr(1)
 #define INPOSSIBLEZERONULLEQUAL   chr(2)
 #define INPOSSIBLEZERONULLGREATER chr(3)
 
@@ -612,8 +611,8 @@ if empty(::p_ErrorMessage)
         ::p_oSQLConnection:LogAutoTrimEvent(::p_cEventId,::p_NamespaceAndTableName,::p_KEY,l_aAutoTrimmedFields)
     endif
 else
-    ::p_Key = -1
-    ::Tally = -1
+    ::p_Key := -1
+    ::Tally := -1
 endif
 
 if len(l_aErrors) > 0
@@ -705,7 +704,7 @@ if empty(::p_ErrorMessage)
         if empty(::p_ErrorMessage)
             if ::p_oSQLConnection:SQLExec(par_xEventId,l_cSQLCommand)
                 // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
-                ::Tally = 1
+                ::Tally := 1
             else
                 ::p_ErrorMessage := ::p_oSQLConnection:GetSQLExecErrorMessage()
                 // ::SQLSendToLogFileAndMonitoringSystem(0,1,l_cSQLCommand+[ -> ]+::p_ErrorMessage)
@@ -718,7 +717,7 @@ if empty(::p_ErrorMessage)
 endif
 
 if !empty(::p_ErrorMessage)
-    ::Tally = -1
+    ::Tally := -1
 endif
 
 return empty(::p_ErrorMessage)
@@ -825,7 +824,7 @@ if empty(::p_ErrorMessage)
             ::p_LastSQLCommand = l_cSQLCommand
             
             if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
-                ::Tally = 1
+                ::Tally := 1
                 // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
                 ::p_LastUpdateChangedData := .t.   // _M_ For now I am assuming the record changed. Later on create a generic Store Procedure that will do these data changes.
             else
@@ -906,7 +905,7 @@ if empty(::p_ErrorMessage)
             ::p_LastSQLCommand = l_cSQLCommand
             
             if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand)
-                ::Tally = 1
+                ::Tally := 1
                 // ::SQLSendToLogFileAndMonitoringSystem(0,0,l_cSQLCommand)
                 ::p_LastUpdateChangedData := .t.   // _M_ For now I am assuming the record changed. Later on create a generic Store Procedure that will do these data changes.
             else
@@ -926,7 +925,7 @@ if empty(::p_ErrorMessage)
         ::p_oSQLConnection:LogAutoTrimEvent(::p_cEventId,::p_NamespaceAndTableName,::p_KEY,l_aAutoTrimmedFields)
     endif
 else
-    ::Tally = -1
+    ::Tally := -1
 endif
 
 if len(l_aErrors) > 0
@@ -962,31 +961,31 @@ if pcount() > 1 .and. "^" $ par_cExpression
                 switch valtype(l_xValue)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_cResult += INVALUEWITCH+'"'+hb_StrReplace( l_xValue, {'\' => '\\',;
+                    l_cResult += HB_ORM_INVALUEWITCH+'"'+hb_StrReplace( l_xValue, {'\' => '\\',;
                                                                             '"' => '\"',;
-                                                                            "'" => "\'"} )+'"'+INVALUEWITCH
+                                                                            "'" => "\'"} )+'"'+HB_ORM_INVALUEWITCH
                     exit
 
                 case "N"  // Numeric
-                    l_cResult += INVALUEWITCH+hb_ntoc(l_xValue)+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+hb_ntoc(l_xValue)+HB_ORM_INVALUEWITCH
                     exit
 
                 case "D"  // Date   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
                     // l_xValue := '"'+hb_DtoC(l_xValue,"YYYY-MM-DD")+'"'           //_M_  Test on 1753-01-01
-                    l_cResult += INVALUEWITCH+::FormatDateForSQLUpdate(l_xValue)+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+::FormatDateForSQLUpdate(l_xValue)+HB_ORM_INVALUEWITCH
                     exit
 
                 case "T"  // TimeStamp (*)   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
                     // l_xValue := '"'+hb_TtoC(l_xValue,"YYYY-MM-DD","hh:mm:ss")+'"'           //_M_  Test on 1753-01-01
-                    l_cResult += INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_xValue)+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_xValue)+HB_ORM_INVALUEWITCH
                     exit
 
                 case "L"  // Boolean (logical)   https://dev.mysql.com/doc/refman/8.0/en/boolean-literals.html
-                    l_cResult += INVALUEWITCH+iif(l_xValue,"TRUE","FALSE")+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+iif(l_xValue,"TRUE","FALSE")+HB_ORM_INVALUEWITCH
                     exit
 
                 case "U"  // Undefined (NIL)
-                    l_cResult += INVALUEWITCH+"NULL"+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+"NULL"+HB_ORM_INVALUEWITCH
                     exit
 
                 // case "A"  // Array
@@ -1020,31 +1019,31 @@ if pcount() > 1 .and. "^" $ par_cExpression
                 switch valtype(l_xValue)
                 case "C"  // Character string   https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
                 case "M"  // Memo field
-                    l_cResult += INVALUEWITCH+"'"+hb_StrReplace( l_xValue, {'\' => '\\',;
+                    l_cResult += HB_ORM_INVALUEWITCH+"'"+hb_StrReplace( l_xValue, {'\' => '\\',;
                                                                             '"' => '\"',;
-                                                                            "'" => "\'"} )+"'"+INVALUEWITCH
+                                                                            "'" => "\'"} )+"'"+HB_ORM_INVALUEWITCH
                     exit
 
                 case "N"  // Numeric
-                    l_cResult += INVALUEWITCH+hb_ntoc(l_xValue)+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+hb_ntoc(l_xValue)+HB_ORM_INVALUEWITCH
                     exit
 
                 case "D"  // Date   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
                     // l_xValue := "'"+hb_DtoC(l_xValue,"YYYY-MM-DD")+"'"          //_M_  Test on 1753-01-01
-                    l_cResult += INVALUEWITCH+::FormatDateForSQLUpdate(l_xValue)+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+::FormatDateForSQLUpdate(l_xValue)+HB_ORM_INVALUEWITCH
                     exit
 
                 case "T"  // TimeStamp (*)   https://dev.mysql.com/doc/refman/8.0/en/datetime.html
                     // l_xValue := "'" +hb_TtoC(l_xValue,"YYYY-MM-DD","hh:mm:ss")+"'"            //_M_  Test on 1753-01-01
-                    l_cResult += INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_xValue)+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+::FormatDateTimeForSQLUpdate(l_xValue)+HB_ORM_INVALUEWITCH
                     exit
 
                 case "L"  // Boolean (logical)   https://dev.mysql.com/doc/refman/8.0/en/boolean-literals.html
-                    l_cResult += INVALUEWITCH+iif(l_xValue,"TRUE","FALSE")+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+iif(l_xValue,"TRUE","FALSE")+HB_ORM_INVALUEWITCH
                     exit
 
                 case "U"  // Undefined (NIL)
-                    l_cResult += INVALUEWITCH+"NULL"+INVALUEWITCH
+                    l_cResult += HB_ORM_INVALUEWITCH+"NULL"+HB_ORM_INVALUEWITCH
                     exit
 
                 // case "A"  // Array
@@ -1451,7 +1450,7 @@ endcase
 
 for each l_cByte in @par_cExpression
 
-    if l_cByte == INVALUEWITCH
+    if l_cByte == HB_ORM_INVALUEWITCH
         l_lValueMode := !l_lValueMode
 
         if !l_lValueMode   // Finished to merge the text, so we should not remove blanks anymore
@@ -1602,6 +1601,7 @@ for each l_cByte in @par_cExpression
                     endif
                 else
                     l_cResult += l_cStreamBuffer+l_cByte
+// altd()
                     hb_orm_SendToDebugView([Auto-Casing Error: Failed To find alias "]+l_cAliasName+[".])
                 endif
             endif
@@ -2874,7 +2874,7 @@ otherwise
 
         if ::p_oSQLConnection:SQLExec(::p_cEventId,l_cSQLCommand,l_cCursorTempName)
             select (l_cCursorTempName)
-            ::Tally        := reccount()
+            ::Tally          := reccount()
             l_lErrorOccurred := .f.
             
             do case
@@ -2894,7 +2894,7 @@ otherwise
                 AAdd(l_aErrors,{::p_NamespaceAndTableName,::p_KEY,"Error in method get() more than 1 record."+CRLF+::LastSQL(),hb_orm_GetApplicationStack()})
             endcase
         else
-            ::Tally = -1
+            ::Tally := -1
             AAdd(l_aErrors,{::p_NamespaceAndTableName,::p_KEY,"Error in method get() "+::p_ErrorMessage,hb_orm_GetApplicationStack()})
         endif
         
@@ -2902,7 +2902,7 @@ otherwise
     endif
     
     if l_lErrorOccurred
-        ::Tally = -1
+        ::Tally := -1
         select (l_nSelect)
     else
         select (l_nSelect)
