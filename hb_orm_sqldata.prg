@@ -2929,7 +2929,10 @@ if empty(par_dDate)
         l_cResult := [NULL]
         
     // case inlist(v_SQLServerType,"MSSQL2000","MSSQL2005","MSSQL2008")
-    // 	l_cResult := [NULL]
+    //     l_cResult := [NULL]
+        
+    // case inlist(v_SQLServerType,"ORACLE")
+    //     l_cResult := [NULL]
         
     otherwise
         l_cResult := [NULL]
@@ -2944,7 +2947,10 @@ else
         l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
         
     // case inlist(v_SQLServerType,"MSSQL2000","MSSQL2005","MSSQL2008")
-    // 	l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
+    //    l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
+        
+    // case inlist(v_SQLServerType,"ORACLE")
+    //    l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
         
     otherwise
         l_cResult := [']+hb_DtoC(par_dDate,"YYYY-MM-DD")+[']
@@ -2967,7 +2973,10 @@ if empty(par_tDati)
         l_cResult := [NULL]
         
     // case inlist(v_SQLServerType,"MSSQL2000","MSSQL2005","MSSQL2008")
-    // 	l_cResult := [NULL]
+    //     l_cResult := [NULL]
+        
+    // case inlist(v_SQLServerType,"ORACLE")
+    //     l_cResult := [NULL]
         
     otherwise
         l_cResult := [NULL]
@@ -2983,7 +2992,10 @@ else
         l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss"+iif(l_nPrecision=0,"","."+replicate("f",l_nPrecision)))+[']
         
     // case inlist(v_SQLServerType,"MSSQL2000","MSSQL2005","MSSQL2008")
-    // 	l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss")+[']
+    //     l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss")+[']
+        
+    // case inlist(v_SQLServerType,"ORACLE")
+    //     l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss")+[']
         
     otherwise
         l_cResult := [']+hb_TtoC(par_tDati,"YYYY-MM-DD","hh:mm:ss"+iif(l_nPrecision=0,"","."+replicate("f",l_nPrecision)))+[']
@@ -3039,6 +3051,15 @@ else
             l_cValue := hb_ntoc(par_xValue)
         else
             AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Small Integer',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+        exit
+    case  "F" // Float
+        if l_cValueType == "N"
+            // Not Testing if in range Yet
+            l_cValue := hb_ntoc(par_xValue)
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not a Float',hb_orm_GetApplicationStack()})
             l_lResult := .f.
         endif
         exit
@@ -3270,6 +3291,15 @@ else
             l_lResult := .f.
         endif
         exit
+    case "F" // Float
+        if l_cValueType == "N"
+            // Not Testing if in range
+            l_cValue := hb_ntoc(par_xValue)
+        else
+            AAdd(l_aErrors,{par_cTableName,par_nKey,'Field "'+par_cFieldName+'" not an Float',hb_orm_GetApplicationStack()})
+            l_lResult := .f.
+        endif
+        exit
     case  "Y" // Money  (4 decimals)
         if l_cValueType == "N"
             // Not Testing if in range Yet
@@ -3498,6 +3528,8 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cCast := [bigint]
     case par_cFieldType == "IS"
         l_cCast := [smallint]
+    case par_cFieldType == "F"
+        l_cCast := [real]
     case par_cFieldType == "N"
         l_cCast := [numeric(]+trans(par_nFieldLen)+[,]+trans(par_nFieldDec)+[)]
     case par_cFieldType == "C"

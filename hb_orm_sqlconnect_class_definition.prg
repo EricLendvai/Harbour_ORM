@@ -63,8 +63,8 @@ class hb_orm_SQLConnect
         data Connected init .f.                                          //true if connected to a server
         data p_hb_orm_version init HB_ORM_BUILDVERSION READONLY
         method SetBackendType(par_cName)                                 // For Example, "MariaDB","MySQL","PostgreSQL"
-        method GetSQLEngineType() inline ::p_SQLEngineType               // HB_ORM_ENGINETYPE_MYSQL, HB_ORM_ENGINETYPE_POSTGRESQL, HB_ORM_ENGINETYPE_MSSQL
-        method GetBackendType()   inline ::p_BackendType                 // HB_ORM_BACKENDTYPE_MARIADB, HB_ORM_BACKENDTYPE_MYSQL, HB_ORM_BACKENDTYPE_POSTGRESQL, HB_ORM_BACKENDTYPE_MSSQL
+        method GetSQLEngineType() inline ::p_SQLEngineType               // HB_ORM_ENGINETYPE_MYSQL, HB_ORM_ENGINETYPE_POSTGRESQL, HB_ORM_ENGINETYPE_MSSQL, HB_ORM_ENGINETYPE_ORACLE
+        method GetBackendType()   inline ::p_BackendType                 // HB_ORM_BACKENDTYPE_MARIADB, HB_ORM_BACKENDTYPE_MYSQL, HB_ORM_BACKENDTYPE_POSTGRESQL, HB_ORM_BACKENDTYPE_MSSQL, HB_ORM_BACKENDTYPE_ORACLE
         method SetDriver(par_cName)
         method SetServer(par_cName)
         method GetServer() inline ::p_Server

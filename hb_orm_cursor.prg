@@ -151,10 +151,14 @@ for each l_hFieldDefinition in ::p_Fields
     endif
 
     if l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_AUTOINC] .or. ;
-       l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_NULL] .or. ;
-       l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_BINARY] .or. ;
+       l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_NULL]    .or. ;
+       l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_BINARY]  .or. ;
        l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_TRIM]
-           
+        
+        if l_hFieldDefinition[2] == "F"
+            l_hFieldDefinition[3] := 0
+        endif
+
         AAdd(::p_FieldsForAppend,{l_hFieldDefinition[1],;
                                   l_hFieldDefinition[2],;
                                   l_hFieldDefinition[3],;
