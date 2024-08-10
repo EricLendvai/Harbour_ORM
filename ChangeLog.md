@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 08/09/2024 V 4.14
+* Added Postgresql code generation for Interval data types (with no precision for now.). No support in CRUD and query methods yet.
+
 ## 08/06/2024 V 4.13
 * Added support to connect to Oracle SQL Server
 * Added support to Float field types.

@@ -721,6 +721,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
                     l_nFieldLen           := 0
                     l_nFieldDec           := 0
                     exit
+                case "interval" // _M_ add support to second precision 0 to 6
+                    l_cFieldType      := "ITV"
+                    l_nFieldLen       := 0
+                    l_nFieldDec       := 0
+                    exit
                 case "USER-DEFINED"
                     l_cFieldType          := "E"
                     l_cFieldTypeEnumName  := trim(field->field_type_enum_name)
@@ -1515,7 +1520,7 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
                         l_lMatchingFieldDefinition := .f.
                         l_cMismatchType := "Field Scale"
                     endif
-                case el_IsInlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS","JSB","OID","E")  //Field type with no length
+                case el_IsInlist(l_cFieldType,"I","IB","IS","M","R","L","D","Y","UUI","JS","JSB","OID","ITV","E")  //Field type with no length.   _M_ ITV will have precision.
                 case empty(el_InlistPos(l_cFieldType,"TOZ","TO","DTZ","DT")) .and. l_nFieldLen <> l_nCurrentFieldLen   //Ignore Length matching for datetime and time fields
                     l_lMatchingFieldDefinition := .f.
                     l_cMismatchType := "Field Length"
@@ -2034,6 +2039,11 @@ for each l_aField in par_hStructure
 
             l_cDefaultString := ""
             
+        case l_cFieldType == "ITV"
+            l_cSQLFields += [interval]+l_cFieldTypeSuffix
+
+            l_cDefaultString := ""
+            
         case l_cFieldType == "E"
             if empty(l_cFieldTypeEnumName)
                 //_M_
@@ -2461,6 +2471,10 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
         l_cSQLCommandCycle1 += [TYPE oid]+l_cFieldTypeSuffix
         l_cDefaultString := "0"
 
+    case l_cFieldType == "ITV"
+        l_cSQLCommandCycle1 += [TYPE interval]+l_cFieldTypeSuffix
+        l_cDefaultString := "''"
+
     case l_cFieldType == "E"
         l_cSQLCommandCycle1 += [TYPE ]+::FormatIdentifier(par_cNamespaceName)+[.]+::FormatIdentifier(l_cFieldTypeEnumName)+l_cFieldTypeSuffix
         l_cDefaultString := "''"
@@ -2792,7 +2806,11 @@ case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
 
     case l_cFieldType == "OID"
         l_cSQLCommand += [oid]+l_cFieldTypeSuffix
-        l_cDefaultString := "FALSE"
+        l_cDefaultString := "FALSE"  //_M_ is this correct?
+
+    case l_cFieldType == "ITV"
+        l_cSQLCommand += [interval]+l_cFieldTypeSuffix
+        l_cDefaultString := "''"  //_M_ is this correct?
 
     case l_cFieldType == "E"
         if empty(l_cFieldTypeEnumName)
@@ -4384,6 +4402,9 @@ case par_cSQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
             l_cFieldDefault = left(par_cFieldDefault,len(par_cFieldDefault)-len("::oid"))
         endif
 
+    case par_cFieldType == "ITV"
+        l_cFieldDefault := NIL
+        
     case par_lFieldNullable
 
     endcase
