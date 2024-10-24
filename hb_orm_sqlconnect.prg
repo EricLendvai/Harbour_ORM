@@ -48,12 +48,12 @@ if ::p_SQLConnection > 0
 
         if !l_lSQLExecResult
             l_nErrorNumber := hb_RDDInfo(RDDI_ERRORNO)
-            if (l_nErrorNumber == 9999) .and. ;
-               ((upper(left(par_cCommand,len("DELETE FROM "))) == "DELETE FROM ") .or. (upper(left(par_cCommand,len("UPDATE "))) == "UPDATE ")) // .and. (" RETURNING " $ upper(par_cCommand))
-                //Ignore the error, because most likely no records where deleted.
-                l_lSQLExecResult := .t.
-                // hb_orm_SendToDebugView("Ignored unknown Error on "+par_cCommand)
-
+            if (l_nErrorNumber == 9999)
+                if ((upper(left(par_cCommand,len("DELETE FROM "))) == "DELETE FROM ") .or. (upper(left(par_cCommand,len("UPDATE "))) == "UPDATE ")) .or. (" UPDATE " $ upper(par_cCommand))
+                    //Ignore the error, because most likely no records where deleted.
+                    l_lSQLExecResult := .t.
+                    // hb_orm_SendToDebugView("Ignored unknown Error on "+par_cCommand)
+                endif
             endif
         endif
 

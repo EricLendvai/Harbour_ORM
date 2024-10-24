@@ -1,5 +1,8 @@
 # Harbour ORM - Change Log
 
+## 10/23/2024 V 4.15
+* Work around false positive error on bulk updated.
+
 ## 08/09/2024 V 4.14
 * Added Postgresql code generation for Interval data types (with no precision for now.). No support in CRUD and query methods yet.
 

@@ -41,7 +41,7 @@ RUN make -j 8 install
 RUN ldconfig
 
 #Fake command to force not using a cache from this point on.
-#-ARG CACHEBUST=9
+#ARG CACHEBUST=9
 
 # install Postgresql odbc
 RUN apt-get -y install odbc-postgresql
