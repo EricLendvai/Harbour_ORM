@@ -9,6 +9,8 @@
         "harbour.compilerExecutable": "/src/harbour/bin/linux/gcc/harbour",
         "harbour.extraOptions": "-i/src/harbour/include/",
         "harbour.extraIncludePaths":["/src/harbour/include/",
+                                     "/src/Harbour/contrib/rddsql/",
+                                     "/src/Harbour/contrib/hbodbc/",
                                      "/src/Harbour_ORM/",
                                      "/src/Harbour_EL/"],
         "harbour.warningLevel": 1,

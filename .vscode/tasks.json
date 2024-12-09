@@ -43,6 +43,7 @@
                     "cwd": "${workspaceFolder}",
                     "env": {
                         "HB_EL_ROOT":"C:\\Harbour_EL",
+                        "HARBOUR_ROOT":"C:\\Harbour",
                         "LIBName":"hb_orm",
                         "BuildMode":"debug",
                         "HB_COMPILER":"${input:CCompiler}"
@@ -65,6 +66,7 @@
                     "cwd": "${workspaceFolder}",
                     "env": {
                         "HB_EL_ROOT":"/src/Harbour_EL",
+                        "HARBOUR_ROOT":"/src/harbour",
                         "LIBName":"hb_orm",
                         "BuildMode":"debug",
                         "HB_COMPILER":"gcc"
@@ -90,6 +92,7 @@
                     "cwd": "${workspaceFolder}",
                     "env": {
                         "HB_EL_ROOT":"C:\\Harbour_EL",
+                        "HARBOUR_ROOT":"C:\\Harbour",
                         "LIBName":"hb_orm",
                         "BuildMode":"release",
                         "HB_COMPILER":"${input:CCompiler}"
@@ -112,6 +115,7 @@
                     "cwd": "${workspaceFolder}",
                     "env": {
                         "HB_EL_ROOT":"/src/Harbour_EL",
+                        "HARBOUR_ROOT":"/src/harbour",
                         "LIBName":"hb_orm",
                         "BuildMode":"release",
                         "HB_COMPILER":"gcc"

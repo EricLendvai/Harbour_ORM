@@ -1,7 +1,7 @@
 //Copyright (c) 2024 Eric Lendvai MIT License
 
 #ifndef HB_ORM_BUILDVERSION
-#define HB_ORM_BUILDVERSION "4.15"
+#define HB_ORM_BUILDVERSION "4.16"
 
 #define HB_ORM_TRIGGERVERSION 2
 
@@ -72,5 +72,9 @@
 
 #define POSTGRESQL_MAX_FOREIGN_KEY_NAME_LENGTH 63   //A PostgreSQL limitation, unless recompiled otherwise
 #define POSTGRESQL_MAX_INDEX_NAME_LENGTH 63         //A PostgreSQL limitation, unless recompiled otherwise
+
+#define HB_ORM_READ_COMMITTED   "READ COMMITTED"
+#define HB_ORM_REPEATABLE_READ  "REPEATABLE READ"
+#define HB_ORM_SERIALIZABLE     "SERIALIZABLE"
 
 #endif /* HB_ORM_BUILDVERSION */

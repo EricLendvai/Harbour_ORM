@@ -7,8 +7,10 @@
     "settings": {
         "files.autoSave": "onFocusChange",
         "harbour.compilerExecutable": "C:\\Harbour\\bin\\win\\mingw64\\harbour.exe",
-        "harbour.extraOptions": "-iC:\\Harbour\\include",
+        "harbour.extraOptions": "-iC:\\Harbour\\include,C:\\Harbour\\contrib\\rddsql",
         "harbour.extraIncludePaths":["C:\\Harbour\\include\\",
+                                     "C:\\Harbour\\contrib\\rddsql\\",
+                                     "C:\\Harbour\\contrib\\hbodbc\\",
                                      "C:\\Harbour_ORM\\",
                                      "C:\\Harbour_EL\\"],
         "harbour.warningLevel": 1,

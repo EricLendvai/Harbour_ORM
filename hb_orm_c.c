@@ -1,12 +1,24 @@
 //Copyright (c) 2024 Eric Lendvai MIT License
 
-#include "hbapi.h"
-#include "hbapierr.h"
-#include "hbapicdp.h"
-
 #ifdef _WIN32
 #include <windows.h>
 #endif
+
+#include <hbapi.h>
+#include <hbapierr.h>
+
+// #include <hbapicdp.h>
+// #include <hbapirdd.h>
+
+#include <hbapiitm.h>
+
+//Ensure HARBOUR_ROOT is set in launch.json
+#include <hbrddsql.h>
+
+#include <sql.h>
+#include <sqlext.h>
+
+//=================================================================================================================
 
 HB_FUNC( HB_ORM_OUTPUTDEBUGSTRING )   // For Windows Only
 {
@@ -16,6 +28,7 @@ HB_FUNC( HB_ORM_OUTPUTDEBUGSTRING )   // For Windows Only
 }
 //=================================================================================================================
 
+// Following code left for reference purpose
 // HB_BOOL xxhb_cdpUTF8ToU16NextChar( HB_UCHAR ucChar, int * n, HB_WCHAR * pwc )
 // {
 
@@ -31,13 +44,11 @@ HB_FUNC( HB_ORM_OUTPUTDEBUGSTRING )   // For Windows Only
 //       return HB_TRUE;
 //    }
 
-
 //    *n = 0;
 //    *pwc = ucChar;
 //    // *pwc &= 0x1f;
 
 // return HB_TRUE;
-
    
 //    if( ucChar >= 0xc0 )
 //    {
@@ -123,4 +134,68 @@ HB_FUNC( HB_UTF8FASTPEEK )
       hb_errRT_BASE_SubstR( EG_ARG, 3012, NULL, HB_ERR_FUNCNAME, HB_ERR_ARGS_BASEPARAMS );
    }
 }
+//=================================================================================================================
+typedef struct
+{
+   void * hEnv;
+   void * hConn;
+} SDDCONN;
+
+// Following function provided by Antonio Linares in the conversation: https://groups.google.com/g/harbour-users/c/tFe2EgBfJyk
+HB_FUNC( HB_ORM_ODBCAPIGETHANDLE )
+{
+   SQLBASEAREAP pArea = ( SQLBASEAREAP ) hb_rddGetCurrentWorkAreaPointer();
+   SQLDDCONNECTION * pConnection = pArea->pConnection;
+
+   hb_storptr( ( ( SDDCONN * ) pConnection->pSDDConn )->hConn, 1 );
+}
+//=================================================================================================================
+//Following 4 functions provided by David Field in the conversation: https://groups.google.com/g/harbour-users/c/tFe2EgBfJyk
+HB_FUNC( HB_ORM_ODBC_SQLSETCONNECTIONATTRIBUTE ) /* hDbc, nOption, uOption */
+{
+#if ODBCVER >= 0x0300
+   hb_retni( SQLSetConnectAttr( ( SQLHDBC )  hb_parptr( 1 ), 
+                                ( SQLINTEGER ) hb_parnl( 2 ),
+                                HB_ISCHAR( 3 ) ? ( SQLPOINTER ) hb_parc( 3 ) : ( SQLPOINTER ) ( HB_PTRUINT ) hb_parnint( 3 ),
+                                HB_ISCHAR( 3 ) ? ( SQLINTEGER ) hb_parclen( 3 ) : ( SQLINTEGER ) SQL_IS_INTEGER ) );
+#else
+   hb_retni( SQLSetConnectOption( ( SQLHDBC ) hb_parptr( 1 ), 
+                                  ( SQLUSMALLINT ) hb_parni( 2 ),
+                                  ( SQLULEN ) HB_ISCHAR( 3 ) ? ( SQLULEN ) hb_parc( 3 ) : hb_parnl( 3 ) ) );
+#endif
+}
+//=================================================================================================================
+HB_FUNC( HB_ORM_ODBC_SQLGETCONNECTIONATTRIBUTE ) /* hDbc, nOption, @cOption */
+{
+#if ODBCVER >= 0x0300
+   SQLPOINTER buffer[ 512 ];
+   SQLINTEGER lLen = 0;
+   buffer[ 0 ] = '\0';
+   hb_retni( SQLGetConnectAttr( ( SQLHDBC ) hb_parptr( 1 ),
+                                ( SQLINTEGER ) hb_parnl( 2 ),
+                                ( SQLPOINTER ) buffer,
+                                ( SQLINTEGER ) sizeof( buffer ),
+                                ( SQLINTEGER * ) &lLen ) );
+   hb_storclen( ( char * ) buffer, lLen, 3 );
+#else
+   char buffer[ 512 ];
+   buffer[ 0 ] = '\0';
+   hb_retni( SQLGetConnectOption( ( SQLHDBC ) hb_parptr( 1 ),
+                                  ( SQLSMALLINT ) hb_parni( 2 ),
+                                  ( SQLPOINTER ) buffer ) );
+   hb_storc( buffer, 3 );
+#endif
+}
+//=================================================================================================================
+HB_FUNC( HB_ORM_ODBC_SQLCOMMIT ) /* hDbc */
+{
+   hb_retni( SQLEndTran(  SQL_HANDLE_DBC , ( SQLHDBC ) hb_parptr( 1 ), SQL_COMMIT ) );
+}
+//=================================================================================================================
+HB_FUNC( HB_ORM_ODBC_SQLROLLBACK ) /* hDbc */
+{
+   hb_retni( SQLEndTran(  SQL_HANDLE_DBC , ( SQLHDBC ) hb_parptr( 1 ), SQL_ROLLBACK ) );
+}
+//=================================================================================================================
+//=================================================================================================================
 //=================================================================================================================

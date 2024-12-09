@@ -699,6 +699,7 @@ if empty(::p_ErrorMessage)
         l_nSelect := iif(used(),select(),0)
         
         l_cSQLCommand := [DELETE FROM ]+::p_oSQLConnection:FormatIdentifier(::p_oSQLConnection:NormalizeTableNamePhysical(l_cNamespaceAndTableName))+[ WHERE ]+::p_oSQLConnection:FormatIdentifier(l_cPrimaryKeyFieldName)+[=]+trans(par_iKey)
+
         ::p_LastSQLCommand = l_cSQLCommand
 
         if empty(::p_ErrorMessage)

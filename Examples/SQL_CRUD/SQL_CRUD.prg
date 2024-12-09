@@ -14,11 +14,12 @@ local l_lInDocker := (hb_GetEnv("InDocker","False") == "True") .or. File("/.dock
 local l_cOutputFolder := iif(l_lInDocker,"Output/","Output\")
 
 local l_lAccessPostgresql := .t.
-local l_lAccessMariaDB    := .t.
+local l_lAccessMariaDB    := .f.
 
 local l_lTestUpdates         := .t.
 local l_lTestSimpleQueries   := .t.
 local l_lTestCombinedQueries := .t.
+local l_lTestTransactions    := .f.
 
 local l_iSQLHandle
 local l_oSQLConnection1
@@ -80,6 +81,8 @@ local l_oCompoundQuery3
 
 local l_cRuntimePrefixStamp := GetZuluTimeStampForFileNameSuffix()+"_"
 
+local l_nSeconds
+
 // local l_iPID := el_GetProcessId()
 
 // altd()
@@ -106,8 +109,7 @@ if l_lAccessMariaDB
         :SetPassword("rndrnd")
         :SetDatabase("test001")
         // :SetServer("127.0.0.1")
-        :SetPrimaryKeyFieldName("key")
-
+        
         :LoadWharfConfiguration(l_hWharfDefinitionMySQLA)
         :LoadWharfConfiguration(l_hWharfDefinitionMySQLB)
         :SetForeignKeyNullAndZeroParity(.t.)
@@ -124,22 +126,21 @@ if l_lAccessMariaDB
         endcase
 
         ?"MariaDB Get last Handle",:GetHandle()  // This function is only needed if l_iSQLHandle was set to 0.
-    end
+    endwith
 endif
 
 if l_lAccessPostgresql
     if l_lInDocker
-        l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL Unicode","host.docker.internal",5432,"postgres","rndrnd","test001","set001")
+        l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL Unicode","host.docker.internal",5437,"postgres","rndrnd","test001","set001")
     else
         // l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL ODBC Driver(UNICODE)","localhost",5432,"postgres","rndrnd","test001","set001")
-        l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL Unicode(x64)","localhost",5432,"postgres","rndrnd","test001","set001")
+        l_oSQLConnection2 := hb_SQLConnect("PostgreSQL","PostgreSQL Unicode(x64)","localhost",5437,"postgres","rndrnd","test001","set001")
     endif
 
     with object l_oSQLConnection2
         ?"PostgreSQL - ORM version - "+:p_hb_orm_version
         :PostgreSQLIdentifierCasing := HB_ORM_POSTGRESQL_CASE_SENSITIVE
 
-        :SetPrimaryKeyFieldName("key")
         :LoadWharfConfiguration(l_hWharfDefinitionPostgresA)
         :LoadWharfConfiguration(l_hWharfDefinitionPostgresB)
         :SetForeignKeyNullAndZeroParity(.t.)
@@ -157,6 +158,7 @@ if l_lAccessPostgresql
         endcase
 
         ?"PostgreSQL Get last Handle",:GetHandle()  // This function is only needed if l_iSQLHandle was set to 0.
+        // ?"AutoCommit is ",:IsAutoCommitOn()
     end
 endif
 //===========================================================================================================================
@@ -210,7 +212,7 @@ if l_lAccessMariaDB
 
         // altd()
         l_cUpdateScript := l_cLastError := ""
-        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hWharfDefinitionMySQLA["Tables"]),,@l_cUpdateScript,@l_cLastError) > 0
+        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hWharfDefinitionMySQLA),,@l_cUpdateScript,@l_cLastError) > 0
             hb_orm_SendToDebugView("MariaDB - Updated Schema with Definition A - No Errors")
         else
             if !empty(l_cLastError)
@@ -228,7 +230,7 @@ if l_lAccessMariaDB
 
 
         l_cUpdateScript := l_cLastError := ""
-        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hWharfDefinitionMySQLB["Tables"]),,@l_cUpdateScript,@l_cLastError) > 0
+        if el_AUnpack(l_oSQLConnection1:MigrateSchema(l_hWharfDefinitionMySQLB),,@l_cUpdateScript,@l_cLastError) > 0
             hb_orm_SendToDebugView("MariaDB - Updated Schema with Definition B - No Errors")
         else
             if !empty(l_cLastError)
@@ -273,7 +275,7 @@ if l_lAccessPostgresql
 
 
         l_cUpdateScript := ""
-        if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hWharfDefinitionPostgresA["Tables"]),,@l_cUpdateScript,@l_cLastError) > 0
+        if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hWharfDefinitionPostgresA),,@l_cUpdateScript,@l_cLastError) > 0
             hb_orm_SendToDebugView("PostgreSQL - Updated MigrationSqlScript_PostgreSQL_set001.txt")
         else
             if !empty(l_cLastError)
@@ -287,7 +289,7 @@ if l_lAccessPostgresql
         l_cPreviousNamespaceName := l_oSQLConnection2:SetCurrentNamespaceName("set002")
 
         l_cUpdateScript := ""
-        if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hWharfDefinitionPostgresB["Tables"]),,@l_cUpdateScript,@l_cLastError) > 0
+        if el_AUnpack(l_oSQLConnection2:MigrateSchema(l_hWharfDefinitionPostgresB),,@l_cUpdateScript,@l_cLastError) > 0
             hb_orm_SendToDebugView("PostgreSQL - Updated MigrationSqlScript_PostgreSQL_set002....txt")
         else
             if !empty(l_cLastError)
@@ -404,7 +406,7 @@ altd()
                 // l_Tally         := :tally
                 // l_cLastSQLError := :ErrorMessage()
                 // l_cLastSQL      := :LastSQL()
-                // l_TestResult   := l_oSQLConnection1:p_TableSchema["table003"]["Fields"]
+                // l_TestResult   := l_oSQLConnection1:p_hMetadataTable["table003"][HB_ORM_SCHEMA_FIELD]
 
                 ExportTableToHtmlFile("Table003Records",l_cOutputFolder+l_cRuntimePrefixStamp+"MySQL_Table003Records","From MySQL",,,.t.)
 
@@ -1450,8 +1452,47 @@ if l_lTestCombinedQueries
 
 endif
 //-----------------------------------------------------------------------------------------------------------------------
+if l_lTestTransactions
+    // Some code use while interacting via PgAdmin to test the transaction methods.
+    if l_lAccessPostgresql
+        // if l_oSQLConnection2:BeginTransactionReadCommitted()
+        if l_oSQLConnection2:BeginTransactionRepeatableRead()
+            ?"Started Repeatable Read Transaction"
+
+            l_oDB1 := hb_SQLData(l_oSQLConnection2)
+            with object l_oDB1
+                :Table(1001,"set001.table001","table001")
+                :Column("table001.fname","table001_fname")
+                l_oData := :Get(1)
+                ?"set001.table001 for key=1, fname=",l_oData:table001_fname
+
+                :Table(1002,"set001.table001","table001")
+                :Field("table001.fname","Ingrid 3")
+                :Update(1)
+
+                l_nSeconds := 5
+                Do while l_nSeconds > 0
+                    ?"Seconds Left ",l_nSeconds
+                    ?hb_idleSleep(1)
+                    l_nSeconds--
+                enddo
+
+                :Table(1003,"set001.table001","table001")
+                :Column("table001.fname","table001_fname")
+                l_oData := :Get(1)
+                ?"set001.table001 for key=1, fname=",l_oData:table001_fname
+
+            endwith
 
 
+            if l_oSQLConnection2:EndTransactionCommit()
+            //if l_oSQLConnection2:EndTransactionRollback()
+                ?"Committed Transaction"
+            endif
+        endif
+    endif
+endif
+//-----------------------------------------------------------------------------------------------------------------------
 
 if l_lAccessMariaDB
     l_oSQLConnection1:Disconnect()
@@ -1482,11 +1523,11 @@ return ;
  "GenerationTime" => "2024-01-19T07:27:28.727Z",;
  "GenerationSignature" => "57f9740f-b64b-49e8-8ba9-3713345fc3a3",;
  "Tables" => ;
-    {"public.clients"=>{"Fields"=>;
+    {"public.clients"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key" =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"name"=>{"Type"=>"CV","Length"=>100}};
                        };
-    ,"set001.alltypes"=>{"Fields"=>;
+    ,"set001.alltypes"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"                =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"integer"            =>{"Type"=>"I","Nullable"=>.t.};
         ,"many_int"           =>{"Type"=>"I","Nullable"=>.t.,"Array"=>.t.};
@@ -1514,45 +1555,45 @@ return ;
         ,"datetime_with_zone" =>{"Type"=>"DTZ","Nullable"=>.t.};
         ,"datetime_no_zone"   =>{"Type"=>"DT","Nullable"=>.t.}};
                         };
-    ,"set001.dbf001"=>{"Fields"=>;
+    ,"set001.dbf001"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"          =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"customer_name"=>{"Type"=>"C","Length"=>50}};
                       };
-    ,"set001.dbf002"=>{"Fields"=>;
+    ,"set001.dbf002"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"p_dbf001"=>{"Type"=>"I","UsedAs"=>"Foreign","ParentTable"=>"set001.dbf001"}};
                       };
-    ,"set001.item"=>{"Fields"=>;
+    ,"set001.item"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"             =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"sysc"            =>{"Type"=>"DTZ"};
         ,"sysm"            =>{"Type"=>"DTZ"};
         ,"fk_item_category"=>{"Type"=>"I"};
         ,"name"            =>{"Type"=>"CV","Length"=>50};
         ,"note"            =>{"Type"=>"CV","Length"=>100}};
-                    ,"Indexes"=>;
+                    ,HB_ORM_SCHEMA_INDEX=>;
         {"fk_item_category"=>{"Expression"=>"fk_item_category"};
         ,"name"            =>{"Expression"=>"name"}}};
-    ,"set001.item_category"=>{"Fields"=>;
+    ,"set001.item_category"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key" =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"sysc"=>{"Type"=>"DTZ"};
         ,"sysm"=>{"Type"=>"DTZ"};
         ,"name"=>{"Type"=>"CV","Length"=>50}};
                              };
-    ,"set001.noindextesttable"=>{"Fields"=>;
+    ,"set001.noindextesttable"=>{HB_ORM_SCHEMA_FIELD=>;
         {"KeY" =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"Code"=>{"Type"=>"C","Length"=>3,"Nullable"=>.t.}};
                                 };
-    ,"set001.price_history"=>{"Fields"=>;
+    ,"set001.price_history"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"           =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"sysc"          =>{"Type"=>"DTZ"};
         ,"sysm"          =>{"Type"=>"DTZ"};
         ,"fk_item"       =>{"Type"=>"I"};
         ,"effective_date"=>{"Type"=>"D"};
         ,"price"         =>{"Type"=>"N","Length"=>8,"Scale"=>2}};
-                             ,"Indexes"=>;
+                             ,HB_ORM_SCHEMA_INDEX=>;
         {"effective_date"=>{"Expression"=>"effective_date"};
         ,"fk_item"       =>{"Expression"=>"fk_item"}}};
-    ,"set001.table001"=>{"Fields"=>;
+    ,"set001.table001"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"sysc"    =>{"Type"=>"DTZ"};
         ,"sysm"    =>{"Type"=>"DTZ"};
@@ -1565,17 +1606,17 @@ return ;
         ,"logical1"=>{"Type"=>"L"};
         ,"numdec2" =>{"Type"=>"N","Length"=>6,"Scale"=>1};
         ,"varchar" =>{"Type"=>"CV","Length"=>203}};
-                        ,"Indexes"=>;
+                        ,HB_ORM_SCHEMA_INDEX=>;
         {"lname"=>{"Expression"=>"LnAme"};
         ,"tag1" =>{"Expression"=>"upper((LnAme)::text)"};
         ,"tag2" =>{"Expression"=>"upper((fname)::text)"}}};
-    ,"set001.table002"=>{"Fields"=>;
+    ,"set001.table002"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"       =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"p_table001"=>{"Type"=>"I","Nullable"=>.t.,"UsedAs"=>"Foreign","ParentTable"=>"set001.table001"};
         ,"children"  =>{"Type"=>"CV","Length"=>200,"Nullable"=>.t.};
         ,"Cars"      =>{"Type"=>"CV","Length"=>300}};
                         };
-    ,"set001.table003"=>{"Fields"=>;
+    ,"set001.table003"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"        =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"p_table001" =>{"Type"=>"I","UsedAs"=>"Foreign","ParentTable"=>"set001.table001"};
         ,"p_table003" =>{"Type"=>"I","UsedAs"=>"Foreign","ParentTable"=>"set001.table003"};
@@ -1601,14 +1642,14 @@ return ;
         ,"time"       =>{"Type"=>"TO","Scale"=>4,"Nullable"=>.t.};
         ,"Boolean"    =>{"Type"=>"L","Nullable"=>.t.}};
                         };
-    ,"set001.table004"=>{"Fields"=>;
+    ,"set001.table004"=>{HB_ORM_SCHEMA_FIELD=>;
         {"id"    =>{"Type"=>"I"};
         ,"street"=>{"Type"=>"C","Length"=>50,"Nullable"=>.t.};
         ,"zip"   =>{"Type"=>"C","Length"=>5,"Nullable"=>.t.};
         ,"state" =>{"Type"=>"C","Length"=>2,"Nullable"=>.t.}};
-                        ,"Indexes"=>;
+                        ,HB_ORM_SCHEMA_INDEX=>;
         {"id"=>{"Expression"=>"id","Unique"=>.t.}}};
-    ,"set001.zipcodes"=>{"Fields"=>;
+    ,"set001.zipcodes"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"    =>{"Type"=>"IB","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"zipcode"=>{"Type"=>"C","Length"=>5,"Nullable"=>.t.};
         ,"city"   =>{"Type"=>"C","Length"=>45,"Nullable"=>.t.}};
@@ -1625,11 +1666,11 @@ return ;
  "GenerationTime" => "2024-01-19T07:28:06.843Z",;
  "GenerationSignature" => "c8a345f7-8e46-41f1-a543-a547e7600a62",;
  "Tables" => ;
-    {"public.clients"=>{"Fields"=>;
+    {"public.clients"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key" =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"name"=>{"Type"=>"CV","Length"=>100}};
                        };
-    ,"set001.alltypes"=>{"Fields"=>;
+    ,"set001.alltypes"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"                =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"integer"            =>{"Type"=>"I","Nullable"=>.t.};
         ,"many_int"           =>{"Type"=>"I","Nullable"=>.t.,"Array"=>.t.};
@@ -1657,45 +1698,45 @@ return ;
         ,"datetime_with_zone" =>{"Type"=>"DTZ","Nullable"=>.t.};
         ,"datetime_no_zone"   =>{"Type"=>"DT","Nullable"=>.t.}};
                         };
-    ,"set001.dbf001"=>{"Fields"=>;
+    ,"set001.dbf001"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"          =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"customer_name"=>{"Type"=>"C","Length"=>50}};
                       };
-    ,"set001.dbf002"=>{"Fields"=>;
+    ,"set001.dbf002"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"p_dbf001"=>{"Type"=>"I","UsedAs"=>"Foreign","ParentTable"=>"set001.dbf001"}};
                       };
-    ,"set001.item"=>{"Fields"=>;
+    ,"set001.item"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"             =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"sysc"            =>{"Type"=>"DTZ"};
         ,"sysm"            =>{"Type"=>"DTZ"};
         ,"fk_item_category"=>{"Type"=>"I"};
         ,"name"            =>{"Type"=>"CV","Length"=>50};
         ,"note"            =>{"Type"=>"CV","Length"=>100}};
-                    ,"Indexes"=>;
+                    ,HB_ORM_SCHEMA_INDEX=>;
         {"fk_item_category"=>{"Expression"=>"fk_item_category"};
         ,"name"            =>{"Expression"=>"name"}}};
-    ,"set001.item_category"=>{"Fields"=>;
+    ,"set001.item_category"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key" =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"sysc"=>{"Type"=>"DTZ"};
         ,"sysm"=>{"Type"=>"DTZ"};
         ,"name"=>{"Type"=>"CV","Length"=>50}};
                              };
-    ,"set001.noindextesttable"=>{"Fields"=>;
+    ,"set001.noindextesttable"=>{HB_ORM_SCHEMA_FIELD=>;
         {"KeY" =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"Code"=>{"Type"=>"C","Length"=>3,"Nullable"=>.t.}};
                                 };
-    ,"set001.price_history"=>{"Fields"=>;
+    ,"set001.price_history"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"           =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"sysc"          =>{"Type"=>"DTZ"};
         ,"sysm"          =>{"Type"=>"DTZ"};
         ,"fk_item"       =>{"Type"=>"I"};
         ,"effective_date"=>{"Type"=>"D"};
         ,"price"         =>{"Type"=>"N","Length"=>8,"Scale"=>2}};
-                             ,"Indexes"=>;
+                             ,HB_ORM_SCHEMA_INDEX=>;
         {"effective_date"=>{"Expression"=>"effective_date"};
         ,"fk_item"       =>{"Expression"=>"fk_item"}}};
-    ,"set001.table001"=>{"Fields"=>;
+    ,"set001.table001"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"sysc"    =>{"Type"=>"DTZ"};
         ,"sysm"    =>{"Type"=>"DTZ"};
@@ -1708,17 +1749,17 @@ return ;
         ,"logical1"=>{"Type"=>"L"};
         ,"numdec2" =>{"Type"=>"N","Length"=>6,"Scale"=>1};
         ,"varchar" =>{"Type"=>"CV","Length"=>203}};
-                        ,"Indexes"=>;
+                        ,HB_ORM_SCHEMA_INDEX=>;
         {"lname"=>{"Expression"=>"LnAme"};
         ,"tag1" =>{"Expression"=>"upper((LnAme)::text)"};
         ,"tag2" =>{"Expression"=>"upper((fname)::text)"}}};
-    ,"set001.table002"=>{"Fields"=>;
+    ,"set001.table002"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"       =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"p_table001"=>{"Type"=>"I","Nullable"=>.t.,"UsedAs"=>"Foreign","ParentTable"=>"set001.table001"};
         ,"children"  =>{"Type"=>"CV","Length"=>200,"Nullable"=>.t.};
         ,"Cars"      =>{"Type"=>"CV","Length"=>300}};
                         };
-    ,"set001.table003"=>{"Fields"=>;
+    ,"set001.table003"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"        =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"p_table001" =>{"Type"=>"I","UsedAs"=>"Foreign","ParentTable"=>"set001.table001"};
         ,"p_table003" =>{"Type"=>"I","UsedAs"=>"Foreign","ParentTable"=>"set001.table003"};
@@ -1744,14 +1785,14 @@ return ;
         ,"time"       =>{"Type"=>"TO","Scale"=>4,"Nullable"=>.t.};
         ,"Boolean"    =>{"Type"=>"L","Nullable"=>.t.}};
                         };
-    ,"set001.table004"=>{"Fields"=>;
+    ,"set001.table004"=>{HB_ORM_SCHEMA_FIELD=>;
         {"id"    =>{"Type"=>"I"};
         ,"street"=>{"Type"=>"C","Length"=>50,"Nullable"=>.t.};
         ,"zip"   =>{"Type"=>"C","Length"=>5,"Nullable"=>.t.};
         ,"state" =>{"Type"=>"C","Length"=>2,"Nullable"=>.t.}};
-                        ,"Indexes"=>;
+                        ,HB_ORM_SCHEMA_INDEX=>;
         {"id"=>{"Expression"=>"id","Unique"=>.t.}}};
-    ,"set001.zipcodes"=>{"Fields"=>;
+    ,"set001.zipcodes"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"    =>{"Type"=>"IB","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"zipcode"=>{"Type"=>"C","Length"=>5,"Nullable"=>.t.};
         ,"city"   =>{"Type"=>"C","Length"=>45,"Nullable"=>.t.}};
@@ -1768,11 +1809,11 @@ return ;
  "GenerationTime" => "2024-01-19T07:29:32.627Z",;
  "GenerationSignature" => "ab6ee276-870c-47a5-b6e5-e43fe60c6486",;
  "Tables" => ;
-    {"set003.cust001"=>{"Fields"=>;
+    {"set003.cust001"=>{HB_ORM_SCHEMA_FIELD=>;
         {"KeY" =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"Code"=>{"Type"=>"C","Length"=>3,"Nullable"=>.t.}};
                        };
-    ,"set003.form001"=>{"Fields"=>;
+    ,"set003.form001"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"LnAme"   =>{"Type"=>"C","Length"=>50};
         ,"fname"   =>{"Type"=>"C","Length"=>53};
@@ -1783,17 +1824,17 @@ return ;
         ,"logical1"=>{"Type"=>"L"};
         ,"numdec2" =>{"Type"=>"N","Length"=>6,"Scale"=>1};
         ,"varchar" =>{"Type"=>"CV","Length"=>203}};
-                       ,"Indexes"=>;
+                       ,HB_ORM_SCHEMA_INDEX=>;
         {"lname"=>{"Expression"=>"LnAme"};
         ,"tag1" =>{"Expression"=>"upper((LnAme)::text)"};
         ,"tag2" =>{"Expression"=>"upper((fname)::text)"}}};
-    ,"set003.form002"=>{"Fields"=>;
+    ,"set003.form002"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"       =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"p_table001"=>{"Type"=>"I","Nullable"=>.t.};
         ,"children"  =>{"Type"=>"CV","Length"=>200,"Nullable"=>.t.};
         ,"Cars"      =>{"Type"=>"CV","Length"=>300}};
                        };
-    ,"set003.ListOfFiles"=>{"Fields"=>;
+    ,"set003.ListOfFiles"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"                      =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"file_name"                =>{"Type"=>"C","Length"=>120,"Nullable"=>.t.};
         ,"reference_to_large_object"=>{"Type"=>"OID","Nullable"=>.t.}};
@@ -1810,11 +1851,11 @@ return ;
  "GenerationTime" => "2024-01-19T07:29:58.066Z",;
  "GenerationSignature" => "7474a84e-7047-4562-96cf-b578e8e204fb",;
  "Tables" => ;
-    {"set003.cust001"=>{"Fields"=>;
+    {"set003.cust001"=>{HB_ORM_SCHEMA_FIELD=>;
         {"KeY" =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"Code"=>{"Type"=>"C","Length"=>3,"Nullable"=>.t.}};
                        };
-    ,"set003.form001"=>{"Fields"=>;
+    ,"set003.form001"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"     =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"LnAme"   =>{"Type"=>"C","Length"=>50};
         ,"fname"   =>{"Type"=>"C","Length"=>53};
@@ -1825,17 +1866,17 @@ return ;
         ,"logical1"=>{"Type"=>"L"};
         ,"numdec2" =>{"Type"=>"N","Length"=>6,"Scale"=>1};
         ,"varchar" =>{"Type"=>"CV","Length"=>203}};
-                       ,"Indexes"=>;
+                       ,HB_ORM_SCHEMA_INDEX=>;
         {"lname"=>{"Expression"=>"LnAme"};
         ,"tag1" =>{"Expression"=>"upper((LnAme)::text)"};
         ,"tag2" =>{"Expression"=>"upper((fname)::text)"}}};
-    ,"set003.form002"=>{"Fields"=>;
+    ,"set003.form002"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"       =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"p_table001"=>{"Type"=>"I","Nullable"=>.t.};
         ,"children"  =>{"Type"=>"CV","Length"=>200,"Nullable"=>.t.};
         ,"Cars"      =>{"Type"=>"CV","Length"=>300}};
                        };
-    ,"set003.ListOfFiles"=>{"Fields"=>;
+    ,"set003.ListOfFiles"=>{HB_ORM_SCHEMA_FIELD=>;
         {"key"                      =>{"Type"=>"I","AutoIncrement"=>.t.,"UsedAs"=>"Primary"};
         ,"file_name"                =>{"Type"=>"C","Length"=>120,"Nullable"=>.t.};
         ,"reference_to_large_object"=>{"Type"=>"OID","Nullable"=>.t.}};

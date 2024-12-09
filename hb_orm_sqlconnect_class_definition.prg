@@ -8,6 +8,7 @@ class hb_orm_SQLConnect
         classdata ConnectionCounter        init 0    // Across all instances of this class. Used to ensure all the ::p_ConnectionNumber are unique across all instances in current running program.
         data p_ConnectionNumber            init 0    // Unique number across all instances in current running program. Can be used to help generate some names.
         data p_SQLConnection               init 0    // ODBC layer connection number
+        data p_OdbcApiHandle               init NIL  // Handle used for calling ODBC APIs  //_M_ Work in progress
         data p_BackendType                 init 0
         data p_SQLEngineType               init 0
         data p_Driver                      init ""
@@ -52,6 +53,8 @@ class hb_orm_SQLConnect
         method GetListOfPrimaryKeysForAllTables(par_hTableSchemaDefinition)             // Returns a Hash with the table name (with Namespace) as keys.
         method GetPostgresTableSchemaQuery()
         method GetPostgresIndexSchemaQuery()
+        method BeginTransaction(par_cIsolationLevel)  // Use one of the following compiler variables HB_ORM_READ_COMMITTED, HB_ORM_REPEATABLE_READ, HB_ORM_SERIALIZABLE
+        method EndTransaction(par_cMode)
 
     exported:
         data p_hMetadataTable       init {=>}          //List of Existing Tables Names. Each element is a hash with HB_ORM_SCHEMA_FIELD and HB_ORM_SCHEMA_INDEX array elements ["Hash of Field Definition","Hash of Index Definitions"]. Named it with a leading "p_" to be threaded as internal.
@@ -193,6 +196,12 @@ class hb_orm_SQLConnect
 
         method GetLastCheckConnectionUTCTime()
         method GetCurrentTimeInTimeZoneAsText(par_cTimeZone)
+
+        method BeginTransactionReadCommitted()   inline ::BeginTransaction(HB_ORM_READ_COMMITTED)    // Return True on Success, otherwise False
+        method BeginTransactionRepeatableRead()  inline ::BeginTransaction(HB_ORM_REPEATABLE_READ)   // Return True on Success, otherwise False
+        method BeginTransactionSerializable()    inline ::BeginTransaction(HB_ORM_SERIALIZABLE)      // Return True on Success, otherwise False
+        method EndTransactionCommit()            inline ::EndTransaction("Commit")                   // Return True on Success, otherwise False
+        method EndTransactionRollback()          inline ::EndTransaction("Rollback")                 // Return True on Success, otherwise False
 
     DESTRUCTOR destroy()
         

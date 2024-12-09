@@ -1,5 +1,8 @@
 -hblib
 
+-incpath=${HARBOUR_ROOT}/contrib/rddsql/
+-incpath=${HARBOUR_ROOT}/contrib/hbodbc/
+
 #To enabled progressing recompilation uncomment the following line
 -inc
 

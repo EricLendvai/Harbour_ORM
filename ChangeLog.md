@@ -1,5 +1,14 @@
 # Harbour ORM - Change Log
 
+## 12/08/2024 V 4.16
+* Support for transactions, including "commit","rollback" and isolation levels via the following connection methods (currently only available for Postgres. All methods return True on success, otherwise False. ):
+  * :BeginTransactionReadCommitted()
+  * :BeginTransactionRepeatableRead()
+  * :BeginTransactionSerializable()
+  * :EndTransactionCommit()
+  * :EndTransactionRollback()
+* Updated VSCode setting file to handle new includes.
+
 ## 10/23/2024 V 4.15
 * Work around false positive error on bulk updated.
 

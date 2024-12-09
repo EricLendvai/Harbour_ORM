@@ -3,17 +3,24 @@
 //Will connect using the odbc driver, will not use any DNS configuration.
 
 #include "hb_orm.ch"
-
 #include "dbinfo.ch"
+
+//Path set in .code-workspace and hb_orm_windows.hbp and hb_orm_linux.hbp
+#include "sql.ch"
 
 //See https://groups.google.com/forum/#!topic/harbour-users/hqDDiRyOcBA   for examples
 
 request SQLMIX , SDDODBC
-
 //=================================================================================================================
 
 #include "hb_orm_sqlconnect_class_definition.prg"
 
+//-----------------------------------------------------------------------------------------------------------------
+//   method IsAutoCommitOn() class hb_orm_SQLConnect
+//   local l_lResult
+//   // l_lResult := SQLGetConnectAttr(::p_SQLConnection,SQL_AUTOCOMMIT)
+//   //Work in progress.
+//   return l_lResult
 //-----------------------------------------------------------------------------------------------------------------
 method destroy() class hb_orm_SQLConnect
 ::Disconnect()
@@ -206,6 +213,8 @@ local l_SQLHandle
 local l_cConnectionString
 local l_cPreviousDefaultRDD
 local l_lNoCache := (::p_HBORMNamespace == "nohborm")
+local l_nSelect
+Local l_xOdbcApiHandle
 
 do case
 case ::Connected
@@ -293,6 +302,19 @@ otherwise
 
         do case
         case ::p_SQLEngineType == HB_ORM_ENGINETYPE_POSTGRESQL
+            //Trick to initialize ::p_OdbcApiHandle. The C interface is using the work area of the last executed SQLExec to retrieve the ApiHandle.
+            if ::SQLExec("CheckIfStillConnected",[select timezone('UTC',current_timestamp(6))::text as "ConnectTime";],"HBORMConnectTime")
+                l_nSelect = iif(used(),select(),0)
+                select ("HBORMConnectTime")
+                hb_ORM_ODBCAPIGetHandle(@l_xOdbcApiHandle)
+                CloseAlias("HBORMConnectTime")
+                if !hb_IsNil(l_xOdbcApiHandle)
+                    ::p_OdbcApiHandle := l_xOdbcApiHandle
+                endif
+                select (l_nSelect)
+            endif
+
+
             // l_cBackendType := "PostgreSQL"
             if !empty(::p_ApplicationName)
                 ::SQLExec("cbcb115d-7bda-4118-aa61-9340faab98fa","set application_name = '"+strtran(::p_ApplicationName,['],[])+"';")
@@ -339,9 +361,11 @@ if ::p_ConnectionNumber > 0
 endif
 
 if ::p_SQLConnection > 0
+    ::p_OdbcApiHandle := NIL
     hb_RDDInfo(RDDI_DISCONNECT,,"SQLMIX",::p_SQLConnection)
     ::p_SQLConnection := 0
 endif
+
 
 ::Connected := .f.
 
@@ -1022,7 +1046,7 @@ select (l_select)
 return NIL
 
 //-----------------------------------------------------------------------------------------------------------------
-method CheckIfStillConnected() class hb_orm_SQLConnect // Returns .t. if connected. Will test if the connection is still present
+method CheckIfStillConnected()  class hb_orm_SQLConnect // Returns .t. if connected. Will test if the connection is still present
 local l_lResult := .f.  // By default assume not connected
 
 if ::Connected
@@ -1614,6 +1638,42 @@ if ::Connected
 endif
 
 return l_cResult
+//-----------------------------------------------------------------------------------------------------------------
+method BeginTransaction(par_cIsolationLevel) class hb_orm_SQLConnect  // Use one of the following compiler variables HB_ORM_READ_COMMITTED, HB_ORM_REPEATABLE_READ, HB_ORM_SERIALIZABLE
+local l_cSQLCommand
+local l_lSuccess := .f.
+if !hb_IsNil(::p_OdbcApiHandle)
+    if hb_orm_ODBC_SQLSetConnectionAttribute(::p_OdbcApiHandle,SQL_AUTOCOMMIT,SQL_AUTOCOMMIT_OFF) == 0
+        l_cSQLCommand := [SET TRANSACTION ISOLATION LEVEL ]+par_cIsolationLevel
+        if ::SQLExec("BeginTransaction"+strtran(par_cIsolationLevel," ","") , l_cSQLCommand)
+            l_lSuccess := .t.
+        endif
+    endif
+endif
+return l_lSuccess
+//-----------------------------------------------------------------------------------------------------------------
+method EndTransaction(par_cMode) class hb_orm_SQLConnect
+local l_cSQLCommand
+local l_lSuccess  := .f.
+local l_lNextStep := .f.
+
+if !hb_IsNil(::p_OdbcApiHandle)
+    do case
+    case par_cMode == "Commit"
+        l_lNextStep := (hb_orm_ODBC_SQLCommit(::p_OdbcApiHandle) == 0)
+    case par_cMode == "Rollback"
+        l_lNextStep := (hb_orm_ODBC_SQLRollback(::p_OdbcApiHandle) == 0)
+    endcase
+
+    if l_lNextStep
+        if hb_orm_ODBC_SQLSetConnectionAttribute(::p_OdbcApiHandle,SQL_AUTOCOMMIT,SQL_AUTOCOMMIT_ON) == 0
+            l_lSuccess := .t.
+        endif
+    endif
+
+endif
+
+return l_lSuccess
 //-----------------------------------------------------------------------------------------------------------------
 #include "hb_orm_schema.prg"
 //-----------------------------------------------------------------------------------------------------------------
