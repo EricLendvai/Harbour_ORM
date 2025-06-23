@@ -82,7 +82,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_EL_ROOT":"R:\\Harbour_EL",
+                        "HB_EL_ROOT":"C:\\Harbour_EL",
                         "HARBOUR_ROOT":"C:\\Harbour",
                         "LIBName":"hb_orm",
                         "BuildMode":"debug",
@@ -131,7 +131,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_EL_ROOT":"R:\\Harbour_EL",
+                        "HB_EL_ROOT":"C:\\Harbour_EL",
                         "HARBOUR_ROOT":"C:\\Harbour",
                         "LIBName":"hb_orm",
                         "BuildMode":"release",

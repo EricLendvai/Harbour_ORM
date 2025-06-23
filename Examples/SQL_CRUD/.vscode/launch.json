@@ -18,8 +18,8 @@
                 "program": "${workspaceFolder}\\build\\win64\\mingw64\\debug\\SQL_CRUD.exe",
                 "sourcePaths": [
                     "${workspaceFolder}",
-                    "R:\\Harbour_ORM\\",
-                    "R:\\Harbour_EL\\"
+                    "C:\\Harbour_ORM\\",
+                    "C:\\Harbour_EL\\"
                 ]
             },
             "linux":{

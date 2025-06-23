@@ -24,6 +24,6 @@
         }
     },
     "mounts": [
-        "source=R:\\Harbour_EL,target=/src/Harbour_EL,type=bind,consistency=default"
+        "source=C:\\Harbour_EL,target=/src/Harbour_EL,type=bind,consistency=default"
     ]
 }
