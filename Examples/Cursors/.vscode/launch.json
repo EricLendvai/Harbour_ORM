@@ -18,8 +18,8 @@
                 "program": "${workspaceFolder}\\build\\win64\\mingw64\\debug\\Cursors.exe",
                 "sourcePaths": [
                     "${workspaceFolder}",
-                    "C:\\Harbour_ORM\\",
-                    "C:\\Harbour_EL\\"
+                    "R:\\Harbour_ORM\\",
+                    "R:\\Harbour_EL\\"
                 ]
             },
             "linux":{

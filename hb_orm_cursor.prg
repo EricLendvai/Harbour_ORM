@@ -117,6 +117,8 @@ local l_cFieldFlags
 local l_cFieldName
 local l_nFieldPos := 0
 
+// hb_orm_SendToDebugView("In CreateCursor")
+
 if !empty(::p_CursorName)
     CloseAlias(::p_CursorName)
     ::p_CursorName  := ""
@@ -172,17 +174,18 @@ for each l_hFieldDefinition in ::p_Fields
                                   })
     endif
 
-    //Following "do case" will not work yet since timestamp field types not supported in SQLMIX
-    // do case
-    // case el_IsInlist(l_cFieldType,"DT","DTZ","T")
-    //     l_cFieldType := "@"
-    //     l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_LEN] := 0
-    //     l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_DEC] := 0
+    do case
+    case el_IsInlist(l_cFieldType,"DT","DTZ","T")
+        l_cFieldType := "@"
+        l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_LEN] := 0
+        l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_DEC] := 0
+
+    //Following "case" will not work yet since time field types not supported in SQLMIX
     // case el_IsInlist(l_cFieldType,"TOZ","TO")
     //     l_cFieldType := "T"
     //     l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_LEN] := 0
     //     l_hFieldDefinition[HB_ORM_CURSOR_STRUCTURE_DEC] := 0
-    // endcase
+    endcase
 
 
     //As of 2024-03-19  DateTime field types don't work
@@ -240,7 +243,11 @@ for each l_hFieldDefinition in ::p_Fields
     
 endfor
 
-DbCreate(::p_CursorName,l_aStructure,'SQLMIX',.T.,::p_CursorName,,"UTF8EX")
+
+if !DbCreate(::p_CursorName,l_aStructure,'SQLMIX',.T.,::p_CursorName,,"UTF8EX") .or. !used(::p_CursorName)
+    hb_orm_SendToDebugView("Failed on DbCreate for alias: "+::p_CursorName)
+    hb_orm_SendToDebugView("DbCreate Source Array: "+hb_jsonEncode(l_aStructure,.f.))
+endif
 
 return NIL
 //-----------------------------------------------------------------------------------------------------------------

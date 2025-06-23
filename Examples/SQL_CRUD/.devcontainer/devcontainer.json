@@ -1,32 +1,34 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.195.0/containers/javascript-node
 {
-    "name": "harbour_orm_examples_sql_crud"
-    ,"build": {
+    "name": "harbour_orm_examples_sql_crud",
+    "build": {
         "dockerfile": "Dockerfile",
-        "context":".."
-    }
-
-    // Set *default* container specific settings.json values on container create.
-    ,"settings": {
-        "files.autoSave": "onFocusChange",
-        "harbour.compilerExecutable": "/src/harbour/bin/linux/gcc/harbour",
-        "harbour.extraOptions": "-i/src/harbour/include/",
-        "harbour.extraIncludePaths":["/src/harbour/include/",
-                                     "/src/Harbour_EL/",
-                                     "/src/Harbour_ORM/"],
-        "harbour.warningLevel":1,
-        "harbour.decorator":true
-    }
-
-    ,"mounts": ["source=${localWorkspaceFolder}\\..\\BuildTools,target=${containerWorkspaceFolder}/../BuildTools,type=bind,consistency=default",
-                "source=C:\\Harbour_EL,target=/src/Harbour_EL,type=bind,consistency=default",
-                "source=C:\\Harbour_ORM,target=/src/Harbour_ORM,type=bind,consistency=default"]
-
-    // Add the IDs of extensions you want installed when the container is created.
-    ,"extensions": [
-        "aperricone.harbour",
-        "actboy168.tasks"
+        "context": ".."
+    },
+    "customizations": {
+        "vscode": {
+        "settings": {
+            "files.autoSave": "onFocusChange",
+            "harbour.compilerExecutable": "/usr/local/bin/harbour",
+            "harbour.extraOptions": "-i/usr/local/include",
+            "harbour.extraIncludePaths": [
+                "/usr/local/include/",
+                "/src/Harbour_EL/",
+                "/src/Harbour_ORM/"
+              ],
+            "harbour.warningLevel": 1,
+            "harbour.decorator": true
+        },
+        "extensions": [
+            "aperricone.harbour",
+            "actboy168.tasks"
+        ]
+        }
+    },
+    "mounts": [
+        "source=${localWorkspaceFolder}\\..\\BuildTools,target=${containerWorkspaceFolder}/../BuildTools,type=bind,consistency=default",
+        "source=R:\\Harbour_EL,target=/src/Harbour_EL,type=bind,consistency=default",
+        "source=R:\\Harbour_ORM,target=/src/Harbour_ORM,type=bind,consistency=default"
     ]
-
 }

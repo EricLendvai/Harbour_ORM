@@ -37,7 +37,7 @@ hb_DirCreate(l_cOutputFolder)
 l_oCursor1 := hb_Cursor()
 with object l_oCursor1
 
-    :Field("KEY"                       ,"I",  4,0,"+")
+    :Field("KEY"                       ,"I",  0,0,"+")
     :Field("ID"                        ,"C", 10,0)
     :Field("FNAME"                     ,"C", 20,0,"T")
     :Field("LNAME"                     ,"C", 20,0)
@@ -45,6 +45,10 @@ with object l_oCursor1
     :Field("DOB"                       ,"D",  0,0,"N")
     :Field("Binary"                    ,"C", 50,0,"B")
     :Field("Long_field_name_extra_text","N",  5,2,"N")
+
+    :Field("Float2"                    ,"F",   ,2,"N")
+
+    :Field("DateTime","@", 0,0,"N") // Patched version of harbour contrib rddsql is needed for this to work.
 
     :CreateCursor("table007")
     ?":p_RecordCount = "+allt(Str(:p_RecordCount))
@@ -57,6 +61,11 @@ with object l_oCursor1
     :SetFieldValue("fname","Roger")
     :SetFieldValue("lname","Moore")
     :SetFieldValue("info",replicate("?",100000))
+
+    :SetFieldValue("Float2",1000000000000/3)
+    :SetFieldValue("DateTime",hb_Datetime())
+    ?"table007->KEY=",table007->KEY
+    ?"table007->DateTime=",table007->DateTime
 
     :AppendBlank()
     :SetFieldValues({"fname"=>"Maria","lname"=>"Smith"})

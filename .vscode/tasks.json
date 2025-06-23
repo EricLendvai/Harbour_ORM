@@ -35,6 +35,46 @@
             }
         },
         {
+            "label": "CompileAll",
+            "windows":{
+                "type": "shell",
+                "command": "${workspaceFolder}\\BuildLIBAllVersions.bat",
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "env": {
+                    },
+                    "statusbar": {"label" : "<Compile All>","hide" : false}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
+            },
+            // the following was not implemented yet.
+            "linux":{
+                "type": "shell",
+                "command": "${workspaceFolder}/BuildLIBAllVersions.sh",
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "env": {
+                    },
+                    "statusbar": {"label" : "<Compile All>","hide" : true}
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared",
+                    "showReuseMessage": false,
+                    "clear": true
+                }
+            }
+        },
+        {
             "label": "CompileDebug",
             "windows":{
                 "type": "shell",
@@ -42,7 +82,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_EL_ROOT":"C:\\Harbour_EL",
+                        "HB_EL_ROOT":"R:\\Harbour_EL",
                         "HARBOUR_ROOT":"C:\\Harbour",
                         "LIBName":"hb_orm",
                         "BuildMode":"debug",
@@ -91,7 +131,7 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_EL_ROOT":"C:\\Harbour_EL",
+                        "HB_EL_ROOT":"R:\\Harbour_EL",
                         "HARBOUR_ROOT":"C:\\Harbour",
                         "LIBName":"hb_orm",
                         "BuildMode":"release",

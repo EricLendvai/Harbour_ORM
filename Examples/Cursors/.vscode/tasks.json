@@ -50,8 +50,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_EL_ROOT":"C:\\Harbour_EL",
-                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "HB_EL_ROOT":"R:\\Harbour_EL",
+                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"debug",
                         // "HB_COMPILER":"${input:CCompiler}"
@@ -93,8 +93,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_EL_ROOT":"C:\\Harbour_EL",
-                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "HB_EL_ROOT":"R:\\Harbour_EL",
+                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"release",
                         "RunAfterCompile":"yes",
@@ -135,8 +135,8 @@
                 "options": {
                     "cwd": "${workspaceFolder}",
                     "env": {
-                        "HB_EL_ROOT":"C:\\Harbour_EL",
-                        "HB_ORM_ROOT":"C:\\Harbour_ORM",
+                        "HB_EL_ROOT":"R:\\Harbour_EL",
+                        "HB_ORM_ROOT":"R:\\Harbour_ORM",
                         "EXEName":"Cursors",
                         "BuildMode":"release",
                         "RunAfterCompile":"no",

@@ -1,5 +1,11 @@
 # Harbour ORM - Change Log
 
+## 06/22/2025 V 4.17
+* Support for creating cursors with timestamp (datetime) field types: "@".
+* Fix on Schema Migration script generation on namespace renames.
+* Speed optimization for Schema Delta tool.
+* Fix of devcontainer settings.
+
 ## 12/08/2024 V 4.16
 * Support for transactions, including "commit","rollback" and isolation levels via the following connection methods (currently only available for Postgres. All methods return True on success, otherwise False. ):
   * :BeginTransactionReadCommitted()

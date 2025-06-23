@@ -960,7 +960,7 @@ if !empty( l_hRename )
             l_cNameTo   := l_hRenameNamespace
 
             l_cNameFrom := hb_hGetDef(::p_hMetadataNamespace,l_cNameFrom,"")  // To check if currently present and get the casing on file
-            if !empty(l_cNameFrom)
+            if !empty(l_cNameFrom) .and. empty(hb_hGetDef(::p_hMetadataNamespace,l_cNameTo,""))
                 l_cSQLScript += [ALTER SCHEMA ]+::FormatIdentifier(l_cNameFrom)+[ RENAME TO ]+::FormatIdentifier(l_cNameTo)+[;]+CRLF
 
                 l_hAppliedRenameNamespace[l_cNameFrom] := l_cNameTo
@@ -1531,7 +1531,7 @@ for each l_hTableDefinition in hb_hGetDef(par_hWharfConfig,"Tables",{=>})
                 endcase
 
                 if l_lMatchingFieldDefinition  // Should still test on nullable and incremental
-                    if l_lFieldAutoIncrement .and. l_cFieldDefault == "Wharf-AutoIncrement()"
+                    if l_lFieldAutoIncrement .and. el_IsInlist(l_cFieldDefault,"Wharf-AutoIncrement()","AutoIncrement()")
                         l_cFieldDefault := ""
                     endif
 
