@@ -8,8 +8,8 @@ if %LIBName%. == . goto MissingEnvironmentVariables
 if %BuildMode%. == . goto MissingEnvironmentVariables
 if %HB_COMPILER%. ==. goto MissingEnvironmentVariables
 
-if not exist %LIBName%_windows.hbp (
-    echo Invalid Workspace Folder. Missing file %LIBName%_windows.hbp
+if not exist src\%LIBName%_windows.hbp (
+    echo Invalid Workspace Folder. Missing file src\%LIBName%_windows.hbp
     goto End
 )
 
@@ -43,7 +43,7 @@ md build\win64\%HB_COMPILER%\%BuildMode%\hbmk2 2>nul
 rem the following will output the current datetime
 for /F "tokens=2" %%i in ('date /t') do set mydate=%%i
 set mytime=%time%
-echo local l_cBuildInfo := "%HB_COMPILER% %BuildMode% %mydate% %mytime%">BuildInfo.txt
+echo local l_cBuildInfo := "%HB_COMPILER% %BuildMode% %mydate% %mytime%">src\BuildInfo.txt
 
 del build\win64\%HB_COMPILER%\%BuildMode%\*.a 2>nul
 del build\win64\%HB_COMPILER%\%BuildMode%\*.lib 2>nul
@@ -53,18 +53,18 @@ del build\win64\%HB_COMPILER%\%BuildMode%\*.lib 2>nul
 ::  -es2      = process warning as errors
 ::  -p        = Leave generated ppo files
 
-copy *.ch  build\win64\%HB_COMPILER%\%BuildMode%\
-copy *.hbc build\win64\%HB_COMPILER%\%BuildMode%\
+copy src\*.ch  build\win64\%HB_COMPILER%\%BuildMode%\
+copy src\*.hbc build\win64\%HB_COMPILER%\%BuildMode%\
 
-del build\win64\%HB_COMPILER%\%BuildMode%\*.ppo
+rem del ..\build\win64\%HB_COMPILER%\%BuildMode%\*.ppo
 
 :: since this is a library will also fail on warnings.
 if %BuildMode% == debug (
 rem    copy debugger_on.hbm debugger.hbm
-    hbmk2 %LIBName%_windows.hbp vscode_debugger.prg -b -p -w3 -dDONOTINCLUDE -shared -dDEBUGVIEW
+    hbmk2 src\%LIBName%_windows.hbp src\vscode_debugger.prg -b -p -w3 -dDONOTINCLUDE -shared -dDEBUGVIEW
 ) else (
 rem    copy debugger_off.hbm debugger.hbm
-    hbmk2 %LIBName%_windows.hbp -w3 -dDONOTINCLUDE -fullstatic -dDEBUGVIEW
+    hbmk2 src\%LIBName%_windows.hbp -w3 -dDONOTINCLUDE -fullstatic -dDEBUGVIEW
 )
 
 echo Current time is %mydate% %mytime%
@@ -78,8 +78,8 @@ if %SUCCESS% == F (
 ) else (
     if errorlevel 0 (
 rem     since debug and release have different .hbx file, localize it
-        copy %LIBName%_windows.hbx build\win64\%HB_COMPILER%\%BuildMode%\ >nul
-        del %LIBName%_windows.hbx >nul
+        copy src\%LIBName%_windows.hbx build\win64\%HB_COMPILER%\%BuildMode%\ >nul
+        del src\%LIBName%_windows.hbx >nul
 
         echo.
         echo No Errors

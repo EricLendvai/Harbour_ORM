@@ -94,7 +94,7 @@ if ::p_SQLConnection > 0
 
     if !::p_DoNotReportErrors
         if !empty(::p_SQLExecErrorMessage)
-            l_cErrorInfo := hb_StrReplace(::p_SQLExecErrorMessage+" - Command: "+par_cCommand+iif(pcount() < 3,""," - Cursor Name: "+par_cCursorName),{chr(13)=>" ",chr(10)=>""})
+            l_cErrorInfo := hb_StrReplace(::p_SQLExecErrorMessage+" - Command: "+par_cCommand+iif(pcount() < 3,""," - Cursor Name: "+par_cCursorName),{chr(10)=>" ",chr(13)=>""})
             hb_orm_SendToDebugView(l_cErrorInfo)
             ::LogErrorEvent(par_xEventId,{{,,l_cErrorInfo,hb_orm_GetApplicationStack()}})   // par_xEventId,par_aErrors
         endif
@@ -1653,7 +1653,6 @@ endif
 return l_lSuccess
 //-----------------------------------------------------------------------------------------------------------------
 method EndTransaction(par_cMode) class hb_orm_SQLConnect
-local l_cSQLCommand
 local l_lSuccess  := .f.
 local l_lNextStep := .f.
 

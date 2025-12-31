@@ -161,8 +161,8 @@ if !empty(par_cAlias) .and. (par_cAlias)->(used())
                                                                                     '<'     => '&lt;'    ,;
                                                                                     '>'     => '&gt;'    ,;
                                                                                     '  '    => ' &nbsp;' ,;
-                                                                                    chr(10) => ''        ,;
-                                                                                    chr(13) => '<br>'    ,;
+                                                                                    chr(10) => '<br>'    ,;
+                                                                                    chr(13) => ''        ,;
                                                                                     '^'     => '&#94;'    ;
                                                                                     })
                                         l_html_record += '<td class="tooltip"><span class="tooltiptext">'+trans(l_xFieldValue_len)+'</span>'+l_xFieldValue+'</td>'

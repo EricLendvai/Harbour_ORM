@@ -13,8 +13,8 @@ elif [ "${BuildMode}" != "debug" ] && [ "${BuildMode}" != "release" ] ; then
 elif [ "${HB_COMPILER}" != "gcc" ]; then
     echo "You must set Environment Variable HB_COMPILER to \"gcc\""
 else
-    if [ ! -f "${LIBName}_linux.hbp" ]; then
-        echo "Invalid Workspace Folder. Missing file ${LIBName}_linux.hbp"
+    if [ ! -f "src/${LIBName}_linux.hbp" ]; then
+        echo "Invalid Workspace Folder. Missing file src/${LIBName}_linux.hbp"
     else
 
         echo "HB_COMPILER = ${HB_COMPILER}"
@@ -22,7 +22,7 @@ else
         mkdir -p "build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2" 2>/dev/null
 
         now=$(date +'%m/%d/%Y %H:%M:%S')
-        echo local l_cBuildInfo := \"${HB_COMPILER} ${BuildMode} ${now}\">BuildInfo.txt
+        echo local l_cBuildInfo := \"${HB_COMPILER} ${BuildMode} ${now}\">src/BuildInfo.txt
 
         rm build/lin64/${HB_COMPILER}/${BuildMode}/lib${LIBName}.a 2>/dev/null
         if [ -f "build/lin64/${HB_COMPILER}/${BuildMode}/lib${LIBName}.a" ] ; then
@@ -35,17 +35,17 @@ else
             #  -gc3      = Pure C code with no HVM
             #  -p        = Leave generated ppo files
 
-            cp *.ch  build/lin64/${HB_COMPILER}/${BuildMode}/
-            cp *.hbc build/lin64/${HB_COMPILER}/${BuildMode}/
+            cp src/*.ch  build/lin64/${HB_COMPILER}/${BuildMode}/
+            cp src/*.hbc build/lin64/${HB_COMPILER}/${BuildMode}/
 
             rm build/lin64/${HB_COMPILER}/${BuildMode}/*.ppo
             #since this is a library will also fail on warnings.
             if [ "${BuildMode}" == "debug" ] ; then
 #                cp debugger_on.hbm debugger.hbm
-                hbmk2 "${LIBName}_linux.hbp" "vscode_debugger.prg" -b -p -w3 -dDONOTINCLUDE -shared
+                hbmk2 "src/${LIBName}_linux.hbp" "src/vscode_debugger.prg" -b -p -w3 -dDONOTINCLUDE -shared
             else
 #                cp debugger_off.hbm debugger.hbm
-                hbmk2 "${LIBName}_linux.hbp" -w3 -dDONOTINCLUDE -fullstatic
+                hbmk2 "src/${LIBName}_linux.hbp" -w3 -dDONOTINCLUDE -fullstatic
             fi
 
             nHbmk2Status=$?
@@ -53,8 +53,8 @@ else
                 echo "Failed To build lib${LIBName}.a"
             else
                 if [ $nHbmk2Status -eq 0 ]; then
-                    cp ${LIBName}_linux.hbx build/lin64/${HB_COMPILER}/${BuildMode}/ >/dev/null
-                    rm ${LIBName}_linux.hbx >/dev/null
+                    cp src/${LIBName}_linux.hbx build/lin64/${HB_COMPILER}/${BuildMode}/ >/dev/null
+                    rm src/${LIBName}_linux.hbx >/dev/null
 
                     echo ""
                     echo "No Errors"

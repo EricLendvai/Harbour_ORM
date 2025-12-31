@@ -62,6 +62,6 @@ if %SUCCESS% == F (
 
 r:
 cd \Harbour_ORM
-del *.ppo
+del src\*.ppo
 
 :exit

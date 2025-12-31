@@ -10,9 +10,9 @@
 hb_el.hbc
 hb_el.hbx
 
--workdir=build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2/
+-workdir=../build/lin64/${HB_COMPILER}/${BuildMode}/hbmk2/
 
--obuild/lin64/${HB_COMPILER}/${BuildMode}/hb_orm
+-o../build/lin64/${HB_COMPILER}/${BuildMode}/hb_orm
 
 #The following settings are done via the BuildLIB.bat
 #-w3 -es2

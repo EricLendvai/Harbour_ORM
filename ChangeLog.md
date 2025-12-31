@@ -1,5 +1,10 @@
 # Harbour ORM - Change Log
 
+## 12/30/2025 V 4.18
+* Changed the internal from using chr(13) to chr(10).
+* Refactored to move source code files to a src folder.
+
+
 ## 06/22/2025 V 4.17
 * Support for creating cursors with timestamp (datetime) field types: "@".
 * Fix on Schema Migration script generation on namespace renames.
